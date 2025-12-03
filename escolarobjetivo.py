@@ -5238,8 +5238,463 @@ class SistemaGestaoEscolar:
         self.ativar_botao("📚 Gestão de Disciplinas")
         self.registrar_log('ACESSO', 'Gestão de Disciplinas', 'Acessou módulo de gestão de disciplinas')
 
-        tk.Label(self.content_frame, text="Módulo de Gestão de Disciplinas - Implementação Similar aos Anteriores",
-                 font=('Arial', 16), bg='#f8f9fa').pack(expand=True)
+        # Frame principal com notebook
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        # Título
+        title_frame = tk.Frame(main_frame, bg='#f8f9fa')
+        title_frame.pack(fill='x', pady=(0, 20))
+
+        tk.Label(title_frame, text="Gestão de Disciplinas", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Cadastro e gerenciamento de disciplinas escolares",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook para abas
+        notebook = ttk.Notebook(main_frame, style='Custom.TNotebook')
+        notebook.pack(fill='both', expand=True)
+
+        # Abas
+        self.carregar_aba_lista_disciplinas_modulo(notebook)
+        self.carregar_aba_cadastro_disciplinas_modulo(notebook)
+        self.carregar_aba_relatorios_disciplinas(notebook)
+
+    def carregar_aba_lista_disciplinas_modulo(self, parent):
+        """Aba de listagem de disciplinas"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='📋 Lista de Disciplinas')
+
+        # Barra de ferramentas
+        toolbar = tk.Frame(frame, bg='white', pady=10)
+        toolbar.pack(fill='x', padx=20)
+
+        # Busca
+        search_frame = tk.Frame(toolbar, bg='white')
+        search_frame.pack(side='left', fill='x', expand=True)
+
+        tk.Label(search_frame, text="🔍 Buscar:", font=('Arial', 10, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left', padx=5)
+
+        self.busca_disciplina_var = tk.StringVar()
+        busca_entry = tk.Entry(search_frame, textvariable=self.busca_disciplina_var,
+                              font=('Arial', 10), width=40, relief='solid', bd=1)
+        busca_entry.pack(side='left', padx=5)
+        busca_entry.bind('<KeyRelease>', self.buscar_disciplinas_modulo)
+
+        # Filtros
+        tk.Label(search_frame, text="Status:", font=('Arial', 10),
+                bg='white', fg='#666666').pack(side='left', padx=(20, 5))
+
+        self.filtro_status_disciplina = ttk.Combobox(search_frame, values=['Todas', 'Ativa', 'Inativa'],
+                                                     state='readonly', width=12, font=('Arial', 10))
+        self.filtro_status_disciplina.set('Ativa')
+        self.filtro_status_disciplina.pack(side='left', padx=5)
+        self.filtro_status_disciplina.bind('<<ComboboxSelected>>', lambda e: self.aplicar_filtros_disciplinas_modulo())
+
+        # Botões de ação
+        btn_frame = tk.Frame(toolbar, bg='white')
+        btn_frame.pack(side='right')
+
+        ModernButton(btn_frame, text="➕ Nova", command=lambda: parent.select(1),
+                    color='#0046AD').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="✏️ Editar", command=self.editar_disciplina_modulo,
+                    color='#FFCC00').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="🗑️ Excluir", command=self.excluir_disciplina_modulo,
+                    color='#dc3545').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="📊 Exportar", command=self.exportar_disciplinas_modulo,
+                    color='#28a745').pack(side='left', padx=5)
+
+        # Tabela de disciplinas
+        table_frame = tk.Frame(frame, bg='white')
+        table_frame.pack(fill='both', expand=True, padx=20, pady=10)
+
+        # Scrollbars
+        scroll_y = ttk.Scrollbar(table_frame)
+        scroll_y.pack(side='right', fill='y')
+
+        scroll_x = ttk.Scrollbar(table_frame, orient='horizontal')
+        scroll_x.pack(side='bottom', fill='x')
+
+        # Treeview
+        colunas = ('ID', 'Nome', 'Carga Horária', 'Professor', 'Turma', 'Status')
+        self.tree_disciplinas_modulo = ttk.Treeview(table_frame, columns=colunas, show='headings',
+                                            yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set,
+                                            style='Custom.Treeview', height=20)
+
+        # Configurar colunas
+        self.tree_disciplinas_modulo.heading('ID', text='ID')
+        self.tree_disciplinas_modulo.heading('Nome', text='Nome da Disciplina')
+        self.tree_disciplinas_modulo.heading('Carga Horária', text='Carga Horária (h)')
+        self.tree_disciplinas_modulo.heading('Professor', text='Professor')
+        self.tree_disciplinas_modulo.heading('Turma', text='Turma')
+        self.tree_disciplinas_modulo.heading('Status', text='Status')
+
+        self.tree_disciplinas_modulo.column('ID', width=50, anchor='center')
+        self.tree_disciplinas_modulo.column('Nome', width=250, anchor='w')
+        self.tree_disciplinas_modulo.column('Carga Horária', width=120, anchor='center')
+        self.tree_disciplinas_modulo.column('Professor', width=200, anchor='w')
+        self.tree_disciplinas_modulo.column('Turma', width=150, anchor='w')
+        self.tree_disciplinas_modulo.column('Status', width=100, anchor='center')
+
+        scroll_y.config(command=self.tree_disciplinas_modulo.yview)
+        scroll_x.config(command=self.tree_disciplinas_modulo.xview)
+
+        self.tree_disciplinas_modulo.pack(fill='both', expand=True)
+
+        # Carregar dados
+        self.carregar_dados_disciplinas_modulo()
+
+        # Bind duplo clique para editar
+        self.tree_disciplinas_modulo.bind('<Double-1>', lambda e: self.editar_disciplina_modulo())
+
+    def carregar_dados_disciplinas_modulo(self, query=None, filtro_status='Ativa'):
+        """Carrega dados das disciplinas na tabela"""
+        for item in self.tree_disciplinas_modulo.get_children():
+            self.tree_disciplinas_modulo.delete(item)
+
+        try:
+            if query:
+                sql = '''
+                    SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                    FROM disciplinas d
+                    LEFT JOIN professores p ON d.professor_id = p.id
+                    LEFT JOIN turmas t ON d.turma_id = t.id
+                    WHERE (d.nome LIKE ? OR p.nome LIKE ? OR t.nome LIKE ?)
+                '''
+                params = [f'%{query}%', f'%{query}%', f'%{query}%']
+
+                if filtro_status != 'Todas':
+                    sql += ' AND d.status = ?'
+                    params.append(filtro_status)
+
+                sql += ' ORDER BY d.nome'
+                self.cursor.execute(sql, params)
+            else:
+                if filtro_status == 'Todas':
+                    self.cursor.execute('''
+                        SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                        FROM disciplinas d
+                        LEFT JOIN professores p ON d.professor_id = p.id
+                        LEFT JOIN turmas t ON d.turma_id = t.id
+                        ORDER BY d.nome
+                    ''')
+                else:
+                    self.cursor.execute('''
+                        SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                        FROM disciplinas d
+                        LEFT JOIN professores p ON d.professor_id = p.id
+                        LEFT JOIN turmas t ON d.turma_id = t.id
+                        WHERE d.status = ?
+                        ORDER BY d.nome
+                    ''', (filtro_status,))
+
+            disciplinas = self.cursor.fetchall()
+
+            for disc in disciplinas:
+                disc_id, nome, carga, professor, turma, status = disc
+                professor = professor if professor else 'Não atribuído'
+                turma = turma if turma else 'Não atribuída'
+                carga = f'{carga}h' if carga else '0h'
+
+                # Cor de status
+                tags = ('ativa',) if status == 'Ativa' else ('inativa',)
+                self.tree_disciplinas_modulo.insert('', 'end', values=(disc_id, nome, carga, professor, turma, status), tags=tags)
+
+            # Configurar cores
+            self.tree_disciplinas_modulo.tag_configure('ativa', foreground='#28a745')
+            self.tree_disciplinas_modulo.tag_configure('inativa', foreground='#dc3545')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar disciplinas: {str(e)}")
+
+    def buscar_disciplinas_modulo(self, event=None):
+        """Busca disciplinas"""
+        query = self.busca_disciplina_var.get()
+        filtro_status = self.filtro_status_disciplina.get()
+        self.carregar_dados_disciplinas_modulo(query, filtro_status)
+
+    def aplicar_filtros_disciplinas_modulo(self):
+        """Aplica filtros na lista de disciplinas"""
+        query = self.busca_disciplina_var.get()
+        filtro_status = self.filtro_status_disciplina.get()
+        self.carregar_dados_disciplinas_modulo(query, filtro_status)
+
+    def carregar_aba_cadastro_disciplinas_modulo(self, parent):
+        """Aba de cadastro de disciplinas"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='➕ Cadastrar Disciplina')
+
+        # Container com scroll
+        canvas = tk.Canvas(frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg='white')
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Título
+        title_frame = tk.Frame(scrollable_frame, bg='white')
+        title_frame.pack(fill='x', pady=(20, 20), padx=20)
+
+        tk.Label(title_frame, text="📚 Cadastro de Disciplina", font=('Arial', 18, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left')
+
+        # Frame do formulário
+        form_frame = tk.Frame(scrollable_frame, bg='white')
+        form_frame.pack(fill='both', expand=True, padx=40)
+
+        self.entries_disciplina_modulo = {}
+
+        # Campos do formulário
+        campos = [
+            ('nome', 'Nome da Disciplina *', 'entry'),
+            ('carga_horaria', 'Carga Horária (horas) *', 'entry'),
+            ('professor_id', 'Professor', 'combo_professor'),
+            ('turma_id', 'Turma', 'combo_turma'),
+            ('descricao', 'Descrição', 'text'),
+            ('status', 'Status', 'combo_status')
+        ]
+
+        row = 0
+        for field, label, tipo in campos:
+            # Label
+            tk.Label(form_frame, text=label, font=('Arial', 11, 'bold'),
+                    bg='white', fg='#0046AD').grid(row=row, column=0, sticky='w', pady=10, padx=10)
+
+            # Campo
+            if tipo == 'entry':
+                entry = tk.Entry(form_frame, font=('Arial', 11), width=50, relief='solid', bd=1)
+                entry.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = entry
+
+            elif tipo == 'text':
+                text_widget = tk.Text(form_frame, font=('Arial', 10), width=50, height=4,
+                                     relief='solid', bd=1, wrap='word')
+                text_widget.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = text_widget
+
+            elif tipo == 'combo_professor':
+                # Buscar professores
+                self.cursor.execute("SELECT id, nome FROM professores WHERE status = 'Ativo' ORDER BY nome")
+                professores = self.cursor.fetchall()
+                prof_values = ['Selecione...'] + [f"{p[0]} - {p[1]}" for p in professores]
+
+                combo = ttk.Combobox(form_frame, values=prof_values, state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Selecione...')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = combo
+
+            elif tipo == 'combo_turma':
+                # Buscar turmas
+                self.cursor.execute("SELECT id, nome FROM turmas WHERE status = 'Ativa' ORDER BY nome")
+                turmas = self.cursor.fetchall()
+                turma_values = ['Selecione...'] + [f"{t[0]} - {t[1]}" for t in turmas]
+
+                combo = ttk.Combobox(form_frame, values=turma_values, state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Selecione...')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = combo
+
+            elif tipo == 'combo_status':
+                combo = ttk.Combobox(form_frame, values=['Ativa', 'Inativa'], state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Ativa')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = combo
+
+            row += 1
+
+        form_frame.columnconfigure(1, weight=1)
+
+        # Botões
+        btn_frame = tk.Frame(scrollable_frame, bg='white')
+        btn_frame.pack(fill='x', pady=20, padx=40)
+
+        ModernButton(btn_frame, text="💾 Salvar Disciplina", command=self.salvar_disciplina_modulo,
+                    color='#0046AD').pack(side='left', padx=10)
+
+        ModernButton(btn_frame, text="🔄 Limpar", command=self.limpar_formulario_disciplina_modulo,
+                    color='#666666').pack(side='left', padx=10)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def limpar_formulario_disciplina_modulo(self):
+        """Limpa o formulário de disciplina"""
+        for field, widget in self.entries_disciplina_modulo.items():
+            if isinstance(widget, tk.Entry):
+                widget.delete(0, tk.END)
+            elif isinstance(widget, tk.Text):
+                widget.delete('1.0', tk.END)
+            elif isinstance(widget, ttk.Combobox):
+                if field == 'status':
+                    widget.set('Ativa')
+                else:
+                    widget.set('Selecione...')
+
+    def salvar_disciplina_modulo(self):
+        """Salva uma nova disciplina"""
+        try:
+            # Validar campos obrigatórios
+            nome = self.entries_disciplina_modulo['nome'].get().strip()
+            carga_horaria = self.entries_disciplina_modulo['carga_horaria'].get().strip()
+
+            if not nome:
+                messagebox.showwarning("Aviso", "O nome da disciplina é obrigatório!")
+                return
+
+            if not carga_horaria:
+                messagebox.showwarning("Aviso", "A carga horária é obrigatória!")
+                return
+
+            try:
+                carga_horaria = int(carga_horaria)
+            except:
+                messagebox.showwarning("Aviso", "A carga horária deve ser um número inteiro!")
+                return
+
+            # Obter professor e turma
+            professor_combo = self.entries_disciplina_modulo['professor_id'].get()
+            turma_combo = self.entries_disciplina_modulo['turma_id'].get()
+
+            professor_id = None
+            if professor_combo != 'Selecione...':
+                professor_id = int(professor_combo.split(' - ')[0])
+
+            turma_id = None
+            if turma_combo != 'Selecione...':
+                turma_id = int(turma_combo.split(' - ')[0])
+
+            # Obter outros campos
+            descricao = self.entries_disciplina_modulo['descricao'].get('1.0', tk.END).strip()
+            status = self.entries_disciplina_modulo['status'].get()
+
+            # Inserir no banco
+            self.cursor.execute('''
+                INSERT INTO disciplinas (nome, carga_horaria, professor_id, turma_id, descricao, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (nome, carga_horaria, professor_id, turma_id, descricao, status))
+
+            self.conn.commit()
+
+            messagebox.showinfo("Sucesso", f"Disciplina '{nome}' cadastrada com sucesso!")
+            self.registrar_log('CADASTRO', 'Disciplinas', f'Cadastrou disciplina: {nome}')
+
+            # Limpar formulário
+            self.limpar_formulario_disciplina_modulo()
+
+            # Atualizar lista
+            self.carregar_dados_disciplinas_modulo()
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar disciplina: {str(e)}")
+
+    def editar_disciplina_modulo(self):
+        """Edita uma disciplina selecionada"""
+        selected = self.tree_disciplinas_modulo.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma disciplina para editar!")
+            return
+
+        disc_id = self.tree_disciplinas_modulo.item(selected[0])['values'][0]
+        messagebox.showinfo("Info", f"Funcionalidade de edição da disciplina ID {disc_id} será implementada.")
+
+    def excluir_disciplina_modulo(self):
+        """Exclui uma disciplina selecionada"""
+        selected = self.tree_disciplinas_modulo.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma disciplina para excluir!")
+            return
+
+        disc_id = self.tree_disciplinas_modulo.item(selected[0])['values'][0]
+        disc_nome = self.tree_disciplinas_modulo.item(selected[0])['values'][1]
+
+        resposta = messagebox.askyesno("Confirmar Exclusão",
+                                       f"Deseja realmente excluir a disciplina '{disc_nome}'?")
+
+        if resposta:
+            try:
+                self.cursor.execute("DELETE FROM disciplinas WHERE id = ?", (disc_id,))
+                self.conn.commit()
+
+                messagebox.showinfo("Sucesso", f"Disciplina '{disc_nome}' excluída com sucesso!")
+                self.registrar_log('EXCLUSÃO', 'Disciplinas', f'Excluiu disciplina: {disc_nome}')
+
+                self.carregar_dados_disciplinas_modulo()
+
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao excluir disciplina: {str(e)}")
+
+    def exportar_disciplinas_modulo(self):
+        """Exporta lista de disciplinas para Excel"""
+        try:
+            filtro_status = self.filtro_status_disciplina.get()
+
+            if filtro_status == 'Todas':
+                self.cursor.execute('''
+                    SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                    FROM disciplinas d
+                    LEFT JOIN professores p ON d.professor_id = p.id
+                    LEFT JOIN turmas t ON d.turma_id = t.id
+                    ORDER BY d.nome
+                ''')
+            else:
+                self.cursor.execute('''
+                    SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                    FROM disciplinas d
+                    LEFT JOIN professores p ON d.professor_id = p.id
+                    LEFT JOIN turmas t ON d.turma_id = t.id
+                    WHERE d.status = ?
+                    ORDER BY d.nome
+                ''', (filtro_status,))
+
+            disciplinas = self.cursor.fetchall()
+
+            if not disciplinas:
+                messagebox.showwarning("Aviso", "Não há disciplinas para exportar!")
+                return
+
+            # Criar DataFrame
+            df = pd.DataFrame(disciplinas, columns=['ID', 'Nome', 'Carga Horária', 'Professor',
+                                                   'Turma', 'Status'])
+
+            # Salvar arquivo
+            filename = filedialog.asksaveasfilename(
+                defaultextension='.xlsx',
+                filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")],
+                initialfile=f'disciplinas_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            )
+
+            if filename:
+                df.to_excel(filename, index=False, engine='openpyxl')
+                messagebox.showinfo("Sucesso", f"Disciplinas exportadas com sucesso!\n\nArquivo: {filename}")
+                self.registrar_log('EXPORTAÇÃO', 'Disciplinas', f'Exportou lista de disciplinas')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar disciplinas: {str(e)}")
+
+    def carregar_aba_relatorios_disciplinas(self, parent):
+        """Aba de relatórios de disciplinas"""
+        frame = tk.Frame(parent, bg='#f8f9fa')
+        parent.add(frame, text='📊 Relatórios')
+
+        tk.Label(frame, text="Relatórios de Disciplinas", font=('Arial', 16, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(pady=20)
+
+        tk.Label(frame, text="Funcionalidade de relatórios em desenvolvimento", font=('Arial', 12),
+                 bg='#f8f9fa', fg='#666666').pack(pady=10)
 
     # ========== MÓDULO CONTROLE DE MATRÍCULAS ==========
 
@@ -5249,8 +5704,497 @@ class SistemaGestaoEscolar:
         self.ativar_botao("📋 Controle de Matrículas")
         self.registrar_log('ACESSO', 'Controle de Matrículas', 'Acessou módulo de controle de matrículas')
 
-        tk.Label(self.content_frame, text="Módulo de Controle de Matrículas - Implementação Similar aos Anteriores",
-                 font=('Arial', 16), bg='#f8f9fa').pack(expand=True)
+        # Frame principal
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        # Título
+        title_frame = tk.Frame(main_frame, bg='#f8f9fa')
+        title_frame.pack(fill='x', pady=(0, 20))
+
+        tk.Label(title_frame, text="Controle de Matrículas", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Gerenciamento completo de matrículas de alunos",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook
+        notebook = ttk.Notebook(main_frame, style='Custom.TNotebook')
+        notebook.pack(fill='both', expand=True)
+
+        # Abas
+        self.carregar_aba_lista_matriculas(notebook)
+        self.carregar_aba_nova_matricula(notebook)
+        self.carregar_aba_relatorios_matriculas(notebook)
+
+    def carregar_aba_lista_matriculas(self, parent):
+        """Aba de listagem de matrículas"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='📋 Lista de Matrículas')
+
+        # Barra de ferramentas
+        toolbar = tk.Frame(frame, bg='white', pady=10)
+        toolbar.pack(fill='x', padx=20)
+
+        # Busca
+        search_frame = tk.Frame(toolbar, bg='white')
+        search_frame.pack(side='left', fill='x', expand=True)
+
+        tk.Label(search_frame, text="🔍 Buscar:", font=('Arial', 10, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left', padx=5)
+
+        self.busca_matricula_var = tk.StringVar()
+        busca_entry = tk.Entry(search_frame, textvariable=self.busca_matricula_var,
+                              font=('Arial', 10), width=40, relief='solid', bd=1)
+        busca_entry.pack(side='left', padx=5)
+        busca_entry.bind('<KeyRelease>', self.buscar_matriculas)
+
+        # Filtros
+        tk.Label(search_frame, text="Status:", font=('Arial', 10),
+                bg='white', fg='#666666').pack(side='left', padx=(20, 5))
+
+        self.filtro_status_matricula = ttk.Combobox(search_frame, values=['Todas', 'Ativa', 'Inativa', 'Transferida'],
+                                                     state='readonly', width=12, font=('Arial', 10))
+        self.filtro_status_matricula.set('Ativa')
+        self.filtro_status_matricula.pack(side='left', padx=5)
+        self.filtro_status_matricula.bind('<<ComboboxSelected>>', lambda e: self.aplicar_filtros_matriculas())
+
+        # Botões de ação
+        btn_frame = tk.Frame(toolbar, bg='white')
+        btn_frame.pack(side='right')
+
+        ModernButton(btn_frame, text="➕ Nova Matrícula", command=lambda: parent.select(1),
+                    color='#0046AD').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="✏️ Editar", command=self.editar_matricula,
+                    color='#FFCC00').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="🔄 Transferir", command=self.transferir_matricula,
+                    color='#17a2b8').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="❌ Cancelar", command=self.cancelar_matricula,
+                    color='#dc3545').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="📊 Exportar", command=self.exportar_matriculas,
+                    color='#28a745').pack(side='left', padx=5)
+
+        # Tabela de matrículas
+        table_frame = tk.Frame(frame, bg='white')
+        table_frame.pack(fill='both', expand=True, padx=20, pady=10)
+
+        # Scrollbars
+        scroll_y = ttk.Scrollbar(table_frame)
+        scroll_y.pack(side='right', fill='y')
+
+        scroll_x = ttk.Scrollbar(table_frame, orient='horizontal')
+        scroll_x.pack(side='bottom', fill='x')
+
+        # Treeview
+        colunas = ('ID', 'Nº Matrícula', 'Aluno', 'Turma', 'Data Matrícula', 'Status')
+        self.tree_matriculas = ttk.Treeview(table_frame, columns=colunas, show='headings',
+                                           yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set,
+                                           style='Custom.Treeview', height=20)
+
+        # Configurar colunas
+        self.tree_matriculas.heading('ID', text='ID')
+        self.tree_matriculas.heading('Nº Matrícula', text='Nº Matrícula')
+        self.tree_matriculas.heading('Aluno', text='Nome do Aluno')
+        self.tree_matriculas.heading('Turma', text='Turma')
+        self.tree_matriculas.heading('Data Matrícula', text='Data Matrícula')
+        self.tree_matriculas.heading('Status', text='Status')
+
+        self.tree_matriculas.column('ID', width=50, anchor='center')
+        self.tree_matriculas.column('Nº Matrícula', width=120, anchor='center')
+        self.tree_matriculas.column('Aluno', width=250, anchor='w')
+        self.tree_matriculas.column('Turma', width=150, anchor='w')
+        self.tree_matriculas.column('Data Matrícula', width=120, anchor='center')
+        self.tree_matriculas.column('Status', width=100, anchor='center')
+
+        scroll_y.config(command=self.tree_matriculas.yview)
+        scroll_x.config(command=self.tree_matriculas.xview)
+
+        self.tree_matriculas.pack(fill='both', expand=True)
+
+        # Carregar dados
+        self.carregar_dados_matriculas()
+
+        # Bind duplo clique para editar
+        self.tree_matriculas.bind('<Double-1>', lambda e: self.editar_matricula())
+
+    def carregar_dados_matriculas(self, query=None, filtro_status='Ativa'):
+        """Carrega dados das matrículas na tabela"""
+        for item in self.tree_matriculas.get_children():
+            self.tree_matriculas.delete(item)
+
+        try:
+            if query:
+                sql = '''
+                    SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                    FROM matriculas m
+                    INNER JOIN alunos a ON m.aluno_id = a.id
+                    LEFT JOIN turmas t ON m.turma_id = t.id
+                    WHERE (a.nome LIKE ? OR m.numero_matricula LIKE ? OR t.nome LIKE ?)
+                '''
+                params = [f'%{query}%', f'%{query}%', f'%{query}%']
+
+                if filtro_status != 'Todas':
+                    sql += ' AND m.status = ?'
+                    params.append(filtro_status)
+
+                sql += ' ORDER BY m.data_matricula DESC'
+                self.cursor.execute(sql, params)
+            else:
+                if filtro_status == 'Todas':
+                    self.cursor.execute('''
+                        SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                        FROM matriculas m
+                        INNER JOIN alunos a ON m.aluno_id = a.id
+                        LEFT JOIN turmas t ON m.turma_id = t.id
+                        ORDER BY m.data_matricula DESC
+                    ''')
+                else:
+                    self.cursor.execute('''
+                        SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                        FROM matriculas m
+                        INNER JOIN alunos a ON m.aluno_id = a.id
+                        LEFT JOIN turmas t ON m.turma_id = t.id
+                        WHERE m.status = ?
+                        ORDER BY m.data_matricula DESC
+                    ''', (filtro_status,))
+
+            matriculas = self.cursor.fetchall()
+
+            for mat in matriculas:
+                mat_id, numero, aluno, turma, data, status = mat
+                turma = turma if turma else 'Não atribuída'
+
+                # Cor de status
+                if status == 'Ativa':
+                    tags = ('ativa',)
+                elif status == 'Inativa':
+                    tags = ('inativa',)
+                else:
+                    tags = ('transferida',)
+
+                self.tree_matriculas.insert('', 'end', values=(mat_id, numero, aluno, turma, data, status), tags=tags)
+
+            # Configurar cores
+            self.tree_matriculas.tag_configure('ativa', foreground='#28a745')
+            self.tree_matriculas.tag_configure('inativa', foreground='#dc3545')
+            self.tree_matriculas.tag_configure('transferida', foreground='#ffc107')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar matrículas: {str(e)}")
+
+    def buscar_matriculas(self, event=None):
+        """Busca matrículas"""
+        query = self.busca_matricula_var.get()
+        filtro_status = self.filtro_status_matricula.get()
+        self.carregar_dados_matriculas(query, filtro_status)
+
+    def aplicar_filtros_matriculas(self):
+        """Aplica filtros na lista de matrículas"""
+        query = self.busca_matricula_var.get()
+        filtro_status = self.filtro_status_matricula.get()
+        self.carregar_dados_matriculas(query, filtro_status)
+
+    def carregar_aba_nova_matricula(self, parent):
+        """Aba de nova matrícula"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='➕ Nova Matrícula')
+
+        # Container com scroll
+        canvas = tk.Canvas(frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg='white')
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Título
+        title_frame = tk.Frame(scrollable_frame, bg='white')
+        title_frame.pack(fill='x', pady=(20, 20), padx=20)
+
+        tk.Label(title_frame, text="📋 Nova Matrícula", font=('Arial', 18, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left')
+
+        # Frame do formulário
+        form_frame = tk.Frame(scrollable_frame, bg='white')
+        form_frame.pack(fill='both', expand=True, padx=40)
+
+        self.entries_matricula = {}
+
+        # Campos do formulário
+        campos = [
+            ('aluno_id', 'Aluno *', 'combo_aluno'),
+            ('turma_id', 'Turma *', 'combo_turma'),
+            ('data_matricula', 'Data da Matrícula *', 'entry'),
+            ('numero_matricula', 'Número da Matrícula (automático)', 'entry_readonly'),
+            ('observacoes', 'Observações', 'text')
+        ]
+
+        row = 0
+        for field, label, tipo in campos:
+            # Label
+            tk.Label(form_frame, text=label, font=('Arial', 11, 'bold'),
+                    bg='white', fg='#0046AD').grid(row=row, column=0, sticky='w', pady=10, padx=10)
+
+            # Campo
+            if tipo == 'entry':
+                entry = tk.Entry(form_frame, font=('Arial', 11), width=50, relief='solid', bd=1)
+                if field == 'data_matricula':
+                    entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
+                entry.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = entry
+
+            elif tipo == 'entry_readonly':
+                entry = tk.Entry(form_frame, font=('Arial', 11), width=50, relief='solid', bd=1, state='readonly')
+                # Gerar número automático
+                self.cursor.execute("SELECT COUNT(*) FROM matriculas")
+                count = self.cursor.fetchone()[0]
+                numero_auto = f"MAT{datetime.now().year}{str(count + 1).zfill(5)}"
+                entry.configure(state='normal')
+                entry.insert(0, numero_auto)
+                entry.configure(state='readonly')
+                entry.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = entry
+
+            elif tipo == 'text':
+                text_widget = tk.Text(form_frame, font=('Arial', 10), width=50, height=4,
+                                     relief='solid', bd=1, wrap='word')
+                text_widget.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = text_widget
+
+            elif tipo == 'combo_aluno':
+                # Buscar alunos ativos
+                self.cursor.execute("SELECT id, nome FROM alunos WHERE status = 'Ativo' ORDER BY nome")
+                alunos = self.cursor.fetchall()
+                aluno_values = ['Selecione...'] + [f"{a[0]} - {a[1]}" for a in alunos]
+
+                combo = ttk.Combobox(form_frame, values=aluno_values, state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Selecione...')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = combo
+
+            elif tipo == 'combo_turma':
+                # Buscar turmas ativas
+                self.cursor.execute("SELECT id, nome, serie FROM turmas WHERE status = 'Ativa' ORDER BY nome")
+                turmas = self.cursor.fetchall()
+                turma_values = ['Selecione...'] + [f"{t[0]} - {t[1]} ({t[2]})" for t in turmas]
+
+                combo = ttk.Combobox(form_frame, values=turma_values, state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Selecione...')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = combo
+
+            row += 1
+
+        form_frame.columnconfigure(1, weight=1)
+
+        # Botões
+        btn_frame = tk.Frame(scrollable_frame, bg='white')
+        btn_frame.pack(fill='x', pady=20, padx=40)
+
+        ModernButton(btn_frame, text="💾 Salvar Matrícula", command=self.salvar_matricula,
+                    color='#0046AD').pack(side='left', padx=10)
+
+        ModernButton(btn_frame, text="🔄 Limpar", command=self.limpar_formulario_matricula,
+                    color='#666666').pack(side='left', padx=10)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def limpar_formulario_matricula(self):
+        """Limpa o formulário de matrícula"""
+        for field, widget in self.entries_matricula.items():
+            if isinstance(widget, tk.Entry):
+                if field == 'data_matricula':
+                    widget.delete(0, tk.END)
+                    widget.insert(0, datetime.now().strftime('%Y-%m-%d'))
+                elif field != 'numero_matricula':  # Não limpar número automático
+                    widget.delete(0, tk.END)
+            elif isinstance(widget, tk.Text):
+                widget.delete('1.0', tk.END)
+            elif isinstance(widget, ttk.Combobox):
+                widget.set('Selecione...')
+
+        # Atualizar número automático
+        self.cursor.execute("SELECT COUNT(*) FROM matriculas")
+        count = self.cursor.fetchone()[0]
+        numero_auto = f"MAT{datetime.now().year}{str(count + 1).zfill(5)}"
+        self.entries_matricula['numero_matricula'].configure(state='normal')
+        self.entries_matricula['numero_matricula'].delete(0, tk.END)
+        self.entries_matricula['numero_matricula'].insert(0, numero_auto)
+        self.entries_matricula['numero_matricula'].configure(state='readonly')
+
+    def salvar_matricula(self):
+        """Salva uma nova matrícula"""
+        try:
+            # Validar campos obrigatórios
+            aluno_combo = self.entries_matricula['aluno_id'].get()
+            turma_combo = self.entries_matricula['turma_id'].get()
+            data_matricula = self.entries_matricula['data_matricula'].get().strip()
+
+            if aluno_combo == 'Selecione...':
+                messagebox.showwarning("Aviso", "Selecione um aluno!")
+                return
+
+            if turma_combo == 'Selecione...':
+                messagebox.showwarning("Aviso", "Selecione uma turma!")
+                return
+
+            if not data_matricula:
+                messagebox.showwarning("Aviso", "A data da matrícula é obrigatória!")
+                return
+
+            aluno_id = int(aluno_combo.split(' - ')[0])
+            turma_id = int(turma_combo.split(' - ')[0])
+
+            numero_matricula = self.entries_matricula['numero_matricula'].get()
+            observacoes = self.entries_matricula['observacoes'].get('1.0', tk.END).strip()
+
+            # Verificar se aluno já tem matrícula ativa
+            self.cursor.execute('''
+                SELECT COUNT(*) FROM matriculas 
+                WHERE aluno_id = ? AND status = 'Ativa'
+            ''', (aluno_id,))
+
+            if self.cursor.fetchone()[0] > 0:
+                messagebox.showwarning("Aviso", "Este aluno já possui uma matrícula ativa!")
+                return
+
+            # Inserir no banco
+            self.cursor.execute('''
+                INSERT INTO matriculas (aluno_id, turma_id, data_matricula, numero_matricula, 
+                                       observacoes, status)
+                VALUES (?, ?, ?, ?, ?, 'Ativa')
+            ''', (aluno_id, turma_id, data_matricula, numero_matricula, observacoes))
+
+            self.conn.commit()
+
+            messagebox.showinfo("Sucesso", f"Matrícula '{numero_matricula}' realizada com sucesso!")
+            self.registrar_log('CADASTRO', 'Matrículas', f'Nova matrícula: {numero_matricula}')
+
+            # Limpar formulário
+            self.limpar_formulario_matricula()
+
+            # Atualizar lista
+            self.carregar_dados_matriculas()
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar matrícula: {str(e)}")
+
+    def editar_matricula(self):
+        """Edita uma matrícula selecionada"""
+        selected = self.tree_matriculas.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma matrícula para editar!")
+            return
+
+        mat_id = self.tree_matriculas.item(selected[0])['values'][0]
+        messagebox.showinfo("Info", f"Funcionalidade de edição da matrícula ID {mat_id} será implementada.")
+
+    def transferir_matricula(self):
+        """Transfere um aluno para outra turma"""
+        selected = self.tree_matriculas.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma matrícula para transferir!")
+            return
+
+        mat_id = self.tree_matriculas.item(selected[0])['values'][0]
+        messagebox.showinfo("Info", f"Funcionalidade de transferência da matrícula ID {mat_id} será implementada.")
+
+    def cancelar_matricula(self):
+        """Cancela uma matrícula"""
+        selected = self.tree_matriculas.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma matrícula para cancelar!")
+            return
+
+        mat_id = self.tree_matriculas.item(selected[0])['values'][0]
+        mat_numero = self.tree_matriculas.item(selected[0])['values'][1]
+
+        resposta = messagebox.askyesno("Confirmar Cancelamento",
+                                       f"Deseja realmente cancelar a matrícula '{mat_numero}'?")
+
+        if resposta:
+            try:
+                self.cursor.execute("UPDATE matriculas SET status = 'Inativa' WHERE id = ?", (mat_id,))
+                self.conn.commit()
+
+                messagebox.showinfo("Sucesso", f"Matrícula '{mat_numero}' cancelada com sucesso!")
+                self.registrar_log('CANCELAMENTO', 'Matrículas', f'Cancelou matrícula: {mat_numero}')
+
+                self.carregar_dados_matriculas()
+
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao cancelar matrícula: {str(e)}")
+
+    def exportar_matriculas(self):
+        """Exporta lista de matrículas para Excel"""
+        try:
+            filtro_status = self.filtro_status_matricula.get()
+
+            if filtro_status == 'Todas':
+                self.cursor.execute('''
+                    SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                    FROM matriculas m
+                    INNER JOIN alunos a ON m.aluno_id = a.id
+                    LEFT JOIN turmas t ON m.turma_id = t.id
+                    ORDER BY m.data_matricula DESC
+                ''')
+            else:
+                self.cursor.execute('''
+                    SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                    FROM matriculas m
+                    INNER JOIN alunos a ON m.aluno_id = a.id
+                    LEFT JOIN turmas t ON m.turma_id = t.id
+                    WHERE m.status = ?
+                    ORDER BY m.data_matricula DESC
+                ''', (filtro_status,))
+
+            matriculas = self.cursor.fetchall()
+
+            if not matriculas:
+                messagebox.showwarning("Aviso", "Não há matrículas para exportar!")
+                return
+
+            # Criar DataFrame
+            df = pd.DataFrame(matriculas, columns=['ID', 'Nº Matrícula', 'Aluno', 'Turma',
+                                                   'Data Matrícula', 'Status'])
+
+            # Salvar arquivo
+            filename = filedialog.asksaveasfilename(
+                defaultextension='.xlsx',
+                filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")],
+                initialfile=f'matriculas_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            )
+
+            if filename:
+                df.to_excel(filename, index=False, engine='openpyxl')
+                messagebox.showinfo("Sucesso", f"Matrículas exportadas com sucesso!\n\nArquivo: {filename}")
+                self.registrar_log('EXPORTAÇÃO', 'Matrículas', f'Exportou lista de matrículas')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar matrículas: {str(e)}")
+
+    def carregar_aba_relatorios_matriculas(self, parent):
+        """Aba de relatórios de matrículas"""
+        frame = tk.Frame(parent, bg='#f8f9fa')
+        parent.add(frame, text='📊 Relatórios')
+
+        tk.Label(frame, text="Relatórios de Matrículas", font=('Arial', 16, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(pady=20)
+
+        tk.Label(frame, text="Funcionalidade de relatórios em desenvolvimento", font=('Arial', 12),
+                 bg='#f8f9fa', fg='#666666').pack(pady=10)
 
     # ========== MÓDULO CONTROLE DE FREQUÊNCIA ==========
 
@@ -5260,10 +6204,270 @@ class SistemaGestaoEscolar:
         self.ativar_botao("✅ Controle de Frequência")
         self.registrar_log('ACESSO', 'Controle de Frequência', 'Acessou módulo de controle de frequência')
 
-        tk.Label(self.content_frame, text="Módulo de Controle de Frequência - Implementação Similar ao Diário",
-                 font=('Arial', 16), bg='#f8f9fa').pack(expand=True)
+        # Frame principal
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
 
-    # ========== MÓDULO CALENDÁRIO ESCOLAR ==========
+        # Título
+        title_frame = tk.Frame(main_frame, bg='#f8f9fa')
+        title_frame.pack(fill='x', pady=(0, 20))
+
+        tk.Label(title_frame, text="Controle de Frequência", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Registro e acompanhamento de presença dos alunos",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook
+        notebook = ttk.Notebook(main_frame, style='Custom.TNotebook')
+        notebook.pack(fill='both', expand=True)
+
+        # Abas
+        self.carregar_aba_registro_frequencia(notebook)
+        self.carregar_aba_consulta_frequencia(notebook)
+        self.carregar_aba_relatorio_frequencia(notebook)
+
+    def carregar_aba_registro_frequencia(self, parent):
+        """Aba de registro de frequência"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='✅ Registrar Frequência')
+
+        # Container com scroll
+        canvas = tk.Canvas(frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg='white')
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Título
+        title_frame = tk.Frame(scrollable_frame, bg='white')
+        title_frame.pack(fill='x', pady=(20, 20), padx=20)
+
+        tk.Label(title_frame, text="✅ Registro de Frequência", font=('Arial', 18, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left')
+
+        # Seleção de turma e disciplina
+        select_frame = tk.Frame(scrollable_frame, bg='white')
+        select_frame.pack(fill='x', padx=40, pady=10)
+
+        # Turma
+        tk.Label(select_frame, text="Turma:", font=('Arial', 11, 'bold'),
+                bg='white', fg='#0046AD').grid(row=0, column=0, sticky='w', pady=10, padx=10)
+
+        self.cursor.execute("SELECT id, nome, serie FROM turmas WHERE status = 'Ativa' ORDER BY nome")
+        turmas = self.cursor.fetchall()
+        turma_values = ['Selecione...'] + [f"{t[0]} - {t[1]} ({t[2]})" for t in turmas]
+
+        self.combo_turma_freq = ttk.Combobox(select_frame, values=turma_values, state='readonly',
+                                            font=('Arial', 11), width=40)
+        self.combo_turma_freq.set('Selecione...')
+        self.combo_turma_freq.grid(row=0, column=1, sticky='ew', pady=10, padx=10)
+        self.combo_turma_freq.bind('<<ComboboxSelected>>', self.carregar_alunos_frequencia)
+
+        # Disciplina
+        tk.Label(select_frame, text="Disciplina:", font=('Arial', 11, 'bold'),
+                bg='white', fg='#0046AD').grid(row=1, column=0, sticky='w', pady=10, padx=10)
+
+        self.combo_disciplina_freq = ttk.Combobox(select_frame, values=['Selecione uma turma primeiro'],
+                                                 state='readonly', font=('Arial', 11), width=40)
+        self.combo_disciplina_freq.set('Selecione uma turma primeiro')
+        self.combo_disciplina_freq.grid(row=1, column=1, sticky='ew', pady=10, padx=10)
+
+        # Data
+        tk.Label(select_frame, text="Data:", font=('Arial', 11, 'bold'),
+                bg='white', fg='#0046AD').grid(row=2, column=0, sticky='w', pady=10, padx=10)
+
+        self.entry_data_freq = tk.Entry(select_frame, font=('Arial', 11), width=42, relief='solid', bd=1)
+        self.entry_data_freq.insert(0, datetime.now().strftime('%Y-%m-%d'))
+        self.entry_data_freq.grid(row=2, column=1, sticky='ew', pady=10, padx=10)
+
+        select_frame.columnconfigure(1, weight=1)
+
+        # Botão carregar alunos
+        btn_carregar = tk.Frame(scrollable_frame, bg='white')
+        btn_carregar.pack(pady=10)
+
+        ModernButton(btn_carregar, text="📋 Carregar Alunos", command=self.carregar_alunos_frequencia,
+                    color='#0046AD').pack()
+
+        # Frame para lista de alunos
+        self.frame_lista_freq = tk.Frame(scrollable_frame, bg='white')
+        self.frame_lista_freq.pack(fill='both', expand=True, padx=40, pady=20)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def carregar_alunos_frequencia(self, event=None):
+        """Carrega lista de alunos para registro de frequência"""
+        # Limpar frame anterior
+        for widget in self.frame_lista_freq.winfo_children():
+            widget.destroy()
+
+        turma_combo = self.combo_turma_freq.get()
+        if turma_combo == 'Selecione...':
+            messagebox.showwarning("Aviso", "Selecione uma turma!")
+            return
+
+        turma_id = int(turma_combo.split(' - ')[0])
+
+        # Carregar disciplinas da turma
+        self.cursor.execute('''
+            SELECT id, nome FROM disciplinas 
+            WHERE turma_id = ? AND status = 'Ativa'
+            ORDER BY nome
+        ''', (turma_id,))
+        disciplinas = self.cursor.fetchall()
+
+        if disciplinas:
+            disc_values = ['Selecione...'] + [f"{d[0]} - {d[1]}" for d in disciplinas]
+            self.combo_disciplina_freq.configure(values=disc_values)
+            self.combo_disciplina_freq.set('Selecione...')
+        else:
+            self.combo_disciplina_freq.configure(values=['Nenhuma disciplina encontrada'])
+            self.combo_disciplina_freq.set('Nenhuma disciplina encontrada')
+
+        # Carregar alunos da turma
+        self.cursor.execute('''
+            SELECT a.id, a.nome
+            FROM alunos a
+            INNER JOIN matriculas m ON a.id = m.aluno_id
+            WHERE m.turma_id = ? AND m.status = 'Ativa' AND a.status = 'Ativo'
+            ORDER BY a.nome
+        ''', (turma_id,))
+
+        alunos = self.cursor.fetchall()
+
+        if not alunos:
+            tk.Label(self.frame_lista_freq, text="Nenhum aluno encontrado nesta turma.",
+                    font=('Arial', 12), bg='white', fg='#666666').pack(pady=20)
+            return
+
+        # Título da lista
+        tk.Label(self.frame_lista_freq, text="Lista de Alunos - Marque os PRESENTES:",
+                font=('Arial', 12, 'bold'), bg='white', fg='#0046AD').pack(anchor='w', pady=10)
+
+        # Frame para checkboxes
+        check_frame = tk.Frame(self.frame_lista_freq, bg='white')
+        check_frame.pack(fill='both', expand=True)
+
+        self.freq_vars = {}
+
+        for i, (aluno_id, aluno_nome) in enumerate(alunos):
+            var = tk.IntVar(value=1)  # Presente por padrão
+            self.freq_vars[aluno_id] = var
+
+            row_frame = tk.Frame(check_frame, bg='white')
+            row_frame.pack(fill='x', pady=2)
+
+            tk.Checkbutton(row_frame, text=f"{aluno_nome}", variable=var,
+                          font=('Arial', 11), bg='white', fg='#333333',
+                          selectcolor='#FFCC00', activebackground='white').pack(side='left', padx=10)
+
+        # Botões de ação
+        btn_frame = tk.Frame(self.frame_lista_freq, bg='white')
+        btn_frame.pack(pady=20)
+
+        ModernButton(btn_frame, text="✅ Marcar Todos Presentes",
+                    command=lambda: self.marcar_todos_freq(1),
+                    color='#28a745').pack(side='left', padx=10)
+
+        ModernButton(btn_frame, text="❌ Marcar Todos Ausentes",
+                    command=lambda: self.marcar_todos_freq(0),
+                    color='#dc3545').pack(side='left', padx=10)
+
+        ModernButton(btn_frame, text="💾 Salvar Frequência",
+                    command=self.salvar_frequencia,
+                    color='#0046AD').pack(side='left', padx=10)
+
+    def marcar_todos_freq(self, valor):
+        """Marca todos os alunos como presentes ou ausentes"""
+        for var in self.freq_vars.values():
+            var.set(valor)
+
+    def salvar_frequencia(self):
+        """Salva o registro de frequência"""
+        try:
+            turma_combo = self.combo_turma_freq.get()
+            disciplina_combo = self.combo_disciplina_freq.get()
+            data_aula = self.entry_data_freq.get().strip()
+
+            if turma_combo == 'Selecione...':
+                messagebox.showwarning("Aviso", "Selecione uma turma!")
+                return
+
+            if disciplina_combo == 'Selecione...' or disciplina_combo == 'Nenhuma disciplina encontrada':
+                messagebox.showwarning("Aviso", "Selecione uma disciplina!")
+                return
+
+            if not data_aula:
+                messagebox.showwarning("Aviso", "Informe a data da aula!")
+                return
+
+            turma_id = int(turma_combo.split(' - ')[0])
+            disciplina_id = int(disciplina_combo.split(' - ')[0])
+
+            # Verificar se já existe registro para esta data
+            self.cursor.execute('''
+                SELECT COUNT(*) FROM frequencia 
+                WHERE turma_id = ? AND disciplina_id = ? AND data_aula = ?
+            ''', (turma_id, disciplina_id, data_aula))
+
+            if self.cursor.fetchone()[0] > 0:
+                resposta = messagebox.askyesno("Aviso",
+                                              "Já existe registro de frequência para esta data.\n"
+                                              "Deseja sobrescrever?")
+                if not resposta:
+                    return
+
+                # Deletar registros antigos
+                self.cursor.execute('''
+                    DELETE FROM frequencia 
+                    WHERE turma_id = ? AND disciplina_id = ? AND data_aula = ?
+                ''', (turma_id, disciplina_id, data_aula))
+
+            # Inserir novos registros
+            for aluno_id, var in self.freq_vars.items():
+                presente = var.get()
+                self.cursor.execute('''
+                    INSERT INTO frequencia (aluno_id, disciplina_id, turma_id, data_aula, presente)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (aluno_id, disciplina_id, turma_id, data_aula, presente))
+
+            self.conn.commit()
+
+            messagebox.showinfo("Sucesso", "Frequência registrada com sucesso!")
+            self.registrar_log('REGISTRO', 'Frequência', f'Registrou frequência para {data_aula}')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar frequência: {str(e)}")
+
+    def carregar_aba_consulta_frequencia(self, parent):
+        """Aba de consulta de frequência"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='🔍 Consultar Frequência')
+
+        tk.Label(frame, text="Consulta de Frequência", font=('Arial', 16, 'bold'),
+                 bg='white', fg='#0046AD').pack(pady=20)
+
+        tk.Label(frame, text="Funcionalidade de consulta em desenvolvimento", font=('Arial', 12),
+                 bg='white', fg='#666666').pack(pady=10)
+
+    def carregar_aba_relatorio_frequencia(self, parent):
+        """Aba de relatórios de frequência"""
+        frame = tk.Frame(parent, bg='#f8f9fa')
+        parent.add(frame, text='📊 Relatórios')
+
+        tk.Label(frame, text="Relatórios de Frequência", font=('Arial', 16, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(pady=20)
+
+        tk.Label(frame, text="Funcionalidade de relatórios em desenvolvimento", font=('Arial', 12),
+                 bg='#f8f9fa', fg='#666666').pack(pady=10)
 
     def carregar_calendario_escolar(self):
         """Carrega módulo de calendário escolar"""
