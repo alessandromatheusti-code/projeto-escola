@@ -1,14117 +1,6958 @@
-﻿"""
-PROJETO ESCOLA - SISTEMA DE GESTÃƒO ESCOLAR
-VersÃ£o Desktop PyQt5 - Aprimorada com melhorias visuais e organizaÃ§Ã£o
-Autoria Original: Alessandro Matheusti
-Data: 2024
-"""
-
 import sys
+import subprocess
+
+def install_package(package):
+    try:
+        __import__(package)
+    except ImportError:
+        print(f"Instalando {package}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# Lista de dependências necessárias
+required_packages = ['reportlab', 'Pillow', 'pandas', 'openpyxl']
+
+for package in required_packages:
+    install_package(package)
+
+# Agora importe normalmente
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch, cm
+from reportlab.graphics.shapes import Drawing, Line
+import pandas as pd
+from PIL import Image, ImageDraw, ImageFont
+import openpyxl
 import os
 import sqlite3
-import pandas as pd
-import numpy as np
-from datetime import datetime, date, timedelta
-import calendar
-import hashlib
-import json
-import csv
-import tempfile
-import webbrowser
-from pathlib import Path
-from typing import Optional, Dict, List, Tuple, Any
-
-# PyQt5 imports - organizados por mÃ³dulo
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton, 
-    QLineEdit, QTextEdit, QComboBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QVBoxLayout, QHBoxLayout, QGridLayout, 
-    QStackedWidget, QMessageBox, QInputDialog, QFileDialog,
-    QProgressBar, QGroupBox, QFrame, QTabWidget, QDateEdit,
-    QCheckBox, QRadioButton, QButtonGroup, QSpinBox,
-    QDoubleSpinBox, QSlider, QProgressDialog, QDialog,
-    QFormLayout, QListWidget, QListWidgetItem, QTreeWidget,
-    QTreeWidgetItem, QSplitter, QToolBar, QStatusBar,
-    QMenuBar, QMenu, QAction, QStyleFactory, QDialogButtonBox,
-    QScrollArea, QSizePolicy, QSpacerItem,
-    QStyle
-    QGraphicsDropShadowEffect,
-    QStyle,
-)
-
-from PyQt5.QtCore import (
-    Qt, QTimer, QDate, QTime, QDateTime, QSize,
-    QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal,
-    QRect, QPoint, QThread, pyqtSlot, QSettings, QRegExp,
-    QItemSelectionModel
-)
-
-from PyQt5.QtGui import (
-    QFont, QIcon, QPixmap, QColor, QPalette, QBrush,
-    QLinearGradient, QRadialGradient, QConicalGradient,
-    QPainter, QPen, QFontMetrics, QIntValidator,
-    QDoubleValidator, QRegExpValidator, QKeySequence,
-    QImage, QTransform, QMovie, QTextCursor, QTextCharFormat,
-    QTextTableFormat, QTextLength, QDesktopServices
-)
-
-# ConfiguraÃ§Ãµes iniciais
-QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-
-# ============================================
-# STYLESHEET GLOBAL MODERNO E PROFISSIONAL
-# ============================================
-GLOBAL_STYLESHEET = """
-/* ===== ESTILOS GERAIS ===== */
-QMainWindow {
-    background-color: #f5f7fa;
-    font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
-}
-
-QWidget {
-    font-size: 13px;
-    color: #333333;
-}
-
-/* ===== BOTÃ•ES PRIMÃRIOS ===== */
-QPushButton {
-    background-color: #2c3e50;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 10px 20px;
-    font-weight: 600;
-    font-size: 13px;
-    min-height: 36px;
-    transition: all 0.2s ease;
-}
-
-QPushButton:hover {
-    background-color: #34495e;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-QPushButton:pressed {
-    background-color: #1a252f;
-    transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-QPushButton:disabled {
-    background-color: #bdc3c7;
-    color: #7f8c8d;
-}
-
-/* ===== BOTÃ•ES SECUNDÃRIOS (Azul original) ===== */
-QPushButton[class="secondary"] {
-    background-color: #3498db;
-}
-
-QPushButton[class="secondary"]:hover {
-    background-color: #2980b9;
-}
-
-QPushButton[class="secondary"]:pressed {
-    background-color: #1c6ea4;
-}
-
-/* ===== BOTÃ•ES DE SUCESSO (Verde original) ===== */
-QPushButton[class="success"] {
-    background-color: #27ae60;
-}
-
-QPushButton[class="success"]:hover {
-    background-color: #219653;
-}
-
-QPushButton[class="success"]:pressed {
-    background-color: #1e874b;
-}
-
-/* ===== BOTÃ•ES DE PERIGO (Vermelho original) ===== */
-QPushButton[class="danger"] {
-    background-color: #e74c3c;
-}
-
-QPushButton[class="danger"]:hover {
-    background-color: #c0392b;
-}
-
-QPushButton[class="danger"]:pressed {
-    background-color: #a93226;
-}
-
-/* ===== BOTÃ•ES DE AVISO (Laranja original) ===== */
-QPushButton[class="warning"] {
-    background-color: #f39c12;
-}
-
-QPushButton[class="warning"]:hover {
-    background-color: #d68910;
-}
-
-QPushButton[class="warning"]:pressed {
-    background-color: #b9770e;
-}
-
-/* ===== CAMPOS DE ENTRADA ===== */
-QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit {
-    background-color: white;
-    border: 2px solid #dce1e6;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 13px;
-    selection-background-color: #3498db;
-    selection-color: white;
-    transition: border-color 0.2s ease;
-}
-
-QLineEdit:focus, QTextEdit:focus, QComboBox:focus, 
-QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-}
-
-QLineEdit:hover, QTextEdit:hover, QComboBox:hover,
-QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover {
-    border-color: #a0c5e8;
-}
-
-/* ===== TABELAS ===== */
-QTableWidget {
-    background-color: white;
-    border: 1px solid #dce1e6;
-    border-radius: 6px;
-    gridline-color: #ecf0f1;
-    alternate-background-color: #f8f9fa;
-    selection-background-color: #e3f2fd;
-    selection-color: #2c3e50;
-}
-
-QTableWidget::item {
-    padding: 8px;
-    border-bottom: 1px solid #ecf0f1;
-}
-
-QTableWidget::item:selected {
-    background-color: #e3f2fd;
-    color: #2c3e50;
-}
-
-QHeaderView::section {
-    background-color: #2c3e50;
-    color: white;
-    padding: 12px 8px;
-    border: none;
-    font-weight: 600;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-QHeaderView::section:hover {
-    background-color: #34495e;
-}
-
-/* ===== ABAS ===== */
-QTabWidget::pane {
-    border: 1px solid #dce1e6;
-    border-radius: 6px;
-    background-color: white;
-    margin-top: 2px;
-}
-
-QTabBar::tab {
-    background-color: #ecf0f1;
-    color: #7f8c8d;
-    padding: 12px 24px;
-    margin-right: 4px;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
-    font-weight: 600;
-    transition: all 0.2s ease;
-}
-
-QTabBar::tab:hover {
-    background-color: #d5dbdb;
-    color: #2c3e50;
-}
-
-QTabBar::tab:selected {
-    background-color: #2c3e50;
-    color: white;
-    border-bottom: 3px solid #3498db;
-}
-
-/* ===== GRUPOS ===== */
-QGroupBox {
-    font-weight: 600;
-    font-size: 14px;
-    color: #2c3e50;
-    border: 2px solid #dce1e6;
-    border-radius: 8px;
-    margin-top: 20px;
-    padding-top: 15px;
-}
-
-QGroupBox::title {
-    subcontrol-origin: margin;
-    subcontrol-position: top left;
-    left: 15px;
-    padding: 0 10px;
-    background-color: #f5f7fa;
-}
-
-/* ===== BARRAS DE PROGRESSO ===== */
-QProgressBar {
-    border: 2px solid #dce1e6;
-    border-radius: 6px;
-    background-color: white;
-    text-align: center;
-    color: #2c3e50;
-    font-weight: 600;
-}
-
-QProgressBar::chunk {
-    background-color: #3498db;
-    border-radius: 4px;
-    transition: width 0.3s ease;
-}
-
-QProgressBar::chunk:hover {
-    background-color: #2980b9;
-}
-
-/* ===== CHECKBOXES E RADIO BUTTONS ===== */
-QCheckBox, QRadioButton {
-    spacing: 8px;
-    font-size: 13px;
-    color: #333333;
-}
-
-QCheckBox::indicator, QRadioButton::indicator {
-    width: 18px;
-    height: 18px;
-    border: 2px solid #dce1e6;
-    border-radius: 4px;
-    background-color: white;
-}
-
-QCheckBox::indicator:checked, QRadioButton::indicator:checked {
-    background-color: #3498db;
-    border-color: #3498db;
-}
-
-QCheckBox::indicator:checked:hover, QRadioButton::indicator:checked:hover {
-    background-color: #2980b9;
-    border-color: #2980b9;
-}
-
-/* ===== SCROLLBARS ===== */
-QScrollBar:vertical, QScrollBar:horizontal {
-    border: none;
-    background-color: #ecf0f1;
-    width: 12px;
-    border-radius: 6px;
-}
-
-QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-    background-color: #bdc3c7;
-    border-radius: 6px;
-    min-height: 30px;
-}
-
-QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
-    background-color: #95a5a6;
-}
-
-QScrollBar::add-line, QScrollBar::sub-line {
-    border: none;
-    background: none;
-}
-
-/* ===== MENUS ===== */
-QMenuBar {
-    background-color: #2c3e50;
-    color: white;
-    padding: 6px;
-    font-weight: 600;
-}
-
-QMenuBar::item {
-    padding: 8px 16px;
-    background-color: transparent;
-    border-radius: 4px;
-}
-
-QMenuBar::item:selected {
-    background-color: #34495e;
-}
-
-QMenu {
-    background-color: white;
-    border: 1px solid #dce1e6;
-    border-radius: 6px;
-    padding: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-QMenu::item {
-    padding: 10px 24px;
-    border-radius: 4px;
-    margin: 2px 0;
-}
-
-QMenu::item:selected {
-    background-color: #e3f2fd;
-    color: #2c3e50;
-}
-
-/* ===== STATUS BAR ===== */
-QStatusBar {
-    background-color: #2c3e50;
-    color: white;
-    font-size: 12px;
-    padding: 6px 12px;
-}
-
-/* ===== SEPARADORES ===== */
-QFrame[frameShape="4"] { /* HLine */
-    background-color: #dce1e6;
-    max-height: 2px;
-    min-height: 2px;
-    border: none;
-}
-
-QFrame[frameShape="5"] { /* VLine */
-    background-color: #dce1e6;
-    max-width: 2px;
-    min-width: 2px;
-    border: none;
-}
-
-/* ===== BADGES E LABELS ESPECIAIS ===== */
-QLabel[class="title"] {
-    font-size: 24px;
-    font-weight: 700;
-    color: #2c3e50;
-    padding: 10px 0;
-}
-
-QLabel[class="subtitle"] {
-    font-size: 18px;
-    font-weight: 600;
-    color: #34495e;
-    padding: 8px 0;
-}
-
-QLabel[class="success-badge"] {
-    background-color: #d5f4e6;
-    color: #27ae60;
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-    font-size: 12px;
-}
-
-QLabel[class="warning-badge"] {
-    background-color: #fef5e7;
-    color: #f39c12;
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-    font-size: 12px;
-}
-
-QLabel[class="danger-badge"] {
-    background-color: #fdeaea;
-    color: #e74c3c;
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-    font-size: 12px;
-}
-
-QLabel[class="info-badge"] {
-    background-color: #e3f2fd;
-    color: #3498db;
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-    font-size: 12px;
-}
-"""
-
-
-# ============================================
-# CLASSES AUXILIARES E UTILITÃRIAS
-# ============================================
-
-class DatabaseManager:
-    """Gerenciador de banco de dados SQLite com mÃ©todos aprimorados"""
-
-    def __init__(self, db_path="escola.db"):
-        self.db_path = db_path
-        self.connection = None
-        self.cursor = None
-        self.init_database()
-
-    def connect(self):
-        """Estabelece conexÃ£o com o banco de dados"""
-        try:
-            self.connection = sqlite3.connect(self.db_path)
-            self.cursor = self.connection.cursor()
-            self.connection.execute("PRAGMA foreign_keys = ON")
-            return True
-        except sqlite3.Error as e:
-            QMessageBox.critical(None, "Erro de Banco de Dados",
-                                 f"Falha ao conectar ao banco de dados:\nfrom PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton,
-    QLineEdit, QTextEdit, QComboBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QStackedWidget, QMessageBox, QInputDialog, QFileDialog,
-    QProgressBar, QGroupBox, QFrame, QTabWidget, QDateEdit,
-    QCheckBox, QRadioButton, QButtonGroup, QSpinBox,
-    QDoubleSpinBox, QSlider, QProgressDialog, QDialog,
-    QFormLayout, QListWidget, QListWidgetItem, QTreeWidget,
-    QTreeWidgetItem, QSplitter, QToolBar, QStatusBar,
-    QMenuBar, QMenu, QAction, QStyleFactory, QDialogButtonBox,
-    QScrollArea, QSizePolicy, QSpacerItem,
-    QGraphicsDropShadowEffect,
-    QStyle
-)\n{str(e)}")
-            return False
-
-    def disconnect(self):
-        """Fecha a conexÃ£o com o banco de dados"""
-        if self.cursor:
-            self.cursor.close()
-        if self.connection:
-            self.connection.close()
-
-    def init_database(self):
-        """Inicializa o banco de dados com todas as tabelas necessÃ¡rias"""
-        if not self.connect():
-            return False
-
-        try:
-            # Tabela de administradores
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS administradores (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    usuario TEXT UNIQUE NOT NULL,
-                    senha TEXT NOT NULL,
-                    nome TEXT NOT NULL,
-                    email TEXT,
-                    telefone TEXT,
-                    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    ultimo_login TIMESTAMP,
-                    ativo INTEGER DEFAULT 1
-                )
-            ''')
-
-            # Tabela de professores
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS professores (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome TEXT NOT NULL,
-                    cpf TEXT UNIQUE,
-                    telefone TEXT,
-                    email TEXT,
-                    materia TEXT,
-                    formacao TEXT,
-                    data_contratacao DATE,
-                    salario REAL,
-                    endereco TEXT,
-                    observacoes TEXT,
-                    ativo INTEGER DEFAULT 1,
-                    usuario TEXT UNIQUE,
-                    senha TEXT,
-                    foto BLOB,
-                    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            # Tabela de alunos
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS alunos (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome TEXT NOT NULL,
-                    data_nascimento DATE,
-                    cpf TEXT UNIQUE,
-                    rg TEXT,
-                    nome_mae TEXT,
-                    nome_pai TEXT,
-                    telefone_responsavel TEXT,
-                    email TEXT,
-                    endereco TEXT,
-                    bairro TEXT,
-                    cidade TEXT,
-                    cep TEXT,
-                    serie TEXT,
-                    turma TEXT,
-                    turno TEXT,
-                    data_matricula DATE,
-                    status TEXT DEFAULT 'Ativo',
-                    observacoes TEXT,
-                    foto BLOB,
-                    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            # Tabela de disciplinas
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS disciplinas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome TEXT NOT NULL,
-                    codigo TEXT UNIQUE,
-                    carga_horaria INTEGER,
-                    serie TEXT,
-                    professor_id INTEGER,
-                    descricao TEXT,
-                    ativa INTEGER DEFAULT 1,
-                    FOREIGN KEY (professor_id) REFERENCES professores(id)
-                )
-            ''')
-
-            # Tabela de notas
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS notas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    aluno_id INTEGER NOT NULL,
-                    disciplina_id INTEGER NOT NULL,
-                    bimestre INTEGER,
-                    nota1 REAL,
-                    nota2 REAL,
-                    nota3 REAL,
-                    nota4 REAL,
-                    media REAL,
-                    faltas INTEGER,
-                    situacao TEXT,
-                    observacoes TEXT,
-                    data_lancamento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    professor_id INTEGER,
-                    FOREIGN KEY (aluno_id) REFERENCES alunos(id),
-                    FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id),
-                    FOREIGN KEY (professor_id) REFERENCES professores(id)
-                )
-            ''')
-
-            # Tabela de frequÃªncia
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS frequencia (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    aluno_id INTEGER NOT NULL,
-                    data DATE NOT NULL,
-                    presente INTEGER DEFAULT 1,
-                    disciplina_id INTEGER,
-                    observacoes TEXT,
-                    professor_id INTEGER,
-                    FOREIGN KEY (aluno_id) REFERENCES alunos(id),
-                    FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id),
-                    FOREIGN KEY (professor_id) REFERENCES professores(id)
-                )
-            ''')
-
-            # Tabela de turmas
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS turmas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome TEXT NOT NULL,
-                    serie TEXT,
-                    turno TEXT,
-                    sala TEXT,
-                    capacidade INTEGER,
-                    professor_responsavel_id INTEGER,
-                    ano_letivo INTEGER,
-                    ativa INTEGER DEFAULT 1,
-                    FOREIGN KEY (professor_responsavel_id) REFERENCES professores(id)
-                )
-            ''')
-
-            # Tabela de horÃ¡rios
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS horarios (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    turma_id INTEGER NOT NULL,
-                    disciplina_id INTEGER NOT NULL,
-                    professor_id INTEGER NOT NULL,
-                    dia_semana TEXT,
-                    hora_inicio TIME,
-                    hora_fim TIME,
-                    sala TEXT,
-                    ativo INTEGER DEFAULT 1,
-                    FOREIGN KEY (turma_id) REFERENCES turmas(id),
-                    FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id),
-                    FOREIGN KEY (professor_id) REFERENCES professores(id)
-                )
-            ''')
-
-            # Tabela de eventos
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS eventos (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    titulo TEXT NOT NULL,
-                    descricao TEXT,
-                    data_inicio DATE,
-                    data_fim DATE,
-                    tipo TEXT,
-                    local TEXT,
-                    responsavel TEXT,
-                    ativo INTEGER DEFAULT 1,
-                    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            # Tabela de comunicados
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS comunicados (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    titulo TEXT NOT NULL,
-                    mensagem TEXT,
-                    destinatarios TEXT,
-                    data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    prioridade TEXT,
-                    lido INTEGER DEFAULT 0,
-                    ativo INTEGER DEFAULT 1
-                )
-            ''')
-
-            # Tabela de configuraÃ§Ãµes
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS configuracoes (
-                    chave TEXT PRIMARY KEY,
-                    valor TEXT,
-                    descricao TEXT,
-                    tipo TEXT,
-                    categoria TEXT,
-                    data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            # Tabela de backups
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS backups (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome_arquivo TEXT,
-                    caminho TEXT,
-                    tamanho INTEGER,
-                    data_backup TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    tipo TEXT,
-                    observacoes TEXT
-                )
-            ''')
-
-            # Inserir administrador padrÃ£o se nÃ£o existir
-            self.cursor.execute("SELECT COUNT(*) FROM administradores WHERE usuario = 'admin'")
-            if self.cursor.fetchone()[0] == 0:
-                senha_hash = hashlib.sha256("admin123".encode()).hexdigest()
-                self.cursor.execute('''
-                    INSERT INTO administradores (usuario, senha, nome, email, ativo)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', ('admin', senha_hash, 'Administrador Principal', 'admin@escola.com', 1))
-
-            # Inserir configuraÃ§Ãµes padrÃ£o
-            configuracoes_padrao = [
-                ('nome_escola', 'Escola Objetivo', 'Nome da instituiÃ§Ã£o', 'texto', 'geral'),
-                ('ano_letivo', str(date.today().year), 'Ano letivo atual', 'numero', 'geral'),
-                ('quantidade_bimestres', '4', 'Quantidade de bimestres', 'numero', 'notas'),
-                ('media_aprovacao', '7.0', 'MÃ©dia para aprovaÃ§Ã£o', 'decimal', 'notas'),
-                ('media_recuperacao', '5.0', 'MÃ©dia para recuperaÃ§Ã£o', 'decimal', 'notas'),
-                ('max_faltas', '25', 'MÃ¡ximo de faltas permitidas', 'numero', 'frequencia'),
-                ('hora_inicio_aula', '07:00', 'Hora de inÃ­cio das aulas', 'texto', 'horarios'),
-                ('hora_fim_aula', '12:00', 'Hora de tÃ©rmino das aulas', 'texto', 'horarios'),
-                ('turnos', 'Matutino,Vespertino,Noturno', 'Turnos disponÃ­veis', 'texto', 'turmas'),
-                ('series', '1Âº Ano,2Âº Ano,3Âº Ano,4Âº Ano,5Âº Ano,6Âº Ano,7Âº Ano,8Âº Ano,9Âº Ano,1Âº EM,2Âº EM,3Âº EM',
-                 'SÃ©ries disponÃ­veis', 'texto', 'turmas')
-            ]
-
-            for chave, valor, descricao, tipo, categoria in configuracoes_padrao:
-                self.cursor.execute('''
-                    INSERT OR IGNORE INTO configuracoes (chave, valor, descricao, tipo, categoria)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (chave, valor, descricao, tipo, categoria))
-
-            self.connection.commit()
-            print("Banco de dados inicializado com sucesso!")
-            return True
-
-        except sqlite3.Error as e:
-            QMessageBox.critical(None, "Erro de Banco de Dados",
-                                 f"Falha ao inicializar banco de dados:\n{str(e)}")
-            return False
-        finally:
-            self.disconnect()
-
-    def execute_query(self, query, params=(), fetch=False):
-        """Executa uma query SQL com tratamento de erro aprimorado"""
-        try:
-            if not self.connect():
-                return None
-
-            self.cursor.execute(query, params)
-
-            if fetch:
-                if 'SELECT' in query.upper() or 'PRAGMA' in query.upper():
-                    result = self.cursor.fetchall()
-                else:
-                    result = self.cursor.lastrowid
-            else:
-                self.connection.commit()
-                result = True
-
-            return result
-
-        except sqlite3.Error as e:
-            self.connection.rollback()
-            print(f"Erro na query: {query}")
-            print(f"ParÃ¢metros: {params}")
-            print(f"Erro SQLite: {e}")
-            return None
-        finally:
-            self.disconnect()
-
-    def get_config(self, chave, default=None):
-        """ObtÃ©m uma configuraÃ§Ã£o do banco de dados"""
-        result = self.execute_query(
-            "SELECT valor FROM configuracoes WHERE chave = ?",
-            (chave,),
-            fetch=True
+from datetime import datetime
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
+
+
+# =============================================================================
+# BANCO DE DADOS PARA MATRÍCULAS
+# =============================================================================
+
+def criar_banco_dados():
+    conn = sqlite3.connect('matriculas.db')
+    cursor = conn.cursor()
+
+    # Tabela da Instituição
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS instituicao (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            endereco TEXT NOT NULL,
+            mantenedora TEXT NOT NULL,
+            cnpj TEXT UNIQUE NOT NULL
         )
+    ''')
 
-        if result and len(result) > 0:
-            return result[0][0]
-        return default
+    # Tabela de Alunos
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS alunos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            foto_path TEXT,
+            numero_matricula TEXT UNIQUE NOT NULL,
+            nome_completo TEXT NOT NULL,
+            data_nascimento DATE NOT NULL,
+            certidao_numero TEXT,
+            certidao_livro TEXT,
+            certidao_folha TEXT,
+            certidao_data_expedicao DATE,
+            certidao_cidade TEXT,
+            certidao_uf TEXT,
+            certidao_cartorio TEXT,
+            rg_uf TEXT,
+            rg_data_expedicao DATE,
+            cpf TEXT UNIQUE,
+            sexo TEXT,
+            cor_raca TEXT,
+            endereco_bairro TEXT,
+            endereco_cidade TEXT,
+            endereco_estado TEXT,
+            endereco_cep TEXT,
+            curso TEXT,
+            ano_serie TEXT,
+            data_ingresso DATE,
+            necessidades_especiais TEXT,
+            alergias TEXT,
+            convenio_medico TEXT,
+            colegio_anterior TEXT,
+            email TEXT,
+            celular TEXT,
+            operadora TEXT,
+            nome_mae TEXT
+        )
+    ''')
 
-    def set_config(self, chave, valor, descricao="", tipo="texto", categoria="geral"):
-        """Define uma configuraÃ§Ã£o no banco de dados"""
-        return self.execute_query('''
-            INSERT OR REPLACE INTO configuracoes (chave, valor, descricao, tipo, categoria)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (chave, valor, descricao, tipo, categoria))
+    # Tabela de Responsáveis Financeiros
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS responsaveis_financeiros (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aluno_id INTEGER,
+            nome_completo TEXT NOT NULL,
+            estado_civil TEXT,
+            guarda_menor TEXT,
+            data_nascimento DATE,
+            rg_uf TEXT,
+            rg_data_expedicao DATE,
+            cpf TEXT,
+            parentesco_aluno TEXT,
+            endereco_cobranca TEXT,
+            endereco_residencial TEXT,
+            bairro_residencial TEXT,
+            cidade_residencial TEXT,
+            estado_residencial TEXT,
+            cep_residencial TEXT,
+            telefone_residencial TEXT,
+            endereco_comercial TEXT,
+            bairro_comercial TEXT,
+            cidade_comercial TEXT,
+            estado_comercial TEXT,
+            cep_comercial TEXT,
+            telefone_comercial TEXT,
+            email TEXT,
+            celular TEXT,
+            profissao TEXT,
+            FOREIGN KEY (aluno_id) REFERENCES alunos (id)
+        )
+    ''')
 
-    def backup_database(self, backup_path=None):
-        """Realiza backup do banco de dados"""
+    # Tabela de Responsáveis Pedagógicos
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS responsaveis_pedagogicos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aluno_id INTEGER,
+            nome_completo TEXT NOT NULL,
+            parentesco_aluno TEXT,
+            rg_uf TEXT,
+            rg_data_expedicao DATE,
+            cpf TEXT,
+            data_nascimento DATE,
+            tipo_endereco TEXT,
+            endereco_completo TEXT,
+            bairro TEXT,
+            cidade TEXT,
+            estado TEXT,
+            cep TEXT,
+            email TEXT,
+            celular TEXT,
+            operadora TEXT,
+            FOREIGN KEY (aluno_id) REFERENCES alunos (id)
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+
+
+# Executar criação do banco
+criar_banco_dados()
+
+import sys
+import subprocess
+
+def install_package(package):
+    try:
+        __import__(package)
+    except ImportError:
+        print(f"Instalando {package}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# Lista de dependências necessárias
+required_packages = ['reportlab', 'Pillow', 'pandas', 'openpyxl']
+
+for package in required_packages:
+    install_package(package)
+
+# Agora importe normalmente
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch, cm
+from reportlab.graphics.shapes import Drawing, Line
+import pandas as pd
+from PIL import Image, ImageDraw, ImageFont
+import openpyxl
+# ... continue com o resto do seu código de 5146 linhas
+
+import tkinter as tk
+from tkinter import ttk, messagebox, simpledialog, scrolledtext
+import sqlite3
+from datetime import datetime, date, timedelta
+import json
+import os
+import csv
+from tkinter import filedialog
+import hashlib
+import shutil
+import webbrowser
+from PIL import Image, ImageTk
+import calendar
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import Table, TableStyle
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import threading
+import time
+import re
+
+
+class ModernButton(tk.Button):
+    def __init__(self, parent, text, command=None, color='#0046AD', **kwargs):
+        super().__init__(parent, text=text, command=command, **kwargs)
+        self.configure(
+            bg=color,
+            fg='white',
+            font=('Arial', 10, 'bold'),
+            relief='flat',
+            border=0,
+            padx=20,
+            pady=10,
+            cursor='hand2',
+            bd=0,
+            highlightthickness=0
+        )
+        self.original_color = color
+
+        self.bind('<Enter>', self._on_enter)
+        self.bind('<Leave>', self._on_leave)
+
+    def _on_enter(self, event):
+        if self['state'] != 'disabled':
+            self.configure(bg='#FFCC00', fg='#0046AD')
+
+    def _on_leave(self, event):
+        if self['state'] != 'disabled':
+            self.configure(bg=self.original_color, fg='white')
+
+
+class CardFrame(tk.Frame):
+    def __init__(self, parent, title, value, icon, color='#0046AD', **kwargs):
+        super().__init__(parent, **kwargs)
+        self.configure(bg='white', relief='flat', bd=1, highlightbackground='#e0e0e0',
+                       highlightthickness=1, padx=15, pady=15)
+
+        # Icon e título
+        top_frame = tk.Frame(self, bg='white')
+        top_frame.pack(fill='x', pady=(0, 10))
+
+        tk.Label(top_frame, text=icon, font=('Arial', 24),
+                 bg='white', fg=color).pack(side='left')
+
+        tk.Label(top_frame, text=title, font=('Arial', 12, 'bold'),
+                 bg='white', fg='#666666').pack(side='right')
+
+        # Valor
+        tk.Label(self, text=str(value), font=('Arial', 28, 'bold'),
+                 bg='white', fg=color).pack(anchor='w')
+
+        # Barra colorida na parte inferior
+        bar_frame = tk.Frame(self, height=4, bg=color)
+        bar_frame.pack(fill='x', side='bottom', pady=(10, 0))
+        bar_frame.pack_propagate(False)
+
+
+class SistemaGestaoEscolar:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Externato Colégio Objetivo - Sistema de Gestão Escolar Integrado")
+        self.root.geometry("1400x800")
+        self.root.configure(bg='#f8f9fa')
+        self.root.state('zoomed')
+
+        # Configurar ícone
         try:
-            if backup_path is None:
-                backup_dir = os.path.join(os.path.expanduser("~"), "BackupsEscola")
-                os.makedirs(backup_dir, exist_ok=True)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_path = os.path.join(backup_dir, f"backup_escola_{timestamp}.db")
-
-            # Conectar ao banco de dados original
-            source_conn = sqlite3.connect(self.db_path)
-            source_cursor = source_conn.cursor()
-
-            # Conectar ao banco de dados de backup
-            backup_conn = sqlite3.connect(backup_path)
-
-            # Fazer o backup
-            source_conn.backup(backup_conn)
-
-            # Fechar conexÃµes
-            source_cursor.close()
-            source_conn.close()
-            backup_conn.close()
-
-            # Registrar o backup
-            tamanho = os.path.getsize(backup_path)
-            self.execute_query('''
-                INSERT INTO backups (nome_arquivo, caminho, tamanho, tipo, observacoes)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (os.path.basename(backup_path), backup_path, tamanho, 'completo', 'Backup automÃ¡tico'))
-
-            return backup_path
-
-        except Exception as e:
-            QMessageBox.critical(None, "Erro no Backup",
-                                 f"Falha ao realizar backup:\n{str(e)}")
-            return None
-
-
-class AnimacaoBotao(QPushButton):
-    """Classe para botÃµes com animaÃ§Ãµes suaves"""
-
-    def __init__(self, text="", parent=None, cor_normal="#2c3e50", cor_hover="#34495e", cor_press="#1a252f"):
-        super().__init__(text, parent)
-
-        self.cor_normal = cor_normal
-        self.cor_hover = cor_hover
-        self.cor_press = cor_press
-
-        # Configurar estilos dinÃ¢micos
-        self.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.cor_normal};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-weight: 600;
-                font-size: 13px;
-                min-height: 36px;
-            }}
-            QPushButton:hover {{
-                background-color: {self.cor_hover};
-            }}
-            QPushButton:pressed {{
-                background-color: {self.cor_press};
-            }}
-        """)
-
-        # Configurar efeitos de sombra
-        self.setGraphicsEffect(self.create_shadow_effect())
-
-    def create_shadow_effect(self):
-        """Cria efeito de sombra para o botÃ£o"""
-        shadow.setBlurRadius(10)
-        shadow.setXOffset(0)
-        shadow.setYOffset(2)
-        shadow.setColor(QColor(0, 0, 0, 40))
-        return shadow
-
-    def enterEvent(self, event):
-        """AnimaÃ§Ã£o ao entrar no botÃ£o"""
-        self.animacao = QPropertyAnimation(self, b"geometry")
-        self.animacao.setDuration(150)
-        self.animacao.setStartValue(self.geometry())
-        self.animacao.setEndValue(QRect(
-            self.x(), self.y() - 1,
-            self.width(), self.height()
-        ))
-        self.animacao.setEasingCurve(QEasingCurve.OutCubic)
-        self.animacao.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        """AnimaÃ§Ã£o ao sair do botÃ£o"""
-        self.animacao = QPropertyAnimation(self, b"geometry")
-        self.animacao.setDuration(150)
-        self.animacao.setStartValue(self.geometry())
-        self.animacao.setEndValue(QRect(
-            self.x(), self.y() + 1,
-            self.width(), self.height()
-        ))
-        self.animacao.setEasingCurve(QEasingCurve.OutCubic)
-        self.animacao.start()
-        super().leaveEvent(event)
-
-
-class CardWidget(QFrame):
-    """Widget de card moderno para exibiÃ§Ã£o de informaÃ§Ãµes"""
-
-    def __init__(self, titulo="", parent=None, cor_borda="#dce1e6", cor_fundo="#ffffff"):
-        super().__init__(parent)
-
-        self.setFrameShape(QFrame.StyledPanel)
-        self.setFrameShadow(QFrame.Raised)
-        self.setLineWidth(1)
-
-        # Layout principal
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        # TÃ­tulo do card
-        if titulo:
-            self.lbl_titulo = QLabel(titulo)
-            self.lbl_titulo.setObjectName("card_titulo")
-            self.lbl_titulo.setStyleSheet("""
-                QLabel#card_titulo {
-                    font-size: 16px;
-                    font-weight: 700;
-                    color: #2c3e50;
-                    padding-bottom: 8px;
-                    border-bottom: 2px solid #3498db;
-                }
-            """)
-            layout.addWidget(self.lbl_titulo)
-
-        # Ãrea de conteÃºdo (serÃ¡ preenchida pelas subclasses)
-        self.conteudo_widget = QWidget()
-        layout.addWidget(self.conteudo_widget)
-
-        # Aplicar estilo
-        self.setStyleSheet(f"""
-            CardWidget {{
-                background-color: {cor_fundo};
-                border: 2px solid {cor_borda};
-                border-radius: 10px;
-                padding: 0px;
-            }}
-            CardWidget:hover {{
-                border-color: #3498db;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            }}
-        """)
-
-
-class LoadingOverlay(QWidget):
-    """Overlay de carregamento com spinner animado"""
-
-    def __init__(self, parent=None, mensagem="Carregando..."):
-        super().__init__(parent)
-
-        if parent:
-            self.setGeometry(parent.rect())
-
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-
-        # Layout central
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignCenter)
-
-        # Container do spinner
-        container = QFrame()
-        container.setStyleSheet("""
-            QFrame {
-                background-color: rgba(255, 255, 255, 0.95);
-                border-radius: 12px;
-                padding: 30px;
-                border: 1px solid #dce1e6;
-            }
-        """)
-        container.setFixedSize(200, 150)
-
-        container_layout = QVBoxLayout(container)
-        container_layout.setAlignment(Qt.AlignCenter)
-        container_layout.setSpacing(20)
-
-        # Spinner animado
-        self.spinner = QLabel()
-        self.spinner_movie = QMovie()
-
-        # Criar spinner animado (usando caracteres ASCII se nÃ£o houver GIF)
-        spinner_frames = ["â ‹", "â ™", "â ¹", "â ¸", "â ¼", "â ´", "â ¦", "â §", "â ‡", "â "]
-        self.spinner_index = 0
-        self.spinner_frames = spinner_frames
-
-        self.spinner.setText(self.spinner_frames[0])
-        self.spinner.setStyleSheet("""
-            QLabel {
-                font-size: 32px;
-                color: #3498db;
-                font-weight: bold;
-            }
-        """)
-        self.spinner.setAlignment(Qt.AlignCenter)
-
-        # Timer para animaÃ§Ã£o do spinner
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.animar_spinner)
-        self.timer.start(100)
-
-        # Texto de carregamento
-        self.lbl_mensagem = QLabel(mensagem)
-        self.lbl_mensagem.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #2c3e50;
-                font-weight: 600;
-            }
-        """)
-        self.lbl_mensagem.setAlignment(Qt.AlignCenter)
-
-        # Adicionar widgets ao container
-        container_layout.addWidget(self.spinner)
-        container_layout.addWidget(self.lbl_mensagem)
-
-        # Adicionar container ao layout principal
-        layout.addWidget(container)
-
-    def animar_spinner(self):
-        """Anima o spinner ASCII"""
-        self.spinner_index = (self.spinner_index + 1) % len(self.spinner_frames)
-        self.spinner.setText(self.spinner_frames[self.spinner_index])
-
-    def showEvent(self, event):
-        """Centraliza o overlay quando mostrado"""
-        if self.parent():
-            self.setGeometry(self.parent().rect())
-        super().showEvent(event)
-
-    def set_mensagem(self, mensagem):
-        """Altera a mensagem de carregamento"""
-        self.lbl_mensagem.setText(mensagem)
-
-
-class ValidadorCampos:
-    """Classe para validaÃ§Ã£o de campos de entrada"""
-
-    @staticmethod
-    def validar_cpf(cpf):
-        """Valida CPF brasileiro"""
-        cpf = ''.join(filter(str.isdigit, cpf))
-
-        if len(cpf) != 11:
-            return False
-
-        if cpf in [s * 11 for s in [str(n) for n in range(10)]]:
-            return False
-
-        # CÃ¡lculo do primeiro dÃ­gito verificador
-        soma = sum(int(cpf[i]) * (10 - i) for i in range(9))
-        resto = soma % 11
-        digito1 = 0 if resto < 2 else 11 - resto
-
-        if digito1 != int(cpf[9]):
-            return False
-
-        # CÃ¡lculo do segundo dÃ­gito verificador
-        soma = sum(int(cpf[i]) * (11 - i) for i in range(10))
-        resto = soma % 11
-        digito2 = 0 if resto < 2 else 11 - resto
-
-        return digito2 == int(cpf[10])
-
-    @staticmethod
-    def validar_email(email):
-        """Valida formato de email"""
-        import re
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        return bool(re.match(pattern, email))
-
-    @staticmethod
-    def validar_telefone(telefone):
-        """Valida telefone brasileiro"""
-        telefone = ''.join(filter(str.isdigit, telefone))
-        return 10 <= len(telefone) <= 11
-
-    @staticmethod
-    def validar_data(data_str):
-        """Valida data no formato DD/MM/YYYY"""
-        try:
-            datetime.strptime(data_str, '%d/%m/%Y')
-            return True
-        except ValueError:
-            return False
-
-    @staticmethod
-    def formatar_cpf(cpf):
-        """Formata CPF para o padrÃ£o XXX.XXX.XXX-XX"""
-        cpf = ''.join(filter(str.isdigit, cpf))
-        if len(cpf) == 11:
-            return f'{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}'
-        return cpf
-
-    @staticmethod
-    def formatar_telefone(telefone):
-        """Formata telefone para o padrÃ£o (XX) XXXXX-XXXX"""
-        telefone = ''.join(filter(str.isdigit, telefone))
-        if len(telefone) == 11:
-            return f'({telefone[:2]}) {telefone[2:7]}-{telefone[7:]}'
-        elif len(telefone) == 10:
-            return f'({telefone[:2]}) {telefone[2:6]}-{telefone[6:]}'
-        return telefone
-
-
-class ExportadorDados:
-    """Classe para exportaÃ§Ã£o de dados em diferentes formatos"""
-
-    def __init__(self, db_manager):
-        self.db = db_manager
-
-    def exportar_para_excel(self, query, nome_arquivo, cabecalhos=None):
-        """Exporta dados para arquivo Excel"""
-        try:
-            dados = self.db.execute_query(query, fetch=True)
-
-            if not dados:
-                return False, "Nenhum dado para exportar"
-
-            df = pd.DataFrame(dados)
-
-            if cabecalhos and len(cabecalhos) == len(df.columns):
-                df.columns = cabecalhos
-
-            # Criar diretÃ³rio de exportaÃ§Ã£o
-            export_dir = os.path.join(os.path.expanduser("~"), "ExportacoesEscola")
-            os.makedirs(export_dir, exist_ok=True)
-
-            # Adicionar timestamp ao nome do arquivo
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            caminho_completo = os.path.join(export_dir, f"{nome_arquivo}_{timestamp}.xlsx")
-
-            # Exportar para Excel
-            with pd.ExcelWriter(caminho_completo, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name='Dados', index=False)
-
-                # Ajustar largura das colunas
-                worksheet = writer.sheets['Dados']
-                for column in worksheet.columns:
-                    max_length = 0
-                    column_letter = column[0].column_letter
-                    for cell in column:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except:
-                            pass
-                    adjusted_width = min(max_length + 2, 50)
-                    worksheet.column_dimensions[column_letter].width = adjusted_width
-
-            return True, caminho_completo
-
-        except Exception as e:
-            return False, f"Erro ao exportar para Excel: {str(e)}"
-
-    def exportar_para_csv(self, query, nome_arquivo, delimitador=";"):
-        """Exporta dados para arquivo CSV"""
-        try:
-            dados = self.db.execute_query(query, fetch=True)
-
-            if not dados:
-                return False, "Nenhum dado para exportar"
-
-            # Criar diretÃ³rio de exportaÃ§Ã£o
-            export_dir = os.path.join(os.path.expanduser("~"), "ExportacoesEscola")
-            os.makedirs(export_dir, exist_ok=True)
-
-            # Adicionar timestamp ao nome do arquivo
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            caminho_completo = os.path.join(export_dir, f"{nome_arquivo}_{timestamp}.csv")
-
-            # Exportar para CSV
-            with open(caminho_completo, 'w', newline='', encoding='utf-8') as csvfile:
-                writer = csv.writer(csvfile, delimiter=delimitador)
-
-                # Escrever cabeÃ§alhos
-                if 'SELECT' in query.upper():
-                    self.db.connect()
-                    self.db.cursor.execute(query)
-                    cabecalhos = [description[0] for description in self.db.cursor.description]
-                    writer.writerow(cabecalhos)
-                    self.db.disconnect()
-
-                # Escrever dados
-                for linha in dados:
-                    writer.writerow(linha)
-
-            return True, caminho_completo
-
-        except Exception as e:
-            return False, f"Erro ao exportar para CSV: {str(e)}"
-
-    def exportar_para_pdf(self, titulo, dados, cabecalhos, nome_arquivo):
-        """Exporta dados para arquivo PDF (simplificado)"""
-        try:
-            # Em um sistema real, usaria uma biblioteca como ReportLab
-            # Aqui Ã© uma implementaÃ§Ã£o simplificada
-
-            from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
-            from PyQt5.QtWidgets import QTextDocument
-
-            # Criar documento HTML
-            html = f"""
-            <html>
-            <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; margin: 40px; }}
-                h1 {{ color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-                th {{ background-color: #2c3e50; color: white; padding: 12px; text-align: left; }}
-                td {{ padding: 10px; border-bottom: 1px solid #ddd; }}
-                tr:nth-child(even) {{ background-color: #f9f9f9; }}
-                .footer {{ margin-top: 30px; color: #7f8c8d; font-size: 12px; text-align: center; }}
-            </style>
-            </head>
-            <body>
-                <h1>{titulo}</h1>
-                <p>Exportado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</p>
-                <table>
-                    <tr>
-            """
-
-            # Adicionar cabeÃ§alhos
-            for cabecalho in cabecalhos:
-                html += f"<th>{cabecalho}</th>"
-            html += "</tr>"
-
-            # Adicionar dados
-            for linha in dados:
-                html += "<tr>"
-                for valor in linha:
-                    html += f"<td>{valor}</td>"
-                html += "</tr>"
-
-            html += f"""
-                </table>
-                <div class="footer">
-                    Sistema Escola Objetivo - ExportaÃ§Ã£o de Dados
-                </div>
-            </body>
-            </html>
-            """
-
-            # Criar diretÃ³rio de exportaÃ§Ã£o
-            export_dir = os.path.join(os.path.expanduser("~"), "ExportacoesEscola")
-            os.makedirs(export_dir, exist_ok=True)
-
-            # Adicionar timestamp ao nome do arquivo
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            caminho_completo = os.path.join(export_dir, f"{nome_arquivo}_{timestamp}.pdf")
-
-            # Configurar impressora para PDF
-            printer = QPrinter(QPrinter.HighResolution)
-            printer.setOutputFormat(QPrinter.PdfFormat)
-            printer.setOutputFileName(caminho_completo)
-            printer.setPageSize(QPrinter.A4)
-            printer.setPageMargins(10, 10, 10, 10, QPrinter.Millimeter)
-
-            # Criar e imprimir documento
-            document = QTextDocument()
-            document.setHtml(html)
-            document.print_(printer)
-
-            return True, caminho_completo
-
-        except Exception as e:
-            return False, f"Erro ao exportar para PDF: {str(e)}"
-
-
-# ============================================
-# JANELA PRINCIPAL DE LOGIN
-# ============================================
-
-class JanelaLogin(QMainWindow):
-    """Janela de login aprimorada com design moderno"""
-
-    login_sucesso = pyqtSignal(str, str)  # sinal para login bem-sucedido (usuario, tipo)
-
-    def __init__(self):
-        super().__init__()
-        self.db = DatabaseManager()
-        self.init_ui()
+            self.root.iconbitmap("icon.ico")
+        except:
+            pass
+
+        # Configurar estilo moderno
+        self.setup_styles()
+
+        # Configurações do sistema
+        self.config_file = 'config.json'
         self.carregar_configuracoes()
-
-    def init_ui(self):
-        """Inicializa a interface grÃ¡fica da janela de login"""
-        self.setWindowTitle("Escola Objetivo - Sistema de GestÃ£o")
-        self.setFixedSize(1000, 600)
 
         # Centralizar janela
         self.center_window()
 
-        # Aplicar estilo global
-        self.setStyleSheet(GLOBAL_STYLESHEET)
+        # Criar banco de dados
+        self.criar_banco_dados()
 
-        # Widget central
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
+        # Tela de login
+        if not self.fazer_login():
+            self.root.destroy()
+            return
 
-        # Layout principal com gradiente de fundo
-        main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        # Configurar interface principal
+        self.setup_interface()
 
-        # Painel esquerdo (imagem/branding)
-        left_panel = QWidget()
-        left_panel.setObjectName("leftPanel")
-        left_panel.setStyleSheet("""
-            QWidget#leftPanel {
-                background: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 1,
-                    stop: 0 #2c3e50, 
-                    stop: 1 #3498db
-                );
-                border-right: 2px solid #2980b9;
-            }
-        """)
-        left_panel.setFixedWidth(400)
+        # Carregar dados iniciais
+        self.carregar_dashboard()
 
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(40, 60, 40, 60)
-        left_layout.setSpacing(30)
-        left_layout.setAlignment(Qt.AlignCenter)
+        # Iniciar serviços em background
+        self.iniciar_servicos_background()
 
-        # Logo/Ãcone
-        lbl_logo = QLabel()
-        lbl_logo.setPixmap(self.criar_logo())
-        lbl_logo.setAlignment(Qt.AlignCenter)
-        lbl_logo.setStyleSheet("""
-            QLabel {
-                padding: 20px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border-radius: 15px;
-                border: 2px solid rgba(255, 255, 255, 0.2);
-            }
-        """)
+    def setup_styles(self):
+        """Configura os estilos visuais do sistema"""
+        style = ttk.Style()
+        style.theme_use('clam')
 
-        # TÃ­tulo do sistema
-        lbl_titulo = QLabel("SISTEMA DE GESTÃƒO ESCOLAR")
-        lbl_titulo.setObjectName("loginTitle")
-        lbl_titulo.setStyleSheet("""
-            QLabel#loginTitle {
-                font-size: 28px;
-                font-weight: 800;
-                color: white;
-                text-align: center;
-                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-                letter-spacing: 1px;
-            }
-        """)
-        lbl_titulo.setAlignment(Qt.AlignCenter)
+        # Configurar Treeview
+        style.configure('Custom.Treeview',
+                        background='white',
+                        foreground='black',
+                        fieldbackground='white',
+                        borderwidth=0,
+                        font=('Arial', 10))
 
-        # SubtÃ­tulo
-        lbl_subtitulo = QLabel("Escola Objetivo")
-        lbl_subtitulo.setStyleSheet("""
-            QLabel {
-                font-size: 18px;
-                font-weight: 600;
-                color: rgba(255, 255, 255, 0.9);
-                text-align: center;
-                font-style: italic;
-            }
-        """)
-        lbl_subtitulo.setAlignment(Qt.AlignCenter)
+        style.configure('Custom.Treeview.Heading',
+                        background='#0046AD',
+                        foreground='white',
+                        relief='flat',
+                        borderwidth=0,
+                        font=('Arial', 11, 'bold'))
 
-        # InformaÃ§Ãµes
-        lbl_info = QLabel("Acesso seguro ao sistema de gestÃ£o acadÃªmica")
-        lbl_info.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: rgba(255, 255, 255, 0.7);
-                text-align: center;
-                padding: 20px;
-                background-color: rgba(0, 0, 0, 0.1);
-                border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-            }
-        """)
-        lbl_info.setAlignment(Qt.AlignCenter)
-        lbl_info.setWordWrap(True)
+        style.map('Custom.Treeview.Heading',
+                  background=[('active', '#0066CC')])
 
-        # Adicionar widgets ao painel esquerdo
-        left_layout.addWidget(lbl_logo)
-        left_layout.addWidget(lbl_titulo)
-        left_layout.addWidget(lbl_subtitulo)
-        left_layout.addSpacing(20)
-        left_layout.addWidget(lbl_info)
-        left_layout.addStretch()
+        # CORREÇÃO: Seleção persistente na Treeview
+        style.map('Custom.Treeview',
+                  background=[('selected', '#FFCC00')],
+                  foreground=[('selected', '#0046AD')])
 
-        # Painel direito (formulÃ¡rio de login)
-        right_panel = QWidget()
-        right_panel.setObjectName("rightPanel")
-        right_panel.setStyleSheet("""
-            QWidget#rightPanel {
-                background-color: #ffffff;
-            }
-        """)
+        # Configurar Notebook (abas)
+        style.configure('Custom.TNotebook',
+                        background='#f8f9fa',
+                        borderwidth=0)
 
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(80, 80, 80, 80)
-        right_layout.setSpacing(30)
+        style.configure('Custom.TNotebook.Tab',
+                        background='#e9ecef',
+                        foreground='#666666',
+                        padding=[20, 10],
+                        font=('Arial', 10, 'bold'))
 
-        # TÃ­tulo do formulÃ¡rio
-        lbl_login_titulo = QLabel("FAZER LOGIN")
-        lbl_login_titulo.setObjectName("formTitle")
-        lbl_login_titulo.setStyleSheet("""
-            QLabel#formTitle {
-                font-size: 24px;
-                font-weight: 700;
-                color: #2c3e50;
-                text-align: center;
-                padding-bottom: 10px;
-                border-bottom: 3px solid #3498db;
-            }
-        """)
-        lbl_login_titulo.setAlignment(Qt.AlignCenter)
+        style.map('Custom.TNotebook.Tab',
+                  background=[('selected', '#0046AD')],
+                  foreground=[('selected', 'white')])
 
-        # Seletor de tipo de login
-        self.combo_tipo_login = QComboBox()
-        self.combo_tipo_login.addItems(["Administrador", "Professor"])
-        self.combo_tipo_login.setStyleSheet("""
-            QComboBox {
-                padding: 12px;
-                font-size: 14px;
-                font-weight: 600;
-            }
-            QComboBox::drop-down {
-                border: none;
-                padding-right: 15px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 8px solid #2c3e50;
-            }
-        """)
-        self.combo_tipo_login.currentIndexChanged.connect(self.atualizar_formulario_login)
+    def carregar_configuracoes(self):
+        """Carrega as configurações do sistema"""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    self.config = json.load(f)
+            else:
+                # Configurações padrão
+                self.config = {
+                    'escola': {
+                        'nome': 'Externato Colégio Objetivo',
+                        'endereco': 'Rua Principal, 123 - Centro',
+                        'telefone': '(11) 9999-9999',
+                        'email': 'contato@externato.com.br',
+                        'cnpj': '12.345.678/0001-90',
+                        'diretor': 'Dr. João Silva',
+                        'coordenador_pedagogico': 'Maria Santos'
+                    },
+                    'ano_letivo': '2024',
+                    'media_aprovacao': 6.0,
+                    'dias_letivos': 200,
+                    'backup_automatico': True,
+                    'notificacoes_email': False,
+                    'limite_faltas': 25
+                }
+                self.salvar_configuracoes()
+        except Exception as e:
+            print(f"Erro ao carregar configurações: {e}")
+            self.config = {}
 
-        # FormulÃ¡rio de login
-        form_layout = QVBoxLayout()
-        form_layout.setSpacing(20)
+    def salvar_configuracoes(self):
+        """Salva as configurações do sistema"""
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar configurações: {str(e)}")
 
-        # Campo usuÃ¡rio
-        lbl_usuario = QLabel("UsuÃ¡rio:")
-        lbl_usuario.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: 600;
-                color: #2c3e50;
-            }
-        """)
+    def fazer_login(self):
+        """Tela de login do sistema com tema Objetivo"""
+        login_window = tk.Toplevel(self.root)
+        login_window.title("Login - Externato Colégio Objetivo")
+        login_window.geometry("500x500")
+        login_window.configure(bg='#0046AD')
+        login_window.transient(self.root)
+        login_window.grab_set()
+        login_window.resizable(False, False)
 
-        self.txt_usuario = QLineEdit()
-        self.txt_usuario.setPlaceholderText("Digite seu nome de usuÃ¡rio")
-        self.txt_usuario.setMinimumHeight(45)
-        self.txt_usuario.setStyleSheet("""
-            QLineEdit {
-                padding-left: 15px;
-                font-size: 14px;
-            }
-        """)
+        # Centralizar
+        self.center_dialog(login_window)
 
-        # Campo senha
-        lbl_senha = QLabel("Senha:")
-        lbl_senha.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: 600;
-                color: #2c3e50;
-            }
-        """)
+        # Frame principal do login
+        main_frame = tk.Frame(login_window, bg='white', padx=40, pady=40)
+        main_frame.pack(expand=True, fill='both', padx=50, pady=50)
 
-        self.txt_senha = QLineEdit()
-        self.txt_senha.setPlaceholderText("Digite sua senha")
-        self.txt_senha.setEchoMode(QLineEdit.Password)
-        self.txt_senha.setMinimumHeight(45)
-        self.txt_senha.setStyleSheet("""
-            QLineEdit {
-                padding-left: 15px;
-                font-size: 14px;
-            }
-        """)
+        # Logo e título
+        logo_frame = tk.Frame(main_frame, bg='white')
+        logo_frame.pack(pady=(0, 40))
 
-        # BotÃ£o para mostrar/ocultar senha
-        self.btn_toggle_senha = QPushButton()
-        self.btn_toggle_senha.setIcon(self.style().standardIcon(31))
-        self.btn_toggle_senha.setFixedSize(30, 30)
-        self.btn_toggle_senha.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                padding: 5px;
-            }
-            QPushButton:hover {
-                background-color: rgba(52, 152, 219, 0.1);
-                border-radius: 4px;
-            }
-        """)
-        self.btn_toggle_senha.clicked.connect(self.toggle_senha_visibilidade)
+        # Logo Objetivo
+        logo_text = tk.Frame(logo_frame, bg='white')
+        logo_text.pack()
 
-        # Layout para senha com botÃ£o
-        senha_layout = QHBoxLayout()
-        senha_layout.addWidget(self.txt_senha)
-        senha_layout.addWidget(self.btn_toggle_senha)
+        tk.Label(logo_text, text="●", font=('Arial', 48),
+                 fg='#0046AD', bg='white').pack(side=tk.LEFT)
 
-        # Checkbox lembrar usuÃ¡rio
-        self.check_lembrar = QCheckBox("Lembrar usuÃ¡rio")
-        self.check_lembrar.setStyleSheet("""
-            QCheckBox {
-                font-size: 13px;
-                color: #7f8c8d;
-            }
-        """)
+        tk.Label(logo_text, text="OBJETIVO", font=('Arial', 32, 'bold'),
+                 fg='#0046AD', bg='white').pack(side=tk.LEFT, padx=10)
 
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-        botoes_layout.setSpacing(15)
+        tk.Label(logo_frame, text="Externato Colégio", font=('Arial', 16),
+                 fg='#FFCC00', bg='white').pack()
+        tk.Label(logo_frame, text="Sistema de Gestão Escolar Integrado", font=('Arial', 12),
+                 fg='#666666', bg='white').pack()
 
-        self.btn_login = AnimacaoBotao("ENTRAR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        self.btn_login.setMinimumHeight(50)
-        self.btn_login.setIcon(self.style().standardIcon(QStyle.SP_DialogOkButton))
-        self.btn_login.clicked.connect(self.realizar_login)
+        # Campos de login
+        form_frame = tk.Frame(main_frame, bg='white')
+        form_frame.pack(fill='x', pady=30)
 
-        self.btn_sair = QPushButton("SAIR")
-        self.btn_sair.setObjectName("danger")
-        self.btn_sair.setMinimumHeight(50)
-        self.btn_sair.setIcon(self.style().standardIcon(QStyle.SP_DialogCancelButton))
-        self.btn_sair.clicked.connect(self.close)
+        # Usuário
+        tk.Label(form_frame, text="Usuário:", font=('Arial', 12, 'bold'),
+                 bg='white', fg='#0046AD').grid(row=0, column=0, sticky='w', pady=15)
+        usuario_entry = tk.Entry(form_frame, font=('Arial', 12), width=25,
+                                 relief='solid', bd=2, highlightthickness=1,
+                                 highlightcolor='#0046AD', bg='#f8f9fa', fg='#333333')
+        usuario_entry.grid(row=0, column=1, pady=15, padx=15, sticky='ew')
+        usuario_entry.focus()
 
-        botoes_layout.addWidget(self.btn_login)
-        botoes_layout.addWidget(self.btn_sair)
+        # Senha
+        tk.Label(form_frame, text="Senha:", font=('Arial', 12, 'bold'),
+                 bg='white', fg='#0046AD').grid(row=1, column=0, sticky='w', pady=15)
+        senha_entry = tk.Entry(form_frame, font=('Arial', 12), width=25, show='*',
+                               relief='solid', bd=2, highlightthickness=1,
+                               highlightcolor='#0046AD', bg='#f8f9fa', fg='#333333')
+        senha_entry.grid(row=1, column=1, pady=15, padx=15, sticky='ew')
 
-        # Adicionar widgets ao formulÃ¡rio
-        form_layout.addWidget(lbl_usuario)
-        form_layout.addWidget(self.txt_usuario)
-        form_layout.addSpacing(10)
-        form_layout.addWidget(lbl_senha)
-        form_layout.addLayout(senha_layout)
-        form_layout.addWidget(self.check_lembrar)
-        form_layout.addSpacing(30)
-        form_layout.addLayout(botoes_layout)
+        form_frame.columnconfigure(1, weight=1)
 
-        # Links/recursos
-        links_layout = QHBoxLayout()
-        links_layout.setAlignment(Qt.AlignCenter)
-        links_layout.setSpacing(20)
+        # Botões
+        btn_frame = tk.Frame(main_frame, bg='white')
+        btn_frame.pack(pady=30)
 
-        btn_recuperar = QPushButton("Esqueci a senha")
-        btn_recuperar.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #3498db;
-                border: none;
-                font-size: 12px;
-                text-decoration: underline;
-                padding: 5px;
-            }
-            QPushButton:hover {
-                color: #2980b9;
-                background-color: transparent;
-            }
-        """)
-        btn_recuperar.clicked.connect(self.recuperar_senha)
+        resultado_login = {'sucesso': False}
 
-        btn_ajuda = QPushButton("Ajuda")
-        btn_ajuda.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #7f8c8d;
-                border: none;
-                font-size: 12px;
-                padding: 5px;
-            }
-            QPushButton:hover {
-                color: #2c3e50;
-                background-color: transparent;
-            }
-        """)
-        btn_ajuda.clicked.connect(self.mostrar_ajuda)
+        def verificar_login():
+            usuario = usuario_entry.get().strip()
+            senha = senha_entry.get()
 
-        links_layout.addWidget(btn_recuperar)
-        links_layout.addWidget(QLabel("â€¢"))
-        links_layout.addWidget(btn_ajuda)
+            if not usuario or not senha:
+                messagebox.showwarning("Aviso", "Preencha todos os campos!")
+                return
 
-        # VersÃ£o do sistema
-        lbl_versao = QLabel(f"VersÃ£o 2.0.0 | {datetime.now().year}")
-        lbl_versao.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                color: #95a5a6;
-                text-align: center;
-            }
-        """)
-        lbl_versao.setAlignment(Qt.AlignCenter)
+            # Verificar no banco de dados
+            senha_hash = hashlib.sha256(senha.encode()).hexdigest()
+            self.cursor.execute(
+                "SELECT u.id, u.nome, u.nivel, p.id FROM usuarios u LEFT JOIN professores p ON u.nome = p.nome WHERE u.usuario = ? AND u.senha = ? AND u.ativo = 1",
+                (usuario, senha_hash)
+            )
+            usuario_data = self.cursor.fetchone()
 
-        # Adicionar tudo ao painel direito
-        right_layout.addWidget(lbl_login_titulo)
-        right_layout.addSpacing(10)
-        right_layout.addWidget(self.combo_tipo_login)
-        right_layout.addSpacing(20)
-        right_layout.addLayout(form_layout)
-        right_layout.addLayout(links_layout)
-        right_layout.addStretch()
-        right_layout.addWidget(lbl_versao)
+            if usuario_data:
+                self.usuario_id, self.usuario_nome, self.usuario_nivel, self.professor_id = usuario_data
+                resultado_login['sucesso'] = True
+                login_window.destroy()
+            else:
+                messagebox.showerror("Erro", "Usuário ou senha inválidos!")
+                senha_entry.delete(0, tk.END)
 
-        # Adicionar painÃ©is ao layout principal
-        main_layout.addWidget(left_panel)
-        main_layout.addWidget(right_panel)
+        def sair():
+            self.root.destroy()
 
-        # Carregar usuÃ¡rio lembrado
-        self.carregar_usuario_lembrado()
+        # Enter para logar
+        def on_enter(event):
+            verificar_login()
 
-        # Conectar tecla Enter ao botÃ£o de login
-        self.txt_senha.returnPressed.connect(self.realizar_login)
+        usuario_entry.bind('<Return>', on_enter)
+        senha_entry.bind('<Return>', on_enter)
 
-    def criar_logo(self):
-        """Cria um logo grÃ¡fico para o sistema"""
-        from PyQt5.QtGui import QPainter, QLinearGradient, QBrush
+        ModernButton(btn_frame, text="🎯 Entrar", command=verificar_login,
+                     color='#0046AD', font=('Arial', 12)).pack(side=tk.LEFT, padx=15)
 
-        pixmap = QPixmap(200, 200)
-        pixmap.fill(Qt.transparent)
+        ModernButton(btn_frame, text="🚪 Sair", command=sair,
+                     color='#666666', font=('Arial', 12)).pack(side=tk.LEFT, padx=15)
 
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
+        # Dicas de login
+        dica_frame = tk.Frame(main_frame, bg='white')
+        dica_frame.pack(pady=20)
 
-        # Gradiente de fundo do logo
-        gradient = QLinearGradient(0, 0, 200, 200)
-        gradient.setColorAt(0, QColor(52, 152, 219))
-        gradient.setColorAt(1, QColor(41, 128, 185))
+        tk.Label(dica_frame, text="💡 Dica: Use 'admin' / 'admin123' ou 'professor' / 'prof123'",
+                 font=('Arial', 10), bg='white', fg='#666666').pack()
 
-        painter.setBrush(QBrush(gradient))
-        painter.setPen(Qt.NoPen)
+        # Focar na janela de login
+        self.root.wait_window(login_window)
 
-        # Desenhar cÃ­rculo principal
-        painter.drawEllipse(20, 20, 160, 160)
-
-        # Desenhar sÃ­mbolo de educaÃ§Ã£o (livro)
-        painter.setPen(QPen(Qt.white, 8))
-        painter.setBrush(Qt.NoBrush)
-
-        # Livro aberto
-        painter.drawArc(60, 70, 40, 60, 30 * 16, 120 * 16)
-        painter.drawArc(100, 70, 40, 60, 30 * 16, 120 * 16)
-
-        # Linha central do livro
-        painter.drawLine(100, 100, 100, 130)
-
-        painter.end()
-
-        return pixmap
+        return resultado_login['sucesso']
 
     def center_window(self):
         """Centraliza a janela na tela"""
-        screen = QApplication.primaryScreen().geometry()
-        window_geometry = self.frameGeometry()
-        center_point = screen.center()
-        window_geometry.moveCenter(center_point)
-        self.move(window_geometry.topLeft())
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
 
-    def carregar_configuracoes(self):
-        """Carrega configuraÃ§Ãµes do sistema"""
-        self.nome_escola = self.db.get_config('nome_escola', 'Escola Objetivo')
-        self.setWindowTitle(f"{self.nome_escola} - Sistema de GestÃ£o")
+    def center_dialog(self, dialog):
+        """Centraliza uma dialog na tela"""
+        dialog.update_idletasks()
+        width = dialog.winfo_width()
+        height = dialog.winfo_height()
+        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (height // 2)
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
 
-    def carregar_usuario_lembrado(self):
-        """Carrega usuÃ¡rio lembrado das configuraÃ§Ãµes"""
-        settings = QSettings("EscolaObjetivo", "SistemaGestao")
-        usuario_salvo = settings.value("ultimo_usuario", "")
+    def criar_banco_dados(self):
+        """Cria o banco de dados SQLite com tabelas necessárias"""
+        self.conn = sqlite3.connect('externato.db', check_same_thread=False)
+        self.cursor = self.conn.cursor()
 
-        if usuario_salvo:
-            self.txt_usuario.setText(usuario_salvo)
-            self.check_lembrar.setChecked(True)
-            self.txt_senha.setFocus()
+        # Tabela de Usuários
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario TEXT UNIQUE NOT NULL,
+                senha TEXT NOT NULL,
+                nome TEXT NOT NULL,
+                email TEXT,
+                nivel TEXT DEFAULT 'usuario',
+                ativo INTEGER DEFAULT 1,
+                data_criacao TEXT DEFAULT CURRENT_TIMESTAMP,
+                ultimo_login TEXT,
+                tentativas_login INTEGER DEFAULT 0,
+                bloqueado INTEGER DEFAULT 0
+            )
+        ''')
 
-    def atualizar_formulario_login(self, index):
-        """Atualiza o formulÃ¡rio de login baseado no tipo selecionado"""
-        tipo = self.combo_tipo_login.currentText()
+        # Tabela de Alunos (expandida)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS alunos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                cpf TEXT UNIQUE,
+                rg TEXT,
+                email TEXT,
+                telefone TEXT,
+                celular TEXT,
+                endereco TEXT,
+                bairro TEXT,
+                cidade TEXT,
+                estado TEXT,
+                cep TEXT,
+                data_nascimento TEXT,
+                nome_pai TEXT,
+                nome_mae TEXT,
+                telefone_responsavel TEXT,
+                email_responsavel TEXT,
+                data_matricula TEXT,
+                status TEXT DEFAULT 'Ativo',
+                observacoes TEXT,
+                foto TEXT,
+                naturalidade TEXT,
+                nacionalidade TEXT,
+                religiao TEXT,
+                necessidades_especiais TEXT,
+                medicamentos TEXT,
+                alergias TEXT,
+                plano_saude TEXT,
+                contato_emergencia TEXT,
+                telefone_emergencia TEXT
+            )
+        ''')
 
-        if tipo == "Administrador":
-            self.txt_usuario.setPlaceholderText("Digite seu nome de administrador")
-        else:  # Professor
-            self.txt_usuario.setPlaceholderText("Digite seu CPF ou usuÃ¡rio")
+        # Tabela de Professores (expandida)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS professores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                cpf TEXT UNIQUE,
+                rg TEXT,
+                email TEXT,
+                telefone TEXT,
+                celular TEXT,
+                endereco TEXT,
+                data_nascimento TEXT,
+                formacao TEXT,
+                especialidade TEXT,
+                data_contratacao TEXT,
+                salario REAL,
+                status TEXT DEFAULT 'Ativo',
+                banco TEXT,
+                agencia TEXT,
+                conta TEXT,
+                pis TEXT,
+                ctps TEXT,
+                observacoes TEXT
+            )
+        ''')
 
-    def toggle_senha_visibilidade(self):
-        """Alterna a visibilidade da senha"""
-        if self.txt_senha.echoMode() == QLineEdit.Password:
-            self.txt_senha.setEchoMode(QLineEdit.Normal)
-            self.btn_toggle_senha.setIcon(self.style().standardIcon(getattr(QStyle, 'SP_FileDialogInfoView')))
-        else:
-            self.txt_senha.setEchoMode(QLineEdit.Password)
-            self.btn_toggle_senha.setIcon(self.style().standardIcon(31))
+        # Tabela de Turmas (expandida)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS turmas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                serie TEXT,
+                turno TEXT,
+                professor_id INTEGER,
+                ano_letivo TEXT,
+                capacidade INTEGER,
+                sala TEXT,
+                status TEXT DEFAULT 'Ativa',
+                horario_inicio TEXT,
+                horario_fim TEXT,
+                dias_semana TEXT,
+                observacoes TEXT,
+                FOREIGN KEY (professor_id) REFERENCES professores (id)
+            )
+        ''')
 
-    def realizar_login(self):
-        """Realiza o processo de login"""
-        usuario = self.txt_usuario.text().strip()
-        senha = self.txt_senha.text().strip()
-        tipo = self.combo_tipo_login.currentText()
+        # Tabela de Matrículas (expandida)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS matriculas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                aluno_id INTEGER,
+                turma_id INTEGER,
+                data_matricula TEXT,
+                status TEXT DEFAULT 'Ativa',
+                numero_matricula TEXT UNIQUE,
+                observacoes TEXT,
+                data_transferencia TEXT,
+                motivo_transferencia TEXT,
+                FOREIGN KEY (aluno_id) REFERENCES alunos (id),
+                FOREIGN KEY (turma_id) REFERENCES turmas (id)
+            )
+        ''')
 
-        # ValidaÃ§Ãµes bÃ¡sicas
-        if not usuario:
-            self.mostrar_erro("Campo obrigatÃ³rio", "Por favor, informe o usuÃ¡rio.")
-            self.txt_usuario.setFocus()
-            return
+        # Tabela de Disciplinas (expandida)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS disciplinas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                carga_horaria INTEGER,
+                professor_id INTEGER,
+                turma_id INTEGER,
+                descricao TEXT,
+                status TEXT DEFAULT 'Ativa',
+                ementa TEXT,
+                objetivos TEXT,
+                competencias TEXT,
+                bibliografia TEXT,
+                avaliacao TEXT,
+                recuperacao TEXT,
+                FOREIGN KEY (professor_id) REFERENCES professores (id),
+                FOREIGN KEY (turma_id) REFERENCES turmas (id)
+            )
+        ''')
 
-        if not senha:
-            self.mostrar_erro("Campo obrigatÃ³rio", "Por favor, informe a senha.")
-            self.txt_senha.setFocus()
-            return
+        # Tabela de Notas (expandida)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                aluno_id INTEGER,
+                disciplina_id INTEGER,
+                nota1 REAL DEFAULT 0,
+                nota2 REAL DEFAULT 0,
+                nota3 REAL DEFAULT 0,
+                nota4 REAL DEFAULT 0,
+                nota_recuperacao REAL DEFAULT 0,
+                media REAL DEFAULT 0,
+                situacao TEXT DEFAULT 'Cursando',
+                bimestre INTEGER,
+                ano_letivo TEXT,
+                observacoes TEXT,
+                data_lancamento TEXT,
+                professor_id INTEGER,
+                FOREIGN KEY (aluno_id) REFERENCES alunos (id),
+                FOREIGN KEY (disciplina_id) REFERENCES disciplinas (id),
+                FOREIGN KEY (professor_id) REFERENCES professores (id)
+            )
+        ''')
 
-        # Criar overlay de carregamento
-        overlay = LoadingOverlay(self, "Verificando credenciais...")
-        overlay.show()
-        QApplication.processEvents()
+        # Tabela de Frequência (expandida)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS frequencia (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                aluno_id INTEGER,
+                disciplina_id INTEGER,
+                turma_id INTEGER,
+                data_aula TEXT,
+                presente INTEGER DEFAULT 1,
+                observacao TEXT,
+                justificativa TEXT,
+                data_justificativa TEXT,
+                FOREIGN KEY (aluno_id) REFERENCES alunos (id),
+                FOREIGN KEY (disciplina_id) REFERENCES disciplinas (id),
+                FOREIGN KEY (turma_id) REFERENCES turmas (id)
+            )
+        ''')
 
+        # Tabela de Diário de Aula (expandida)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS diario_aula (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                disciplina_id INTEGER,
+                turma_id INTEGER,
+                professor_id INTEGER,
+                data_aula TEXT NOT NULL,
+                conteudo TEXT NOT NULL,
+                objetivos TEXT,
+                metodologia TEXT,
+                recursos TEXT,
+                tarefa_casa TEXT,
+                observacoes TEXT,
+                presencas TEXT,
+                data_registro TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (disciplina_id) REFERENCES disciplinas (id),
+                FOREIGN KEY (turma_id) REFERENCES turmas (id),
+                FOREIGN KEY (professor_id) REFERENCES professores (id)
+            )
+        ''')
+
+        # Tabela de Eventos Escolares
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS eventos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                titulo TEXT NOT NULL,
+                descricao TEXT,
+                data_inicio TEXT,
+                data_fim TEXT,
+                local TEXT,
+                tipo TEXT,
+                responsavel TEXT,
+                participantes TEXT,
+                status TEXT DEFAULT 'Agendado',
+                data_criacao TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Tabela de Comunicados
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS comunicados (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                titulo TEXT NOT NULL,
+                mensagem TEXT,
+                destinatarios TEXT,
+                data_publicacao TEXT,
+                data_validade TEXT,
+                prioridade TEXT DEFAULT 'Normal',
+                status TEXT DEFAULT 'Ativo',
+                autor_id INTEGER,
+                data_criacao TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (autor_id) REFERENCES usuarios (id)
+            )
+        ''')
+
+        # Tabela de Ocorrências
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ocorrencias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                aluno_id INTEGER,
+                professor_id INTEGER,
+                tipo TEXT,
+                descricao TEXT,
+                data_ocorrencia TEXT,
+                medidas_tomadas TEXT,
+                responsavel TEXT,
+                status TEXT DEFAULT 'Aberta',
+                data_registro TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (aluno_id) REFERENCES alunos (id),
+                FOREIGN KEY (professor_id) REFERENCES professores (id)
+            )
+        ''')
+
+        # Tabela de Planejamento Pedagógico
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS planejamento_pedagogico (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                disciplina_id INTEGER,
+                turma_id INTEGER,
+                bimestre INTEGER,
+                conteudos TEXT,
+                habilidades TEXT,
+                competencias TEXT,
+                estrategias TEXT,
+                recursos TEXT,
+                avaliacao TEXT,
+                data_planejamento TEXT,
+                status TEXT DEFAULT 'Rascunho',
+                FOREIGN KEY (disciplina_id) REFERENCES disciplinas (id),
+                FOREIGN KEY (turma_id) REFERENCES turmas (id)
+            )
+        ''')
+
+        # Tabela de Avaliações Institucionais
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS avaliacoes_institucionais (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                titulo TEXT NOT NULL,
+                descricao TEXT,
+                data_aplicacao TEXT,
+                tipo TEXT,
+                participantes TEXT,
+                resultados TEXT,
+                observacoes TEXT,
+                status TEXT DEFAULT 'Planejada',
+                data_criacao TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Tabela de Histórico Escolar
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS historico_escolar (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                aluno_id INTEGER,
+                ano_letivo TEXT,
+                serie TEXT,
+                turma TEXT,
+                escola_anterior TEXT,
+                transferencia TEXT,
+                observacoes TEXT,
+                data_registro TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (aluno_id) REFERENCES alunos (id)
+            )
+        ''')
+
+        # Tabela de Configurações do Sistema
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS configuracoes_sistema (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chave TEXT UNIQUE NOT NULL,
+                valor TEXT,
+                descricao TEXT,
+                data_atualizacao TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Tabela de Logs do Sistema
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS logs_sistema (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario_id INTEGER,
+                acao TEXT,
+                modulo TEXT,
+                descricao TEXT,
+                data_hora TEXT DEFAULT CURRENT_TIMESTAMP,
+                ip TEXT,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+            )
+        ''')
+
+        # Tabela de Backup
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS backups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                arquivo TEXT,
+                tamanho INTEGER,
+                data_backup TEXT,
+                status TEXT,
+                observacoes TEXT
+            )
+        ''')
+
+        self.conn.commit()
+
+        # Inserir dados iniciais
+        self.inserir_dados_iniciais()
+
+    def inserir_dados_iniciais(self):
+        """Insere dados iniciais para demonstração"""
         try:
-            if tipo == "Administrador":
-                autenticado, dados = self.verificar_login_administrador(usuario, senha)
-            else:  # Professor
-                autenticado, dados = self.verificar_login_professor(usuario, senha)
+            # Verificar se já existem usuários
+            self.cursor.execute("SELECT COUNT(*) FROM usuarios")
+            if self.cursor.fetchone()[0] == 0:
+                # Inserir usuário admin padrão
+                senha_admin = hashlib.sha256('admin123'.encode()).hexdigest()
+                self.cursor.execute('''
+                    INSERT INTO usuarios (usuario, senha, nome, email, nivel)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', ('admin', senha_admin, 'Administrador Sistema', 'admin@externato.com', 'admin'))
 
-            overlay.close()
+                # Inserir usuário professor
+                senha_prof = hashlib.sha256('prof123'.encode()).hexdigest()
+                self.cursor.execute('''
+                    INSERT INTO usuarios (usuario, senha, nome, email, nivel)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', ('professor', senha_prof, 'Maria Silva', 'maria@externato.com', 'professor'))
 
-            if autenticado:
-                # Salvar usuÃ¡rio se marcado para lembrar
-                if self.check_lembrar.isChecked():
-                    settings = QSettings("EscolaObjetivo", "SistemaGestao")
-                    settings.setValue("ultimo_usuario", usuario)
+                # Inserir coordenador
+                senha_coord = hashlib.sha256('coord123'.encode()).hexdigest()
+                self.cursor.execute('''
+                    INSERT INTO usuarios (usuario, senha, nome, email, nivel)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', ('coordenador', senha_coord, 'Carlos Santos', 'coordenacao@externato.com', 'coordenador'))
 
-                # Atualizar Ãºltimo login no banco
-                self.atualizar_ultimo_login(tipo, dados['id'])
+                # Inserir professores
+                professores = [
+                    ('Maria Silva', '111.222.333-44', 'maria@externato.com',
+                     '(11) 9999-8888', 'Matemática', '2020-01-15', 3500.00),
+                    ('João Santos', '222.333.444-55', 'joao@externato.com',
+                     '(11) 8888-7777', 'Português', '2019-03-20', 3200.00),
+                    ('Ana Costa', '333.444.555-66', 'ana@externato.com',
+                     '(11) 7777-6666', 'História', '2021-02-10', 3000.00),
+                    ('Pedro Oliveira', '444.555.666-77', 'pedro@externato.com',
+                     '(11) 6666-5555', 'Geografia', '2018-08-15', 3100.00),
+                    ('Carla Mendes', '555.666.777-88', 'carla@externato.com',
+                     '(11) 5555-4444', 'Ciências', '2022-01-20', 2900.00),
+                ]
+                self.cursor.executemany('''
+                    INSERT INTO professores (nome, cpf, email, telefone, especialidade, data_contratacao, salario)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', professores)
 
-                # Emitir sinal de sucesso
-                self.login_sucesso.emit(tipo, json.dumps(dados))
-                self.close()
-            else:
-                self.mostrar_erro("Login invÃ¡lido", "UsuÃ¡rio ou senha incorretos.")
-                self.txt_senha.selectAll()
-                self.txt_senha.setFocus()
+                # Inserir turmas
+                turmas = [
+                    ('1º Ano A', '1º Ano', 'Manhã', 1, '2024', 30, 'Sala 101', '07:00', '12:00', 'Segunda a Sexta'),
+                    ('2º Ano B', '2º Ano', 'Tarde', 2, '2024', 25, 'Sala 102', '13:00', '18:00', 'Segunda a Sexta'),
+                    ('3º Ano A', '3º Ano', 'Manhã', 3, '2024', 28, 'Sala 103', '07:00', '12:00', 'Segunda a Sexta'),
+                    ('4º Ano B', '4º Ano', 'Tarde', 4, '2024', 26, 'Sala 104', '13:00', '18:00', 'Segunda a Sexta'),
+                    ('5º Ano A', '5º Ano', 'Manhã', 5, '2024', 24, 'Sala 105', '07:00', '12:00', 'Segunda a Sexta'),
+                ]
+                self.cursor.executemany('''
+                    INSERT INTO turmas (nome, serie, turno, professor_id, ano_letivo, capacidade, sala, horario_inicio, horario_fim, dias_semana)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', turmas)
+
+                # Inserir alunos
+                alunos = [
+                    ('Pedro Oliveira', '555.666.777-88', 'pedro@externato.com',
+                     '(11) 3333-2222', '(11) 96666-5555', 'Rua A, 123', 'Centro', 'São Paulo', 'SP', '01234-567',
+                     '2010-05-15', 'Carlos Oliveira', 'Ana Oliveira', '(11) 95555-4444', 'responsavel@email.com',
+                     '2024-01-10'),
+                    ('Carla Mendes', '666.777.888-99', 'carla@externato.com',
+                     '(11) 4444-3333', '(11) 95555-4444', 'Rua B, 456', 'Jardins', 'São Paulo', 'SP', '01234-568',
+                     '2011-08-20', 'Roberto Mendes', 'Julia Mendes', '(11) 94444-3333', 'responsavel2@email.com',
+                     '2024-01-10'),
+                    ('Ana Costa', '777.888.999-00', 'ana@externato.com',
+                     '(11) 5555-4444', '(11) 97777-6666', 'Rua C, 789', 'Moema', 'São Paulo', 'SP', '01234-569',
+                     '2010-11-30', 'Paulo Costa', 'Sandra Costa', '(11) 93333-2222', 'responsavel3@email.com',
+                     '2024-01-10'),
+                    ('Lucas Santos', '888.999.000-11', 'lucas@externato.com',
+                     '(11) 6666-5555', '(11) 98888-7777', 'Rua D, 321', 'Pinheiros', 'São Paulo', 'SP', '01234-570',
+                     '2011-03-25', 'Marcos Santos', 'Fernanda Santos', '(11) 92222-1111', 'responsavel4@email.com',
+                     '2024-01-10'),
+                    ('Mariana Lima', '999.000.111-22', 'mariana@externato.com',
+                     '(11) 7777-6666', '(11) 99999-8888', 'Rua E, 654', 'Vila Madalena', 'São Paulo', 'SP', '01234-571',
+                     '2010-07-12', 'Ricardo Lima', 'Patricia Lima', '(11) 91111-0000', 'responsavel5@email.com',
+                     '2024-01-10'),
+                ]
+                self.cursor.executemany('''
+                    INSERT INTO alunos (nome, cpf, email, telefone, celular, endereco, bairro, cidade, estado, cep,
+                    data_nascimento, nome_pai, nome_mae, telefone_responsavel, email_responsavel, data_matricula)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', alunos)
+
+                # Matrículas
+                matriculas = [
+                    (1, 1, '2024-01-10', 'MAT2024001'),
+                    (2, 1, '2024-01-10', 'MAT2024002'),
+                    (3, 1, '2024-01-10', 'MAT2024003'),
+                    (4, 2, '2024-01-10', 'MAT2024004'),
+                    (5, 2, '2024-01-10', 'MAT2024005'),
+                ]
+                self.cursor.executemany('''
+                    INSERT INTO matriculas (aluno_id, turma_id, data_matricula, numero_matricula)
+                    VALUES (?, ?, ?, ?)
+                ''', matriculas)
+
+                # Disciplinas
+                disciplinas = [
+                    ('Matemática', 80, 1, 1, 'Matemática básica e avançada'),
+                    ('Português', 80, 2, 1, 'Gramática e literatura'),
+                    ('História', 60, 3, 1, 'História do Brasil'),
+                    ('Geografia', 60, 4, 1, 'Geografia geral e do Brasil'),
+                    ('Ciências', 60, 5, 1, 'Ciências naturais'),
+                ]
+                self.cursor.executemany('''
+                    INSERT INTO disciplinas (nome, carga_horaria, professor_id, turma_id, descricao)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', disciplinas)
+
+                # Notas de exemplo
+                notas = [
+                    (1, 1, 7.5, 8.0, 6.5, 9.0, (7.5 + 8.0 + 6.5 + 9.0) / 4, 'Aprovado', 1, '2024'),
+                    (2, 1, 6.0, 7.5, 8.0, 6.5, (6.0 + 7.5 + 8.0 + 6.5) / 4, 'Aprovado', 1, '2024'),
+                    (3, 1, 5.0, 6.0, 4.5, 7.0, (5.0 + 6.0 + 4.5 + 7.0) / 4, 'Recuperação', 1, '2024'),
+                    (4, 2, 8.0, 8.5, 9.0, 8.5, (8.0 + 8.5 + 9.0 + 8.5) / 4, 'Aprovado', 1, '2024'),
+                    (5, 2, 7.0, 6.5, 7.5, 8.0, (7.0 + 6.5 + 7.5 + 8.0) / 4, 'Aprovado', 1, '2024'),
+                ]
+                self.cursor.executemany('''
+                    INSERT INTO notas (aluno_id, disciplina_id, nota1, nota2, nota3, nota4, media, situacao, bimestre, ano_letivo)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', notas)
+
+                # Diário de aula de exemplo
+                diario_aulas = [
+                    (1, 1, 1, '2024-03-01', 'Introdução à álgebra: equações de primeiro grau',
+                     'Aula introdutória bem participativa'),
+                    (1, 1, 1, '2024-03-08', 'Sistemas de equações e problemas',
+                     'Alunos apresentaram dificuldades em problemas contextualizados'),
+                    (2, 1, 2, '2024-03-02', 'Análise sintática: sujeito e predicado',
+                     'Exercícios práticos de identificação'),
+                ]
+                self.cursor.executemany('''
+                    INSERT INTO diario_aula (disciplina_id, turma_id, professor_id, data_aula, conteudo, observacoes)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', diario_aulas)
+
+                # Eventos escolares
+                eventos = [
+                    ('Reunião de Pais', 'Primeira reunião de pais do ano letivo', '2024-02-15', '2024-02-15',
+                     'Auditório Principal', 'Reunião', 'Coordenação', 'Pais e Responsáveis'),
+                    ('Festa Junina', 'Festa junina da escola', '2024-06-15', '2024-06-15',
+                     'Pátio da Escola', 'Festividade', 'Comissão de Festas', 'Comunidade Escolar'),
+                    ('Olimpíada de Matemática', 'Competição interna de matemática', '2024-08-20', '2024-08-20',
+                     'Salas de Aula', 'Competição', 'Departamento de Matemática', 'Alunos do 6º ao 9º ano'),
+                ]
+                self.cursor.executemany('''
+                    INSERT INTO eventos (titulo, descricao, data_inicio, data_fim, local, tipo, responsavel, participantes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', eventos)
+
+                # Comunicados
+                comunicados = [
+                    ('Início das Aulas', 'As aulas terão início no dia 05/02/2024 conforme calendário escolar.',
+                     'Todos', '2024-01-20', '2024-02-05', 'Alta', 1),
+                    ('Recesso Escolar',
+                     'Informamos que não haverá aula nos dias 20 e 21/02 devido ao feriado municipal.',
+                     'Alunos e Professores', '2024-02-15', '2024-02-21', 'Média', 1),
+                ]
+                self.cursor.executemany('''
+                    INSERT INTO comunicados (titulo, mensagem, destinatarios, data_publicacao, data_validade, prioridade, autor_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', comunicados)
+
+                self.conn.commit()
+        except sqlite3.IntegrityError as e:
+            print(f"Dados iniciais já existem: {e}")
+
+    def iniciar_servicos_background(self):
+        """Inicia serviços em background"""
+        try:
+            # Backup automático
+            if self.config.get('backup_automatico', True):
+                threading.Thread(target=self.servico_backup_automatico, daemon=True).start()
+
+            # Verificação de notificações
+            threading.Thread(target=self.servico_notificacoes, daemon=True).start()
+        except Exception as e:
+            print(f"Erro ao iniciar serviços: {e}")
+
+    def servico_backup_automatico(self):
+        """Serviço de backup automático"""
+        while True:
+            try:
+                # Fazer backup diário às 2h
+                now = datetime.now()
+                if now.hour == 2 and now.minute == 0:
+                    self.criar_backup_automatico()
+                time.sleep(60)  # Verificar a cada minuto
+            except Exception as e:
+                print(f"Erro no serviço de backup: {e}")
+                time.sleep(300)  # Esperar 5 minutos em caso de erro
+
+    def servico_notificacoes(self):
+        """Serviço de verificação de notificações"""
+        while True:
+            try:
+                self.verificar_notificacoes_pendentes()
+                time.sleep(300)  # Verificar a cada 5 minutos
+            except Exception as e:
+                print(f"Erro no serviço de notificações: {e}")
+                time.sleep(300)
+
+    def criar_backup_automatico(self):
+        """Cria backup automático do banco de dados"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_dir = "backups"
+            os.makedirs(backup_dir, exist_ok=True)
+
+            backup_file = f"{backup_dir}/backup_auto_{timestamp}.db"
+            shutil.copy2('externato.db', backup_file)
+
+            # Registrar no banco
+            tamanho = os.path.getsize(backup_file)
+            self.cursor.execute('''
+                INSERT INTO backups (arquivo, tamanho, data_backup, status, observacoes)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (backup_file, tamanho, datetime.now().isoformat(), 'Sucesso', 'Backup automático'))
+
+            self.conn.commit()
+
+            # Manter apenas últimos 10 backups
+            self.limpar_backups_antigos(backup_dir, 10)
 
         except Exception as e:
-            overlay.close()
-            self.mostrar_erro("Erro no login", f"Ocorreu um erro durante o login:\n{str(e)}")
-
-    def verificar_login_administrador(self, usuario, senha):
-        """Verifica credenciais de administrador"""
-        senha_hash = hashlib.sha256(senha.encode()).hexdigest()
-
-        resultado = self.db.execute_query('''
-            SELECT id, usuario, nome, email, ativo 
-            FROM administradores 
-            WHERE usuario = ? AND senha = ? AND ativo = 1
-        ''', (usuario, senha_hash), fetch=True)
-
-        if resultado and len(resultado) > 0:
-            dados = {
-                'id': resultado[0][0],
-                'usuario': resultado[0][1],
-                'nome': resultado[0][2],
-                'email': resultado[0][3],
-                'tipo': 'administrador'
-            }
-            return True, dados
-
-        return False, None
-
-    def verificar_login_professor(self, usuario, senha):
-        """Verifica credenciais de professor"""
-        # Tentar login por usuÃ¡rio/senha
-        senha_hash = hashlib.sha256(senha.encode()).hexdigest()
-
-        resultado = self.db.execute_query('''
-            SELECT id, nome, cpf, email, materia, usuario
-            FROM professores 
-            WHERE (usuario = ? OR cpf = ?) AND senha = ? AND ativo = 1
-        ''', (usuario, usuario, senha_hash), fetch=True)
-
-        if resultado and len(resultado) > 0:
-            dados = {
-                'id': resultado[0][0],
-                'nome': resultado[0][1],
-                'cpf': resultado[0][2],
-                'email': resultado[0][3],
-                'materia': resultado[0][4],
-                'usuario': resultado[0][5],
-                'tipo': 'professor'
-            }
-            return True, dados
-
-        return False, None
-
-    def atualizar_ultimo_login(self, tipo, id_usuario):
-        """Atualiza o timestamp do Ãºltimo login"""
-        data_atual = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        if tipo == "Administrador":
-            self.db.execute_query(
-                "UPDATE administradores SET ultimo_login = ? WHERE id = ?",
-                (data_atual, id_usuario)
-            )
-        else:  # Professor
-            self.db.execute_query(
-                "UPDATE professores SET ultimo_login = ? WHERE id = ?",
-                (data_atual, id_usuario)
-            )
-
-    def recuperar_senha(self):
-        """Abre diÃ¡logo para recuperaÃ§Ã£o de senha"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("RecuperaÃ§Ã£o de Senha")
-        dialog.setFixedSize(500, 350)
-        dialog.setStyleSheet(GLOBAL_STYLESHEET)
-
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel("RECUPERAR SENHA")
-        lbl_titulo.setStyleSheet("""
-            QLabel {
-                font-size: 20px;
-                font-weight: 700;
-                color: #2c3e50;
-                text-align: center;
-                padding-bottom: 10px;
-                border-bottom: 2px solid #3498db;
-            }
-        """)
-
-        # InstruÃ§Ãµes
-        lbl_instrucoes = QLabel(
-            "Para recuperar sua senha, informe seu email cadastrado. "
-            "Enviaremos um link para redefiniÃ§Ã£o."
-        )
-        lbl_instrucoes.setStyleSheet("""
-            QLabel {
-                font-size: 13px;
-                color: #7f8c8d;
-                text-align: center;
-                padding: 15px;
-                background-color: #f8f9fa;
-                border-radius: 6px;
-                border: 1px solid #ecf0f1;
-            }
-        """)
-        lbl_instrucoes.setWordWrap(True)
-
-        # Tipo de conta
-        lbl_tipo = QLabel("Tipo de conta:")
-        lbl_tipo.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: 600;
-                color: #2c3e50;
-            }
-        """)
-
-        combo_tipo = QComboBox()
-        combo_tipo.addItems(["Administrador", "Professor"])
-
-        # Campo email
-        lbl_email = QLabel("Email cadastrado:")
-        lbl_email.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: 600;
-                color: #2c3e50;
-            }
-        """)
-
-        txt_email = QLineEdit()
-        txt_email.setPlaceholderText("seu.email@escola.com")
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-        btn_enviar = AnimacaoBotao("ENVIAR LINK", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_cancelar = QPushButton("CANCELAR")
-        btn_cancelar.setObjectName("danger")
-        btn_cancelar.clicked.connect(dialog.reject)
-
-        botoes_layout.addWidget(btn_enviar)
-        botoes_layout.addWidget(btn_cancelar)
-
-        # Adicionar widgets
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(lbl_instrucoes)
-        layout.addWidget(lbl_tipo)
-        layout.addWidget(combo_tipo)
-        layout.addWidget(lbl_email)
-        layout.addWidget(txt_email)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-        # FunÃ§Ã£o de envio (simulada)
-        def enviar_link():
-            email = txt_email.text().strip()
-            if not ValidadorCampos.validar_email(email):
-                QMessageBox.warning(dialog, "Email invÃ¡lido",
-                                    "Por favor, informe um email vÃ¡lido.")
-                return
-
-            # SimulaÃ§Ã£o de envio
-            QMessageBox.information(dialog, "Link enviado",
-                                    f"Um link de recuperaÃ§Ã£o foi enviado para {email}.\n"
-                                    "Verifique sua caixa de entrada.")
-            dialog.accept()
-
-        btn_enviar.clicked.connect(enviar_link)
-
-        dialog.exec_()
-
-    def mostrar_ajuda(self):
-        """Mostra diÃ¡logo de ajuda"""
-        QMessageBox.information(self, "Ajuda - Login",
-                                "Para acessar o sistema:\n\n"
-                                "1. Selecione o tipo de conta (Administrador ou Professor)\n"
-                                "2. Informe seu usuÃ¡rio e senha\n"
-                                "3. Clique em ENTRAR\n\n"
-                                "Contate o administrador do sistema se tiver dificuldades.")
-
-    def mostrar_erro(self, titulo, mensagem):
-        """Mostra mensagem de erro estilizada"""
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle(titulo)
-        msg_box.setText(mensagem)
-        msg_box.setIcon(QMessageBox.Warning)
-        msg_box.setStyleSheet("""
-            QMessageBox {
-                background-color: white;
-                font-family: 'Segoe UI', Arial, sans-serif;
-            }
-            QMessageBox QLabel {
-                font-size: 13px;
-                color: #2c3e50;
-            }
-            QMessageBox QPushButton {
-                min-width: 80px;
-                min-height: 35px;
-                font-weight: 600;
-            }
-        """)
-        msg_box.exec_()
-
-    def closeEvent(self, event):
-        """Evento ao fechar a janela"""
-        resposta = QMessageBox.question(
-            self, "Confirmar saÃ­da",
-            "Deseja realmente sair do sistema?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            event.accept()
-        else:
-            event.ignore()
-
-
-# ============================================
-# JANELA PRINCIPAL DO SISTEMA
-# ============================================
-
-class JanelaPrincipal(QMainWindow):
-    """Janela principal do sistema apÃ³s login"""
-
-    def __init__(self, tipo_usuario, dados_usuario):
-        super().__init__()
-        self.tipo_usuario = tipo_usuario
-        self.dados_usuario = dados_usuario
-        self.db = DatabaseManager()
-        self.paginas = {}
-        self.init_ui()
-
-    def init_ui(self):
-        """Inicializa a interface grÃ¡fica da janela principal"""
-        self.setWindowTitle(f"Escola Objetivo - Sistema de GestÃ£o")
-        self.setGeometry(100, 100, 1400, 800)
-
-        # Aplicar estilo global
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        # Configurar menu bar
-        self.criar_menu_bar()
-
-        # Configurar toolbar
-        self.criar_toolbar()
-
-        # Configurar status bar
-        self.criar_status_bar()
-
-        # Widget central com layout em pilha
-        self.central_widget = QStackedWidget()
-        self.setCentralWidget(self.central_widget)
-
-        # Criar pÃ¡ginas do sistema
-        self.criar_pagina_inicial()
-        self.criar_pagina_alunos()
-        self.criar_pagina_professores()
-        self.criar_pagina_disciplinas()
-        self.criar_pagina_notas()
-        self.criar_pagina_frequencia()
-        self.criar_pagina_turmas()
-        self.criar_pagina_relatorios()
-        self.criar_pagina_configuracoes()
-
-        # Mostrar pÃ¡gina inicial
-        self.central_widget.setCurrentWidget(self.paginas['inicial'])
-
-        # Carregar dados iniciais
-        self.carregar_dados_iniciais()
-
-    def criar_menu_bar(self):
-        """Cria a barra de menus"""
-        menu_bar = self.menuBar()
-
-        # Menu Arquivo
-        menu_arquivo = menu_bar.addMenu("&Arquivo")
-
-        act_backup = QAction("&Backup do Sistema", self)
-        act_backup.setShortcut("Ctrl+B")
-        act_backup.triggered.connect(self.realizar_backup)
-        menu_arquivo.addAction(act_backup)
-
-        menu_arquivo.addSeparator()
-
-        act_exportar = QAction("&Exportar Dados", self)
-        act_exportar.triggered.connect(self.exportar_dados)
-        menu_arquivo.addAction(act_exportar)
-
-        act_importar = QAction("&Importar Dados", self)
-        act_importar.triggered.connect(self.importar_dados)
-        menu_arquivo.addAction(act_importar)
-
-        menu_arquivo.addSeparator()
-
-        act_sair = QAction("&Sair", self)
-        act_sair.setShortcut("Ctrl+Q")
-        act_sair.triggered.connect(self.close)
-        menu_arquivo.addAction(act_sair)
-
-        # Menu Cadastros
-        menu_cadastros = menu_bar.addMenu("&Cadastros")
-
-        act_alunos = QAction("&Alunos", self)
-        act_alunos.setShortcut("Ctrl+A")
-        act_alunos.triggered.connect(lambda: self.mostrar_pagina('alunos'))
-        menu_cadastros.addAction(act_alunos)
-
-        act_professores = QAction("&Professores", self)
-        act_professores.setShortcut("Ctrl+P")
-        act_professores.triggered.connect(lambda: self.mostrar_pagina('professores'))
-        menu_cadastros.addAction(act_professores)
-
-        act_disciplinas = QAction("&Disciplinas", self)
-        act_disciplinas.triggered.connect(lambda: self.mostrar_pagina('disciplinas'))
-        menu_cadastros.addAction(act_disciplinas)
-
-        act_turmas = QAction("&Turmas", self)
-        act_turmas.triggered.connect(lambda: self.mostrar_pagina('turmas'))
-        menu_cadastros.addAction(act_turmas)
-
-        # Menu AcadÃªmico
-        menu_academico = menu_bar.addMenu("&AcadÃªmico")
-
-        act_notas = QAction("&LanÃ§ar Notas", self)
-        act_notas.setShortcut("Ctrl+N")
-        act_notas.triggered.connect(lambda: self.mostrar_pagina('notas'))
-        menu_academico.addAction(act_notas)
-
-        act_frequencia = QAction("&Registrar FrequÃªncia", self)
-        act_frequencia.setShortcut("Ctrl+F")
-        act_frequencia.triggered.connect(lambda: self.mostrar_pagina('frequencia'))
-        menu_academico.addAction(act_frequencia)
-
-        act_boletim = QAction("&Gerar Boletim", self)
-        act_boletim.triggered.connect(self.gerar_boletim)
-        menu_academico.addAction(act_boletim)
-
-        # Menu RelatÃ³rios
-        menu_relatorios = menu_bar.addMenu("&RelatÃ³rios")
-
-        act_rel_alunos = QAction("&RelatÃ³rio de Alunos", self)
-        act_rel_alunos.triggered.connect(self.gerar_relatorio_alunos)
-        menu_relatorios.addAction(act_rel_alunos)
-
-        act_rel_notas = QAction("&RelatÃ³rio de Notas", self)
-        act_rel_notas.triggered.connect(self.gerar_relatorio_notas)
-        menu_relatorios.addAction(act_rel_notas)
-
-        act_rel_frequencia = QAction("&RelatÃ³rio de FrequÃªncia", self)
-        act_rel_frequencia.triggered.connect(self.gerar_relatorio_frequencia)
-        menu_relatorios.addAction(act_rel_frequencia)
-
-        menu_relatorios.addSeparator()
-
-        act_rel_personalizado = QAction("&RelatÃ³rio Personalizado", self)
-        act_rel_personalizado.triggered.connect(self.relatorio_personalizado)
-        menu_relatorios.addAction(act_rel_personalizado)
-
-        # Menu Sistema
-        menu_sistema = menu_bar.addMenu("&Sistema")
-
-        act_config = QAction("&ConfiguraÃ§Ãµes", self)
-        act_config.triggered.connect(lambda: self.mostrar_pagina('configuracoes'))
-        menu_sistema.addAction(act_config)
-
-        act_usuarios = QAction("&UsuÃ¡rios", self)
-        act_usuarios.triggered.connect(self.gerenciar_usuarios)
-        menu_sistema.addAction(act_usuarios)
-
-        menu_sistema.addSeparator()
-
-        act_trocar_usuario = QAction("&Trocar UsuÃ¡rio", self)
-        act_trocar_usuario.triggered.connect(self.trocar_usuario)
-        menu_sistema.addAction(act_trocar_usuario)
-
-        act_sobre = QAction("&Sobre", self)
-        act_sobre.triggered.connect(self.mostrar_sobre)
-        menu_sistema.addAction(act_sobre)
-
-        # Aplicar estilo Ã  barra de menus
-        menu_bar.setStyleSheet("""
-            QMenuBar {
-                background-color: #2c3e50;
-                color: white;
-                font-weight: 600;
-                padding: 6px;
-            }
-            QMenuBar::item {
-                padding: 8px 16px;
-                background-color: transparent;
-                border-radius: 4px;
-            }
-            QMenuBar::item:selected {
-                background-color: #34495e;
-            }
-        """)
-
-    def criar_toolbar(self):
-        """Cria a barra de ferramentas"""
-        toolbar = QToolBar("Barra de Ferramentas")
-        toolbar.setMovable(False)
-        toolbar.setIconSize(QSize(24, 24))
-        self.addToolBar(toolbar)
-
-        # BotÃµes da toolbar
-        act_inicio = QAction(QIcon(), "InÃ­cio", self)
-        act_inicio.triggered.connect(lambda: self.mostrar_pagina('inicial'))
-        toolbar.addAction(act_inicio)
-
-        toolbar.addSeparator()
-
-        act_alunos = QAction(QIcon(), "Alunos", self)
-        act_alunos.triggered.connect(lambda: self.mostrar_pagina('alunos'))
-        toolbar.addAction(act_alunos)
-
-        act_professores = QAction(QIcon(), "Professores", self)
-        act_professores.triggered.connect(lambda: self.mostrar_pagina('professores'))
-        toolbar.addAction(act_professores)
-
-        act_notas = QAction(QIcon(), "Notas", self)
-        act_notas.triggered.connect(lambda: self.mostrar_pagina('notas'))
-        toolbar.addAction(act_notas)
-
-        act_frequencia = QAction(QIcon(), "FrequÃªncia", self)
-        act_frequencia.triggered.connect(lambda: self.mostrar_pagina('frequencia'))
-        toolbar.addAction(act_frequencia)
-
-        toolbar.addSeparator()
-
-        act_relatorios = QAction(QIcon(), "RelatÃ³rios", self)
-        act_relatorios.triggered.connect(lambda: self.mostrar_pagina('relatorios'))
-        toolbar.addAction(act_relatorios)
-
-        # Adicionar espaÃ§ador
-        toolbar.addWidget(QWidget())
-
-        # UsuÃ¡rio atual
-        lbl_usuario = QLabel(f"UsuÃ¡rio: {self.dados_usuario.get('nome', '')}")
-        lbl_usuario.setStyleSheet("""
-            QLabel {
-                color: #2c3e50;
-                font-weight: 600;
-                padding: 4px 12px;
-                background-color: #ecf0f1;
-                border-radius: 4px;
-                border: 1px solid #dce1e6;
-            }
-        """)
-        toolbar.addWidget(lbl_usuario)
-
-    def criar_status_bar(self):
-        """Cria a barra de status"""
-        status_bar = self.statusBar()
-
-        # Status do banco de dados
-        self.lbl_status_db = QLabel(" Banco de dados: Conectado")
-        self.lbl_status_db.setStyleSheet("""
-            QLabel {
-                color: #27ae60;
-                font-weight: 600;
-                padding: 2px 8px;
-                background-color: #d5f4e6;
-                border-radius: 3px;
-                border: 1px solid #a3e4c0;
-            }
-        """)
-        status_bar.addPermanentWidget(self.lbl_status_db)
-
-        # Data e hora atualizadas em tempo real
-        self.lbl_data_hora = QLabel()
-        self.lbl_data_hora.setStyleSheet("""
-            QLabel {
-                color: #7f8c8d;
-                font-weight: 600;
-                padding: 2px 8px;
-            }
-        """)
-        status_bar.addPermanentWidget(self.lbl_data_hora)
-
-        # Atualizar data/hora
-        self.timer_data_hora = QTimer(self)
-        self.timer_data_hora.timeout.connect(self.atualizar_data_hora)
-        self.timer_data_hora.start(1000)  # Atualizar a cada segundo
+            print(f"Erro no backup automático: {e}")
+
+    def limpar_backups_antigos(self, backup_dir, manter_quantidade):
+        """Remove backups antigos"""
+        try:
+            backups = []
+            for f in os.listdir(backup_dir):
+                if f.startswith('backup_auto_') and f.endswith('.db'):
+                    filepath = os.path.join(backup_dir, f)
+                    backups.append((filepath, os.path.getctime(filepath)))
+
+            # Ordenar por data de criação (mais antigos primeiro)
+            backups.sort(key=lambda x: x[1])
+
+            # Remover backups antigos
+            while len(backups) > manter_quantidade:
+                old_backup = backups.pop(0)
+                os.remove(old_backup[0])
+
+        except Exception as e:
+            print(f"Erro ao limpar backups: {e}")
+
+    def verificar_notificacoes_pendentes(self):
+        """Verifica notificações pendentes"""
+        try:
+            # Verificar comunicados próximos do vencimento
+            hoje = date.today().isoformat()
+            self.cursor.execute('''
+                SELECT COUNT(*) FROM comunicados
+                WHERE data_validade BETWEEN ? AND date(?, '+3 days')
+                AND status = 'Ativo'
+            ''', (hoje, hoje))
+
+            comunicados_proximos = self.cursor.fetchone()[0]
+
+            # Verificar eventos próximos
+            self.cursor.execute('''
+                SELECT COUNT(*) FROM eventos
+                WHERE data_inicio BETWEEN ? AND date(?, '+7 days')
+                AND status = 'Agendado'
+            ''', (hoje, hoje))
+
+            eventos_proximos = self.cursor.fetchone()[0]
+
+            # Aqui você pode implementar notificações na interface
+            if comunicados_proximos > 0 or eventos_proximos > 0:
+                self.mostrar_notificacao_sistema(comunicados_proximos, eventos_proximos)
+
+        except Exception as e:
+            print(f"Erro ao verificar notificações: {e}")
+
+    def mostrar_notificacao_sistema(self, comunicados, eventos):
+        """Mostra notificação no sistema"""
+        try:
+            # Esta função seria chamada para atualizar a interface
+            # Por enquanto, apenas registra no log
+            if hasattr(self, 'status_bar'):
+                mensagem = f"📢 {comunicados} comunicados e {eventos} eventos próximos"
+                self.status_bar.config(text=mensagem)
+        except Exception as e:
+            print(f"Erro ao mostrar notificação: {e}")
+
+    def setup_interface(self):
+        """Configura a interface gráfica principal"""
+        # Frame principal
+        main_frame = tk.Frame(self.root, bg='#0046AD')
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Header
+        self.setup_header(main_frame)
+
+        # Content area
+        content_container = tk.Frame(main_frame, bg='#f8f9fa')
+        content_container.pack(fill=tk.BOTH, expand=True)
+
+        # Sidebar
+        self.setup_sidebar(content_container)
+
+        # Área de conteúdo
+        self.setup_content_area(content_container)
+
+        # Status bar
+        self.setup_status_bar(content_container)
+
+        # Ajustar menu conforme perfil
+        self.ajustar_menu_conforme_perfil()
+
+    def setup_header(self, parent):
+        """Configura o cabeçalho do sistema"""
+        header = tk.Frame(parent, bg='#0046AD', height=80)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+
+        # Logo e título
+        logo_frame = tk.Frame(header, bg='#0046AD')
+        logo_frame.pack(side=tk.LEFT, padx=25, pady=15)
+
+        # Logo Objetivo
+        logo_text = tk.Frame(logo_frame, bg='#0046AD')
+        logo_text.pack(side=tk.LEFT)
+
+        tk.Label(logo_text, text="●", font=('Arial', 24),
+                 fg='#FFCC00', bg='#0046AD').pack(side=tk.LEFT)
+
+        tk.Label(logo_text, text="OBJETIVO", font=('Arial', 20, 'bold'),
+                 fg='white', bg='#0046AD').pack(side=tk.LEFT, padx=8)
+
+        escola_frame = tk.Frame(logo_frame, bg='#0046AD')
+        escola_frame.pack(side=tk.LEFT, padx=10)
+
+        tk.Label(escola_frame, text="Externato Colégio", font=('Arial', 12),
+                 fg='#FFCC00', bg='#0046AD').pack()
+        tk.Label(escola_frame, text="Sistema de Gestão Integrado", font=('Arial', 10),
+                 fg='white', bg='#0046AD').pack()
+
+        # Informações do usuário e data
+        info_frame = tk.Frame(header, bg='#0046AD')
+        info_frame.pack(side=tk.RIGHT, padx=25, pady=15)
+
+        # Data e hora
+        self.data_hora_label = tk.Label(info_frame, text="", font=('Arial', 10),
+                                        bg='#0046AD', fg='white')
+        self.data_hora_label.pack(side=tk.RIGHT, padx=10)
         self.atualizar_data_hora()
 
+        # Info do usuário
+        user_label = tk.Label(info_frame, text=f"👤 {self.usuario_nome} | {self.usuario_nivel.title()}",
+                              font=('Arial', 10), bg='#0046AD', fg='#FFCC00')
+        user_label.pack(side=tk.RIGHT, padx=10)
+
+        # Botão configurações
+        config_btn = ModernButton(info_frame, text="⚙️", command=self.abrir_configuracoes,
+                                  color='#0046AD', font=('Arial', 12), padx=10, pady=5)
+        config_btn.pack(side=tk.RIGHT, padx=5)
+
     def atualizar_data_hora(self):
-        """Atualiza a data e hora na status bar"""
-        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        self.lbl_data_hora.setText(f" {data_hora}")
-
-    def criar_pagina_inicial(self):
-        """Cria a pÃ¡gina inicial/dashboard"""
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo da pÃ¡gina
-        lbl_titulo = QLabel("DASHBOARD - VISÃƒO GERAL")
-        lbl_titulo.setObjectName("title")
-        lbl_titulo.setStyleSheet("""
-            QLabel#title {
-                font-size: 24px;
-                font-weight: 700;
-                color: #2c3e50;
-                padding-bottom: 10px;
-                border-bottom: 3px solid #3498db;
-            }
-        """)
-
-        # SubtÃ­tulo com saudaÃ§Ã£o
-        saudacao = self.obter_saudacao()
-        lbl_saudacao = QLabel(f"{saudacao}, {self.dados_usuario.get('nome', 'UsuÃ¡rio')}!")
-        lbl_saudacao.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                color: #7f8c8d;
-                font-weight: 600;
-            }
-        """)
-
-        # Grid de cards de estatÃ­sticas
-        grid_cards = QGridLayout()
-        grid_cards.setSpacing(20)
-
-        # Card: Total de Alunos
-        card_alunos = CardWidget("ALUNOS CADASTRADOS")
-        layout_alunos = QVBoxLayout(card_alunos.conteudo_widget)
-        self.lbl_total_alunos = QLabel("Carregando...")
-        self.lbl_total_alunos.setStyleSheet("""
-            QLabel {
-                font-size: 36px;
-                font-weight: 800;
-                color: #3498db;
-                text-align: center;
-            }
-        """)
-        self.lbl_total_alunos.setAlignment(Qt.AlignCenter)
-
-        lbl_info_alunos = QLabel("Alunos ativos no sistema")
-        lbl_info_alunos.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #7f8c8d;
-                text-align: center;
-            }
-        """)
-        lbl_info_alunos.setAlignment(Qt.AlignCenter)
-
-        layout_alunos.addWidget(self.lbl_total_alunos)
-        layout_alunos.addWidget(lbl_info_alunos)
-
-        # Card: Total de Professores
-        card_professores = CardWidget("PROFESSORES")
-        layout_professores = QVBoxLayout(card_professores.conteudo_widget)
-        self.lbl_total_professores = QLabel("Carregando...")
-        self.lbl_total_professores.setStyleSheet("""
-            QLabel {
-                font-size: 36px;
-                font-weight: 800;
-                color: #27ae60;
-                text-align: center;
-            }
-        """)
-        self.lbl_total_professores.setAlignment(Qt.AlignCenter)
-
-        lbl_info_professores = QLabel("Professores ativos")
-        lbl_info_professores.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #7f8c8d;
-                text-align: center;
-            }
-        """)
-        lbl_info_professores.setAlignment(Qt.AlignCenter)
-
-        layout_professores.addWidget(self.lbl_total_professores)
-        layout_professores.addWidget(lbl_info_professores)
-
-        # Card: MÃ©dia Geral
-        card_media = CardWidget("MÃ‰DIA GERAL")
-        layout_media = QVBoxLayout(card_media.conteudo_widget)
-        self.lbl_media_geral = QLabel("Carregando...")
-        self.lbl_media_geral.setStyleSheet("""
-            QLabel {
-                font-size: 36px;
-                font-weight: 800;
-                color: #f39c12;
-                text-align: center;
-            }
-        """)
-        self.lbl_media_geral.setAlignment(Qt.AlignCenter)
-
-        lbl_info_media = QLabel("MÃ©dia das notas")
-        lbl_info_media.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #7f8c8d;
-                text-align: center;
-            }
-        """)
-        lbl_info_media.setAlignment(Qt.AlignCenter)
-
-        layout_media.addWidget(self.lbl_media_geral)
-        layout_media.addWidget(lbl_info_media)
-
-        # Card: FrequÃªncia
-        card_frequencia = CardWidget("FREQUÃŠNCIA")
-        layout_frequencia = QVBoxLayout(card_frequencia.conteudo_widget)
-        self.lbl_frequencia = QLabel("Carregando...")
-        self.lbl_frequencia.setStyleSheet("""
-            QLabel {
-                font-size: 36px;
-                font-weight: 800;
-                color: #e74c3c;
-                text-align: center;
-            }
-        """)
-        self.lbl_frequencia.setAlignment(Qt.AlignCenter)
-
-        lbl_info_frequencia = QLabel("PresenÃ§a mÃ©dia")
-        lbl_info_frequencia.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #7f8c8d;
-                text-align: center;
-            }
-        """)
-        lbl_info_frequencia.setAlignment(Qt.AlignCenter)
-
-        layout_frequencia.addWidget(self.lbl_frequencia)
-        layout_frequencia.addWidget(lbl_info_frequencia)
-
-        # Adicionar cards ao grid
-        grid_cards.addWidget(card_alunos, 0, 0)
-        grid_cards.addWidget(card_professores, 0, 1)
-        grid_cards.addWidget(card_media, 1, 0)
-        grid_cards.addWidget(card_frequencia, 1, 1)
-
-        # AÃ§Ãµes rÃ¡pidas
-        group_acoes = QGroupBox("AÃ‡Ã•ES RÃPIDAS")
-        group_acoes.setStyleSheet("""
-            QGroupBox {
-                font-size: 16px;
-                font-weight: 700;
-                color: #2c3e50;
-                border: 2px solid #dce1e6;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 15px;
-                padding: 0 10px;
-                background-color: #f5f7fa;
-            }
-        """)
-
-        layout_acoes = QHBoxLayout()
-        layout_acoes.setSpacing(15)
-
-        btn_cad_aluno = AnimacaoBotao("Cadastrar Aluno", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_cad_aluno.clicked.connect(lambda: self.mostrar_pagina('alunos'))
-
-        btn_lancar_nota = AnimacaoBotao("LanÃ§ar Nota", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_lancar_nota.clicked.connect(lambda: self.mostrar_pagina('notas'))
-
-        btn_reg_frequencia = AnimacaoBotao("Registrar FrequÃªncia", cor_normal="#f39c12", cor_hover="#d68910",
-                                           cor_press="#b9770e")
-        btn_reg_frequencia.clicked.connect(lambda: self.mostrar_pagina('frequencia'))
-
-        btn_ger_relatorio = AnimacaoBotao("Gerar RelatÃ³rio", cor_normal="#9b59b6", cor_hover="#8e44ad",
-                                          cor_press="#7d3c98")
-        btn_ger_relatorio.clicked.connect(lambda: self.mostrar_pagina('relatorios'))
-
-        layout_acoes.addWidget(btn_cad_aluno)
-        layout_acoes.addWidget(btn_lancar_nota)
-        layout_acoes.addWidget(btn_reg_frequencia)
-        layout_acoes.addWidget(btn_ger_relatorio)
-        layout_acoes.addStretch()
-
-        group_acoes.setLayout(layout_acoes)
-
-        # Atividades recentes
-        group_atividades = QGroupBox("ATIVIDADES RECENTES")
-        group_atividades.setStyleSheet(group_acoes.styleSheet())
-
-        layout_atividades = QVBoxLayout()
-        self.list_atividades = QListWidget()
-        self.list_atividades.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #dce1e6;
-                border-radius: 6px;
-                background-color: white;
-                padding: 5px;
-            }
-            QListWidget::item {
-                padding: 12px;
-                border-bottom: 1px solid #ecf0f1;
-                font-size: 13px;
-            }
-            QListWidget::item:selected {
-                background-color: #e3f2fd;
-                color: #2c3e50;
-            }
-        """)
-        layout_atividades.addWidget(self.list_atividades)
-        group_atividades.setLayout(layout_atividades)
-
-        # Adicionar tudo ao layout principal
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(lbl_saudacao)
-        layout.addLayout(grid_cards)
-        layout.addWidget(group_acoes)
-        layout.addWidget(group_atividades)
-
-        self.paginas['inicial'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def criar_pagina_alunos(self):
-        """Cria a pÃ¡gina de gerenciamento de alunos"""
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # CabeÃ§alho
-        cabecalho_layout = QHBoxLayout()
-
-        lbl_titulo = QLabel("GESTÃƒO DE ALUNOS")
-        lbl_titulo.setObjectName("title")
-
-        # Barra de busca
-        self.txt_busca_aluno = QLineEdit()
-        self.txt_busca_aluno.setPlaceholderText("Buscar aluno por nome, CPF ou turma...")
-        self.txt_busca_aluno.setMinimumHeight(40)
-        self.txt_busca_aluno.textChanged.connect(self.buscar_alunos)
-
-        # BotÃµes de aÃ§Ã£o
-        btn_novo = AnimacaoBotao("Novo Aluno", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_novo.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
-        btn_novo.clicked.connect(self.cadastrar_aluno)
-
-        btn_editar = AnimacaoBotao("Editar", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_editar.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        btn_editar.clicked.connect(self.editar_aluno)
-
-        btn_excluir = AnimacaoBotao("Excluir", cor_normal="#e74c3c", cor_hover="#c0392b", cor_press="#a93226")
-        btn_excluir.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
-        btn_excluir.clicked.connect(self.excluir_aluno)
-
-        btn_imprimir = AnimacaoBotao("Imprimir", cor_normal="#f39c12", cor_hover="#d68910", cor_press="#b9770e")
-        btn_imprimir.setIcon(self.style().standardIcon(QStyle.SP_FileDialogListView))
-        btn_imprimir.clicked.connect(self.imprimir_lista_alunos)
-
-        cabecalho_layout.addWidget(lbl_titulo)
-        cabecalho_layout.addStretch()
-        cabecalho_layout.addWidget(self.txt_busca_aluno, 2)
-        cabecalho_layout.addWidget(btn_novo)
-        cabecalho_layout.addWidget(btn_editar)
-        cabecalho_layout.addWidget(btn_excluir)
-        cabecalho_layout.addWidget(btn_imprimir)
-
-        # Tabela de alunos
-        self.tabela_alunos = QTableWidget()
-        self.tabela_alunos.setColumnCount(10)
-        self.tabela_alunos.setHorizontalHeaderLabels([
-            "ID", "Nome", "CPF", "Data Nasc.", "Turma", "SÃ©rie",
-            "ResponsÃ¡vel", "Telefone", "Status", "Data MatrÃ­cula"
-        ])
-
-        # Configurar tabela
-        self.tabela_alunos.setAlternatingRowColors(True)
-        self.tabela_alunos.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabela_alunos.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabela_alunos.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Ajustar largura das colunas
-        header = self.tabela_alunos.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Nome
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Turma
-        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Data MatrÃ­cula
-
-        # Conectar duplo clique
-        self.tabela_alunos.doubleClicked.connect(self.ver_detalhes_aluno)
-
-        # EstatÃ­sticas
-        stats_layout = QHBoxLayout()
-
-        lbl_total = QLabel("Total de alunos: 0")
-        lbl_total.setObjectName("info-badge")
-
-        lbl_ativos = QLabel("Ativos: 0")
-        lbl_ativos.setObjectName("success-badge")
-
-        lbl_inativos = QLabel("Inativos: 0")
-        lbl_inativos.setObjectName("danger-badge")
-
-        stats_layout.addWidget(lbl_total)
-        stats_layout.addWidget(lbl_ativos)
-        stats_layout.addWidget(lbl_inativos)
-        stats_layout.addStretch()
-
-        # Adicionar tudo ao layout
-        layout.addLayout(cabecalho_layout)
-        layout.addWidget(self.tabela_alunos)
-        layout.addLayout(stats_layout)
-
-        self.paginas['alunos'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def criar_pagina_professores(self):
-        """Cria a pÃ¡gina de gerenciamento de professores"""
-        # ImplementaÃ§Ã£o similar Ã  pÃ¡gina de alunos
-        pagina = QWidget()
-        # ... (cÃ³digo similar ao de alunos)
-
-        self.paginas['professores'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def criar_pagina_disciplinas(self):
-        """Cria a pÃ¡gina de gerenciamento de disciplinas"""
-        pagina = QWidget()
-        # ... (cÃ³digo similar)
-
-        self.paginas['disciplinas'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def criar_pagina_notas(self):
-        """Cria a pÃ¡gina de lanÃ§amento de notas"""
-        pagina = QWidget()
-        # ... (cÃ³digo similar)
-
-        self.paginas['notas'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def criar_pagina_frequencia(self):
-        """Cria a pÃ¡gina de registro de frequÃªncia"""
-        pagina = QWidget()
-        # ... (cÃ³digo similar)
-
-        self.paginas['frequencia'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def criar_pagina_turmas(self):
-        """Cria a pÃ¡gina de gerenciamento de turmas"""
-        pagina = QWidget()
-        # ... (cÃ³digo similar)
-
-        self.paginas['turmas'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def criar_pagina_relatorios(self):
-        """Cria a pÃ¡gina de relatÃ³rios"""
-        pagina = QWidget()
-        # ... (cÃ³digo similar)
-
-        self.paginas['relatorios'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def criar_pagina_configuracoes(self):
-        """Cria a pÃ¡gina de configuraÃ§Ãµes"""
-        pagina = QWidget()
-        # ... (cÃ³digo similar)
-
-        self.paginas['configuracoes'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def carregar_dados_iniciais(self):
-        """Carrega dados iniciais para o dashboard"""
-        # Carregar totais
-        self.carregar_totais_alunos()
-        self.carregar_totais_professores()
-        self.carregar_media_geral()
-        self.carregar_frequencia_media()
-        self.carregar_atividades_recentes()
-
-    def carregar_totais_alunos(self):
-        """Carrega o total de alunos"""
-        try:
-            resultado = self.db.execute_query(
-                "SELECT COUNT(*) FROM alunos WHERE status = 'Ativo'",
-                fetch=True
-            )
-            if resultado:
-                self.lbl_total_alunos.setText(str(resultado[0][0]))
-        except:
-            self.lbl_total_alunos.setText("Erro")
-
-    def carregar_totais_professores(self):
-        """Carrega o total de professores"""
-        try:
-            resultado = self.db.execute_query(
-                "SELECT COUNT(*) FROM professores WHERE ativo = 1",
-                fetch=True
-            )
-            if resultado:
-                self.lbl_total_professores.setText(str(resultado[0][0]))
-        except:
-            self.lbl_total_professores.setText("Erro")
-
-    def carregar_media_geral(self):
-        """Carrega a mÃ©dia geral das notas"""
-        try:
-            resultado = self.db.execute_query(
-                "SELECT AVG(media) FROM notas WHERE media IS NOT NULL",
-                fetch=True
-            )
-            if resultado and resultado[0][0]:
-                media = float(resultado[0][0])
-                self.lbl_media_geral.setText(f"{media:.1f}")
-            else:
-                self.lbl_media_geral.setText("N/A")
-        except:
-            self.lbl_media_geral.setText("Erro")
-
-    def carregar_frequencia_media(self):
-        """Carrega a frequÃªncia mÃ©dia"""
-        try:
-            resultado = self.db.execute_query(
-                "SELECT AVG(presente) * 100 FROM frequencia",
-                fetch=True
-            )
-            if resultado and resultado[0][0]:
-                frequencia = float(resultado[0][0])
-                self.lbl_frequencia.setText(f"{frequencia:.1f}%")
-            else:
-                self.lbl_frequencia.setText("N/A")
-        except:
-            self.lbl_frequencia.setText("Erro")
-
-    def carregar_atividades_recentes(self):
-        """Carrega atividades recentes"""
-        atividades = [
-            "Novo aluno cadastrado: JoÃ£o Silva",
-            "Notas lanÃ§adas para MatemÃ¡tica - 1Âº Bimestre",
-            "FrequÃªncia registrada para Turma A",
-            "RelatÃ³rio de desempenho gerado",
-            "Backup do sistema realizado"
+        """Atualiza data e hora no header"""
+        agora = datetime.now()
+        texto_data = agora.strftime("%d/%m/%Y %H:%M:%S")
+        self.data_hora_label.config(text=texto_data)
+        self.root.after(1000, self.atualizar_data_hora)
+
+    def setup_sidebar(self, parent):
+        """Configura a barra lateral"""
+        sidebar = tk.Frame(parent, bg='#0046AD', width=280)
+        sidebar.pack(side=tk.LEFT, fill=tk.Y)
+        sidebar.pack_propagate(False)
+
+        # Menu de navegação
+        self.nav_buttons = {}
+
+        nav_buttons_config = [
+            ("📊 Dashboard", self.carregar_dashboard),
+            ("👨🎓 Gestão de Alunos", self.carregar_gestao_alunos),
+            ("👨🏫 Gestão de Professores", self.carregar_gestao_professores),
+            ("🏫 Gestão de Turmas", self.carregar_gestao_turmas),
+            ("📚 Gestão de Disciplinas", self.carregar_gestao_disciplinas),
+            ("📝 Sistema de Notas", self.carregar_sistema_notas),
+            ("📋 Controle de Matrículas", self.carregar_controle_matriculas),
+            ("📓 Diário de Classe", self.carregar_diario_classe),
+            ("✅ Controle de Frequência", self.carregar_controle_frequencia),
+            ("📅 Calendário Escolar", self.carregar_calendario_escolar),
+            ("📢 Comunicados e Avisos", self.carregar_comunicados_avisos),
+            ("🔔 Ocorrências Disciplinares", self.carregar_ocorrencias_disciplinares),
+            ("📋 Relatórios Gerenciais", self.carregar_relatorios_gerenciais),
+            ("🎓 Histórico Escolar", self.carregar_historico_escolar),
+            ("📈 Planejamento Pedagógico", self.carregar_planejamento_pedagogico),
+            ("🏆 Avaliações Institucionais", self.carregar_avaliacoes_institucionais),
+            ("⚙️ Configurações do Sistema", self.carregar_configuracoes_sistema),
         ]
 
-        self.list_atividades.clear()
-        for atividade in atividades:
-            item = QListWidgetItem(f"â€¢ {atividade}")
-            self.list_atividades.addItem(item)
+        # Frame com scroll para a sidebar
+        canvas = tk.Canvas(sidebar, bg='#0046AD', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(sidebar, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
 
-    def obter_saudacao(self):
-        """Retorna a saudaÃ§Ã£o apropriada para a hora atual"""
-        hora_atual = datetime.now().hour
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
 
-        if 5 <= hora_atual < 12:
-            return "Bom dia"
-        elif 12 <= hora_atual < 18:
-            return "Boa tarde"
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        for i, (text, command) in enumerate(nav_buttons_config):
+            btn = tk.Button(scrollable_frame, text=text, font=('Arial', 11),
+                            bg='#0046AD', fg='white', bd=0, anchor='w', padx=25,
+                            command=command, cursor='hand2', pady=12)
+            btn.pack(fill=tk.X, pady=1)
+
+            # Efeitos hover
+            btn.bind("<Enter>", lambda e, b=btn: b.configure(bg='#0066CC'))
+            btn.bind("<Leave>", lambda e, b=btn: b.configure(bg='#0046AD'))
+
+            self.nav_buttons[text] = btn
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        self.ativar_botao("📊 Dashboard")
+
+        # Logout
+        logout_frame = tk.Frame(scrollable_frame, bg='#0046AD')
+        logout_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=20)
+
+        ModernButton(logout_frame, text="🚪 Sair do Sistema", command=self.sair,
+                     color='#FF6B6B', font=('Arial', 11)).pack(fill=tk.X, padx=20)
+
+    def setup_content_area(self, parent):
+        """Configura a área de conteúdo principal"""
+        self.content_frame = tk.Frame(parent, bg='#f8f9fa')
+        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+    def setup_status_bar(self, parent):
+        """Configura a barra de status"""
+        self.status_bar = tk.Label(parent, text="Sistema carregado com sucesso | Externato Colégio Objetivo",
+                                   font=('Arial', 9), bg='#0046AD', fg='white', anchor='w')
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def ajustar_menu_conforme_perfil(self):
+        """Ajusta o menu lateral conforme o perfil do usuário"""
+        if self.usuario_nivel == 'professor':
+            opcoes_restritas = [
+                "💰 Gestão Financeira",
+                "👨🏫 Gestão de Professores",
+                "⚙️ Configurações do Sistema",
+                "📈 Relatórios Gerenciais"
+            ]
+            for opcao in opcoes_restritas:
+                if opcao in self.nav_buttons:
+                    self.nav_buttons[opcao].pack_forget()
+
+        elif self.usuario_nivel == 'coordenador':
+            opcoes_restritas = ["💰 Gestão Financeira", "⚙️ Configurações do Sistema"]
+            for opcao in opcoes_restritas:
+                if opcao in self.nav_buttons:
+                    self.nav_buttons[opcao].pack_forget()
+
+    def ativar_botao(self, nome_botao):
+        """Ativa o botão de navegação selecionado"""
+        for nome, btn in self.nav_buttons.items():
+            if nome == nome_botao:
+                btn.configure(bg='#FFCC00', fg='#0046AD')
+            else:
+                btn.configure(bg='#0046AD', fg='white')
+
+    def sair(self):
+        """Sair do sistema"""
+        if messagebox.askyesno("Sair", "Deseja realmente sair do sistema?"):
+            try:
+                # Registrar log de saída
+                self.registrar_log('LOGOUT', 'Sistema', f'Usuário {self.usuario_nome} saiu do sistema')
+                self.conn.close()
+                self.root.destroy()
+            except Exception as e:
+                self.root.destroy()
+
+    def limpar_conteudo(self):
+        """Limpa o conteúdo da área principal"""
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+
+    def criar_toolbar(self, parent, botoes):
+        """Cria uma barra de ferramentas padronizada"""
+        toolbar = tk.Frame(parent, bg='white', relief='flat', bd=1, height=60)
+        toolbar.pack(fill=tk.X, pady=(0, 20))
+        toolbar.pack_propagate(False)
+
+        left_frame = tk.Frame(toolbar, bg='white')
+        left_frame.pack(side=tk.LEFT, padx=20, pady=15)
+
+        for texto, comando, cor in botoes:
+            btn = ModernButton(left_frame, text=texto, command=comando, color=cor)
+            btn.pack(side=tk.LEFT, padx=5)
+
+        return toolbar
+
+    def criar_tabela(self, parent, colunas, altura=20):
+        """Cria uma tabela padronizada"""
+        frame = tk.Frame(parent, bg='white', relief='flat', bd=1)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        # Treeview
+        tree = ttk.Treeview(frame, columns=colunas, show='headings', height=altura, style='Custom.Treeview')
+
+        # Configurar colunas
+        for col in colunas:
+            tree.heading(col, text=col)
+            tree.column(col, width=120, minwidth=100)
+
+        # Scrollbars
+        v_scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
+        h_scroll = ttk.Scrollbar(frame, orient=tk.HORIZONTAL, command=tree.xview)
+        tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+
+        # Layout
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+
+        return tree
+
+    def registrar_log(self, acao, modulo, descricao):
+        """Registra log de atividades do sistema"""
+        try:
+            self.cursor.execute('''
+                INSERT INTO logs_sistema (usuario_id, acao, modulo, descricao, data_hora)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (self.usuario_id, acao, modulo, descricao, datetime.now().isoformat()))
+            self.conn.commit()
+        except Exception as e:
+            print(f"Erro ao registrar log: {e}")
+
+    # ========== DASHBOARD PRINCIPAL ==========
+
+    def carregar_dashboard(self):
+        """Carrega o dashboard principal"""
+        self.limpar_conteudo()
+        self.ativar_botao("📊 Dashboard")
+        self.registrar_log('ACESSO', 'Dashboard', 'Acessou o dashboard principal')
+
+        # Título
+        title_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        title_frame.pack(fill=tk.X, pady=(0, 20))
+
+        tk.Label(title_frame, text="Dashboard Principal", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Visão geral do sistema educacional - Externato Colégio Objetivo",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Frame principal do dashboard
+        main_dashboard = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_dashboard.pack(fill=tk.BOTH, expand=True)
+
+        # Container com scroll
+        canvas = tk.Canvas(main_dashboard, bg='#f8f9fa', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_dashboard, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Estatísticas
+        stats_frame = tk.Frame(scrollable_frame, bg='#f8f9fa')
+        stats_frame.pack(fill=tk.X, pady=(0, 30))
+
+        # Buscar estatísticas
+        stats_data = self.buscar_estatisticas_dashboard()
+
+        for i, (titulo, valor, icon, cor) in enumerate(stats_data):
+            card = CardFrame(stats_frame, titulo, valor, icon, cor, width=200, height=120)
+            card.grid(row=0, column=i, padx=10, pady=10, sticky='nsew')
+
+        for i in range(len(stats_data)):
+            stats_frame.columnconfigure(i, weight=1)
+
+        # Gráficos e métricas
+        metrics_frame = tk.Frame(scrollable_frame, bg='#f8f9fa')
+        metrics_frame.pack(fill=tk.X, pady=20)
+
+        # Abas para diferentes visualizações
+        notebook = ttk.Notebook(metrics_frame, style='Custom.TNotebook')
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Aba 1: Visão Geral
+        aba_visao_geral = ttk.Frame(notebook)
+        notebook.add(aba_visao_geral, text="📈 Visão Geral")
+
+        self.carregar_visao_geral_dashboard(aba_visao_geral)
+
+        # Aba 2: Desempenho Acadêmico
+        aba_desempenho = ttk.Frame(notebook)
+        notebook.add(aba_desempenho, text="🎓 Desempenho")
+
+        self.carregar_desempenho_dashboard(aba_desempenho)
+
+        # Aba 3: Frequência
+        aba_frequencia = ttk.Frame(notebook)
+        notebook.add(aba_frequencia, text="✅ Frequência")
+
+        self.carregar_frequencia_dashboard(aba_frequencia)
+
+        # Ações rápidas
+        actions_frame = tk.Frame(scrollable_frame, bg='#f8f9fa')
+        actions_frame.pack(fill=tk.X, pady=20)
+
+        tk.Label(actions_frame, text="⚡ Ações Rápidas", font=('Arial', 18, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w', pady=(0, 15))
+
+        acoes_frame = tk.Frame(actions_frame, bg='#f8f9fa')
+        acoes_frame.pack(fill=tk.X)
+
+        acoes = [
+            ("➕ Novo Aluno", self.novo_aluno, '#0046AD'),
+            ("👨🏫 Novo Professor", self.novo_professor, '#0046AD'),
+            ("🏫 Nova Turma", self.nova_turma, '#0046AD'),
+            ("📝 Lançar Notas", self.lancar_notas, '#0046AD'),
+            ("📓 Registrar Aula", self.nova_aula_diario, '#0046AD'),
+            ("📢 Novo Comunicado", self.novo_comunicado, '#0046AD'),
+            ("📅 Novo Evento", self.novo_evento, '#0046AD'),
+            ("📋 Relatório Rápido", self.gerar_relatorio_rapido, '#0046AD'),
+        ]
+
+        # Organizar em duas linhas
+        linha1 = tk.Frame(acoes_frame, bg='#f8f9fa')
+        linha1.pack(fill=tk.X, pady=5)
+        linha2 = tk.Frame(acoes_frame, bg='#f8f9fa')
+        linha2.pack(fill=tk.X, pady=5)
+
+        for i, (texto, comando, cor) in enumerate(acoes):
+            if i < 4:
+                btn = ModernButton(linha1, text=texto, command=comando, color=cor)
+                btn.pack(side=tk.LEFT, padx=5)
+            else:
+                btn = ModernButton(linha2, text=texto, command=comando, color=cor)
+                btn.pack(side=tk.LEFT, padx=5)
+
+        # Atividades recentes
+        atividades_frame = tk.Frame(scrollable_frame, bg='#f8f9fa')
+        atividades_frame.pack(fill=tk.X, pady=20)
+
+        tk.Label(atividades_frame, text="🕐 Atividades Recentes", font=('Arial', 18, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w', pady=(0, 15))
+
+        self.carregar_atividades_recentes(atividades_frame)
+
+        # Avisos e notificações
+        if hasattr(self, 'usuario_nivel'):
+            if self.usuario_nivel == 'professor':
+                self.carregar_avisos_professor(scrollable_frame)
+            elif self.usuario_nivel == 'coordenador':
+                self.carregar_avisos_coordenador(scrollable_frame)
+            else:
+                self.carregar_avisos_administrativos(scrollable_frame)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def buscar_estatisticas_dashboard(self):
+        """Busca estatísticas atualizadas do banco para o dashboard"""
+        try:
+            total_alunos = self.cursor.execute("SELECT COUNT(*) FROM alunos WHERE status='Ativo'").fetchone()[0]
+            total_professores = self.cursor.execute("SELECT COUNT(*) FROM professores WHERE status='Ativo'").fetchone()[
+                0]
+            total_turmas = self.cursor.execute("SELECT COUNT(*) FROM turmas WHERE status='Ativa'").fetchone()[0]
+            total_disciplinas = self.cursor.execute("SELECT COUNT(*) FROM disciplinas WHERE status='Ativa'").fetchone()[
+                0]
+
+            # Estatísticas específicas para professores
+            if hasattr(self, 'usuario_nivel') and self.usuario_nivel == 'professor':
+                self.cursor.execute("SELECT id FROM professores WHERE nome = ?", (self.usuario_nome,))
+                professor = self.cursor.fetchone()
+                if professor:
+                    professor_id = professor[0]
+                    total_minhas_disciplinas = self.cursor.execute(
+                        "SELECT COUNT(*) FROM disciplinas WHERE professor_id = ?", (professor_id,)
+                    ).fetchone()[0]
+                    total_aulas = self.cursor.execute(
+                        "SELECT COUNT(*) FROM diario_aula WHERE professor_id = ?", (professor_id,)
+                    ).fetchone()[0]
+
+                    # Alunos do professor
+                    total_meus_alunos = self.cursor.execute('''
+                        SELECT COUNT(DISTINCT m.aluno_id)
+                        FROM matriculas m
+                        JOIN turmas t ON m.turma_id = t.id
+                        JOIN disciplinas d ON t.id = d.turma_id
+                        WHERE d.professor_id = ? AND m.status = 'Ativa'
+                    ''', (professor_id,)).fetchone()[0]
+
+                    return [
+                        ("Minhas Disciplinas", total_minhas_disciplinas, "📚", "#0046AD"),
+                        ("Aulas Ministradas", total_aulas, "📅", "#FFCC00"),
+                        ("Meus Alunos", total_meus_alunos, "👨🎓", "#0046AD"),
+                        ("Turmas", total_turmas, "🏫", "#FFCC00"),
+                    ]
+
+            # Estatísticas para coordenador
+            elif hasattr(self, 'usuario_nivel') and self.usuario_nivel == 'coordenador':
+                total_ocorrencias = \
+                    self.cursor.execute("SELECT COUNT(*) FROM ocorrencias WHERE status='Aberta'").fetchone()[0]
+                total_comunicados = \
+                    self.cursor.execute("SELECT COUNT(*) FROM comunicados WHERE status='Ativo'").fetchone()[0]
+
+                return [
+                    ("Alunos Ativos", total_alunos, "👨🎓", "#0046AD"),
+                    ("Professores", total_professores, "👨🏫", "#FFCC00"),
+                    ("Ocorrências Abertas", total_ocorrencias, "🔔", "#FF6B6B"),
+                    ("Comunicados Ativos", total_comunicados, "📢", "#0046AD"),
+                ]
+
+            # Estatísticas para admin
+            return [
+                ("Alunos Ativos", total_alunos, "👨🎓", "#0046AD"),
+                ("Professores", total_professores, "👨🏫", "#FFCC00"),
+                ("Turmas Ativas", total_turmas, "🏫", "#0046AD"),
+                ("Disciplinas", total_disciplinas, "📚", "#FFCC00"),
+            ]
+        except Exception as e:
+            print(f"Erro ao buscar estatísticas: {e}")
+            return [
+                ("Alunos Ativos", "0", "👨🎓", "#0046AD"),
+                ("Professores", "0", "👨🏫", "#FFCC00"),
+                ("Turmas", "0", "🏫", "#0046AD"),
+                ("Disciplinas", "0", "📚", "#FFCC00"),
+            ]
+
+    def carregar_visao_geral_dashboard(self, parent):
+        """Carrega visão geral no dashboard"""
+        try:
+            # Métricas rápidas
+            metrics_frame = tk.Frame(parent, bg='white', relief='flat', bd=1, padx=20, pady=15)
+            metrics_frame.pack(fill=tk.X, pady=10)
+
+            tk.Label(metrics_frame, text="Métricas do Sistema", font=('Arial', 14, 'bold'),
+                     bg='white', fg='#0046AD').pack(anchor='w')
+
+            # Buscar métricas
+            total_matriculas = self.cursor.execute("SELECT COUNT(*) FROM matriculas WHERE status='Ativa'").fetchone()[0]
+            media_geral = self.cursor.execute("SELECT AVG(media) FROM notas WHERE media > 0").fetchone()[0] or 0
+            frequencia_media = self.cursor.execute("SELECT AVG(presente) * 100 FROM frequencia").fetchone()[0] or 0
+
+            metrics_text = f"""
+            • Total de Matrículas Ativas: {total_matriculas}
+            • Média Geral dos Alunos: {media_geral:.2f}
+            • Frequência Média: {frequencia_media:.1f}%
+            • Taxa de Aprovação: {self.calcular_taxa_aprovacao():.1f}%
+            """
+
+            tk.Label(metrics_frame, text=metrics_text, font=('Arial', 11),
+                     bg='white', fg='#666666', justify=tk.LEFT).pack(anchor='w', pady=10)
+
+        except Exception as e:
+            print(f"Erro ao carregar visão geral: {e}")
+
+    def carregar_desempenho_dashboard(self, parent):
+        """Carrega dados de desempenho no dashboard"""
+        try:
+            desempenho_frame = tk.Frame(parent, bg='white', relief='flat', bd=1, padx=20, pady=15)
+            desempenho_frame.pack(fill=tk.X, pady=10)
+
+            tk.Label(desempenho_frame, text="Desempenho por Turma", font=('Arial', 14, 'bold'),
+                     bg='white', fg='#0046AD').pack(anchor='w')
+
+            # Buscar desempenho por turma
+            self.cursor.execute('''
+                SELECT t.nome, AVG(n.media) as media_turma,
+                       COUNT(CASE WHEN n.media >= 6 THEN 1 END) as aprovados,
+                       COUNT(CASE WHEN n.media < 6 THEN 1 END) as em_recuperacao
+                FROM turmas t
+                JOIN matriculas m ON t.id = m.turma_id
+                JOIN notas n ON m.aluno_id = n.aluno_id
+                WHERE t.status = 'Ativa' AND m.status = 'Ativa'
+                GROUP BY t.nome
+                ORDER BY media_turma DESC
+            ''')
+
+            turmas_desempenho = self.cursor.fetchall()
+
+            if turmas_desempenho:
+                for turma, media, aprovados, recuperacao in turmas_desempenho:
+                    turma_frame = tk.Frame(desempenho_frame, bg='#f8f9fa', relief='flat', bd=1, padx=10, pady=5)
+                    turma_frame.pack(fill=tk.X, pady=2)
+
+                    info_text = f"{turma}: Média {media:.2f} | Aprovados: {aprovados} | Recuperação: {recuperacao}"
+                    tk.Label(turma_frame, text=info_text, font=('Arial', 10),
+                             bg='#f8f9fa', justify=tk.LEFT).pack(anchor='w')
+            else:
+                tk.Label(desempenho_frame, text="Nenhum dado de desempenho disponível",
+                         font=('Arial', 11), bg='white', fg='#666666').pack(anchor='w')
+
+        except Exception as e:
+            print(f"Erro ao carregar desempenho: {e}")
+
+    def carregar_frequencia_dashboard(self, parent):
+        """Carrega dados de frequência no dashboard"""
+        try:
+            frequencia_frame = tk.Frame(parent, bg='white', relief='flat', bd=1, padx=20, pady=15)
+            frequencia_frame.pack(fill=tk.X, pady=10)
+
+            tk.Label(frequencia_frame, text="Frequência por Disciplina", font=('Arial', 14, 'bold'),
+                     bg='white', fg='#0046AD').pack(anchor='w')
+
+            # Buscar frequência por disciplina
+            self.cursor.execute('''
+                SELECT d.nome,
+                       COUNT(f.id) as total_registros,
+                       COUNT(CASE WHEN f.presente = 1 THEN 1 END) as presencas,
+                       ROUND(COUNT(CASE WHEN f.presente = 1 THEN 1 END) * 100.0 / COUNT(f.id), 2) as percentual
+                FROM disciplinas d
+                LEFT JOIN frequencia f ON d.id = f.disciplina_id
+                WHERE d.status = 'Ativa'
+                GROUP BY d.nome
+                ORDER BY percentual DESC
+                LIMIT 10
+            ''')
+
+            frequencia_disciplinas = self.cursor.fetchall()
+
+            if frequencia_disciplinas:
+                for disciplina, total, presencas, percentual in frequencia_disciplinas:
+                    disc_frame = tk.Frame(frequencia_frame, bg='#f8f9fa', relief='flat', bd=1, padx=10, pady=5)
+                    disc_frame.pack(fill=tk.X, pady=2)
+
+                    info_text = f"{disciplina}: {presencas}/{total} ({percentual}%)"
+                    tk.Label(disc_frame, text=info_text, font=('Arial', 10),
+                             bg='#f8f9fa', justify=tk.LEFT).pack(anchor='w')
+            else:
+                tk.Label(frequencia_frame, text="Nenhum registro de frequência disponível",
+                         font=('Arial', 11), bg='white', fg='#666666').pack(anchor='w')
+
+        except Exception as e:
+            print(f"Erro ao carregar frequência: {e}")
+
+    def carregar_atividades_recentes(self, parent):
+        """Carrega atividades recentes no dashboard"""
+        try:
+            atividades_frame = tk.Frame(parent, bg='white', relief='flat', bd=1, padx=20, pady=15)
+            atividades_frame.pack(fill=tk.X, pady=10)
+
+            # Buscar logs recentes
+            self.cursor.execute('''
+                SELECT l.acao, l.modulo, l.descricao, l.data_hora, u.nome
+                FROM logs_sistema l
+                JOIN usuarios u ON l.usuario_id = u.id
+                ORDER BY l.data_hora DESC
+                LIMIT 10
+            ''')
+
+            logs = self.cursor.fetchall()
+
+            if logs:
+                for acao, modulo, descricao, data_hora, usuario in logs:
+                    log_frame = tk.Frame(atividades_frame, bg='#f8f9fa', relief='flat', bd=1, padx=10, pady=5)
+                    log_frame.pack(fill=tk.X, pady=2)
+
+                    data_formatada = datetime.fromisoformat(data_hora).strftime("%d/%m/%Y %H:%M")
+                    info_text = f"{data_formatada} | {usuario} | {acao} em {modulo}: {descricao}"
+
+                    tk.Label(log_frame, text=info_text, font=('Arial', 9),
+                             bg='#f8f9fa', justify=tk.LEFT, wraplength=800).pack(anchor='w')
+            else:
+                tk.Label(atividades_frame, text="Nenhuma atividade recente registrada",
+                         font=('Arial', 11), bg='white', fg='#666666').pack(anchor='w')
+
+        except Exception as e:
+            print(f"Erro ao carregar atividades: {e}")
+
+    def calcular_taxa_aprovacao(self):
+        """Calcula a taxa de aprovação geral"""
+        try:
+            self.cursor.execute('''
+                SELECT COUNT(*) as total,
+                       COUNT(CASE WHEN media >= 6 THEN 1 END) as aprovados
+                FROM notas
+                WHERE media > 0
+            ''')
+            resultado = self.cursor.fetchone()
+            if resultado and resultado[0] > 0:
+                return (resultado[1] / resultado[0]) * 100
+            return 0
+        except:
+            return 0
+
+    def carregar_avisos_professor(self, parent):
+        """Carrega avisos específicos para professores"""
+        avisos_frame = tk.Frame(parent, bg='#FFF9E6', relief='flat', bd=1, padx=20, pady=15)
+        avisos_frame.pack(fill=tk.X, pady=20)
+
+        tk.Label(avisos_frame, text="📢 Avisos do Professor", font=('Arial', 14, 'bold'),
+                 bg='#FFF9E6', fg='#0046AD').pack(anchor='w', pady=(0, 10))
+
+        try:
+            self.cursor.execute("SELECT id FROM professores WHERE nome = ?", (self.usuario_nome,))
+            professor = self.cursor.fetchone()
+
+            if professor:
+                professor_id = professor[0]
+
+                # Aulas pendentes
+                self.cursor.execute('''
+                    SELECT COUNT(*) FROM diario_aula
+                    WHERE professor_id = ? AND date(data_aula) = date('now')
+                ''', (professor_id,))
+                aulas_hoje = self.cursor.fetchone()[0]
+
+                # Notas pendentes
+                self.cursor.execute('''
+                    SELECT COUNT(DISTINCT n.disciplina_id)
+                    FROM notas n
+                    JOIN disciplinas d ON n.disciplina_id = d.id
+                    WHERE d.professor_id = ? AND n.media = 0 AND n.bimestre = ?
+                ''', (professor_id, self.obter_bimestre_atual()))
+                notas_pendentes = self.cursor.fetchone()[0]
+
+                # Frequência pendente
+                self.cursor.execute('''
+                    SELECT COUNT(DISTINCT data_aula)
+                    FROM diario_aula
+                    WHERE professor_id = ? AND presencas IS NULL
+                ''', (professor_id,))
+                frequencia_pendente = self.cursor.fetchone()[0]
+
+                avisos_text = f"""
+                • Aulas para hoje: {aulas_hoje}
+                • Disciplinas com notas pendentes: {notas_pendentes}
+                • Aulas com frequência pendente: {frequencia_pendente}
+                • Próximas atividades: Verificar planejamento pedagógico
+                """
+
+                tk.Label(avisos_frame, text=avisos_text, font=('Arial', 11),
+                         bg='#FFF9E6', fg='#666666', justify=tk.LEFT).pack(anchor='w', pady=(0, 10))
+
+        except Exception as e:
+            print(f"Erro ao carregar avisos: {e}")
+
+    def carregar_avisos_coordenador(self, parent):
+        """Carrega avisos específicos para coordenadores"""
+        avisos_frame = tk.Frame(parent, bg='#E6F3FF', relief='flat', bd=1, padx=20, pady=15)
+        avisos_frame.pack(fill=tk.X, pady=20)
+
+        tk.Label(avisos_frame, text="📢 Avisos da Coordenação", font=('Arial', 14, 'bold'),
+                 bg='#E6F3FF', fg='#0046AD').pack(anchor='w', pady=(0, 10))
+
+        try:
+            # Ocorrências pendentes
+            ocorrencias_pendentes = self.cursor.execute(
+                "SELECT COUNT(*) FROM ocorrencias WHERE status='Aberta'"
+            ).fetchone()[0]
+
+            # Comunicados próximos do vencimento
+            hoje = date.today().isoformat()
+            comunicados_vencendo = self.cursor.execute('''
+                SELECT COUNT(*) FROM comunicados
+                WHERE data_validade BETWEEN ? AND date(?, '+3 days')
+                AND status = 'Ativo'
+            ''', (hoje, hoje)).fetchone()[0]
+
+            # Eventos próximos
+            eventos_proximos = self.cursor.execute('''
+                SELECT COUNT(*) FROM eventos
+                WHERE data_inicio BETWEEN ? AND date(?, '+7 days')
+                AND status = 'Agendado'
+            ''', (hoje, hoje)).fetchone()[0]
+
+            avisos_text = f"""
+            • Ocorrências pendentes: {ocorrencias_pendentes}
+            • Comunicados próximos do vencimento: {comunicados_vencendo}
+            • Eventos próximos: {eventos_proximos}
+            • Reuniões pedagógicas: Verificar calendário
+            """
+
+            tk.Label(avisos_frame, text=avisos_text, font=('Arial', 11),
+                     bg='#E6F3FF', fg='#666666', justify=tk.LEFT).pack(anchor='w', pady=(0, 10))
+
+        except Exception as e:
+            print(f"Erro ao carregar avisos coordenador: {e}")
+
+    def carregar_avisos_administrativos(self, parent):
+        """Carrega avisos para administradores"""
+        avisos_frame = tk.Frame(parent, bg='#E6F3FF', relief='flat', bd=1, padx=20, pady=15)
+        avisos_frame.pack(fill=tk.X, pady=20)
+
+        tk.Label(avisos_frame, text="📢 Avisos do Sistema", font=('Arial', 14, 'bold'),
+                 bg='#E6F3FF', fg='#0046AD').pack(anchor='w', pady=(0, 10))
+
+        try:
+            # Estatísticas gerais
+            total_alunos = self.cursor.execute("SELECT COUNT(*) FROM alunos WHERE status='Ativo'").fetchone()[0]
+            total_professores = self.cursor.execute("SELECT COUNT(*) FROM professores WHERE status='Ativo'").fetchone()[
+                0]
+            total_turmas = self.cursor.execute("SELECT COUNT(*) FROM turmas WHERE status='Ativa'").fetchone()[0]
+
+            # Backup status
+            ultimo_backup = self.cursor.execute(
+                "SELECT data_backup FROM backups ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+
+            backup_status = "OK" if ultimo_backup else "Pendente"
+
+            avisos_text = f"""
+            • Total de alunos ativos: {total_alunos}
+            • Professores ativos: {total_professores}
+            • Turmas ativas: {total_turmas}
+            • Status do backup: {backup_status}
+            • Próximos eventos: Reunião pedagógica mensal
+            """
+
+            tk.Label(avisos_frame, text=avisos_text, font=('Arial', 11),
+                     bg='#E6F3FF', fg='#666666', justify=tk.LEFT).pack(anchor='w', pady=(0, 10))
+
+        except Exception as e:
+            print(f"Erro ao carregar avisos administrativos: {e}")
+
+    def obter_bimestre_atual(self):
+        """Retorna o bimestre atual baseado na data"""
+        mes_atual = datetime.now().month
+        if mes_atual in [1, 2]:
+            return 1
+        elif mes_atual in [3, 4]:
+            return 2
+        elif mes_atual in [5, 6]:
+            return 3
+        elif mes_atual in [7, 8]:
+            return 4
         else:
-            return "Boa noite"
+            return 1  # Padrão para o primeiro bimestre
 
-    def mostrar_pagina(self, nome_pagina):
-        """Mostra a pÃ¡gina especificada"""
-        if nome_pagina in self.paginas:
-            self.central_widget.setCurrentWidget(self.paginas[nome_pagina])
+    # ========== MÓDULO GESTÃO DE ALUNOS ==========
 
-            # Atualizar dados da pÃ¡gina se necessÃ¡rio
-            if nome_pagina == 'inicial':
-                self.carregar_dados_iniciais()
-            elif nome_pagina == 'alunos':
-                self.carregar_tabela_alunos()
+    def carregar_gestao_alunos(self):
+        """Carrega o módulo completo de gestão de alunos"""
+        self.limpar_conteudo()
+        self.ativar_botao("👨🎓 Gestão de Alunos")
+        self.registrar_log('ACESSO', 'Gestão de Alunos', 'Acessou módulo de gestão de alunos')
 
-    def carregar_tabela_alunos(self):
-        """Carrega dados na tabela de alunos"""
+        # Título
+        title_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        title_frame.pack(fill=tk.X, pady=(0, 20))
+
+        tk.Label(title_frame, text="Gestão de Alunos", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Cadastro, consulta e gestão completa de alunos",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook com abas
+        notebook = ttk.Notebook(self.content_frame, style='Custom.TNotebook')
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Aba 1: Lista de Alunos
+        aba_lista = ttk.Frame(notebook)
+        notebook.add(aba_lista, text="👥 Lista de Alunos")
+
+        self.carregar_aba_lista_alunos(aba_lista)
+
+        # Aba 2: Cadastro de Alunos
+        aba_cadastro = ttk.Frame(notebook)
+        notebook.add(aba_cadastro, text="➕ Cadastro")
+
+        self.carregar_aba_cadastro_alunos(aba_cadastro)
+
+        # Aba 3: Relatórios de Alunos
+        aba_relatorios = ttk.Frame(notebook)
+        notebook.add(aba_relatorios, text="📊 Relatórios")
+
+        self.carregar_aba_relatorios_alunos(aba_relatorios)
+
+    def carregar_aba_lista_alunos(self, parent):
+        """Carrega aba de lista de alunos"""
+        # Barra de ferramentas
+        botoes = [
+            ("🔍 Buscar", self.buscar_alunos, '#0046AD'),
+            ("📝 Editar", self.editar_aluno, '#0046AD'),
+            ("🗑️ Excluir", self.excluir_aluno, '#FF6B6B'),
+            ("📋 Exportar", self.exportar_alunos, '#0046AD'),
+            ("🖨️ Imprimir", self.imprimir_lista_alunos, '#0046AD'),
+        ]
+        toolbar = self.criar_toolbar(parent, botoes)
+
+        # Filtros
+        filtros_frame = tk.Frame(toolbar, bg='white')
+        filtros_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        tk.Label(filtros_frame, text="Filtro:", font=('Arial', 9),
+                 bg='white').pack(side=tk.LEFT, padx=5)
+
+        self.filtro_status_alunos = ttk.Combobox(filtros_frame,
+                                                 values=['Todos', 'Ativo', 'Inativo', 'Transferido'],
+                                                 state='readonly', width=12)
+        self.filtro_status_alunos.pack(side=tk.LEFT, padx=5)
+        self.filtro_status_alunos.set('Ativo')
+
+        self.filtro_turma_alunos = ttk.Combobox(filtros_frame,
+                                                values=['Todas'] + self.obter_turmas_combo(),
+                                                state='readonly', width=15)
+        self.filtro_turma_alunos.pack(side=tk.LEFT, padx=5)
+        self.filtro_turma_alunos.set('Todas')
+
+        ModernButton(filtros_frame, text="Aplicar",
+                     command=self.aplicar_filtros_alunos,
+                     color='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        # Campo de busca
+        search_frame = tk.Frame(toolbar, bg='white')
+        search_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        self.search_var_alunos = tk.StringVar()
+        search_entry = tk.Entry(search_frame, textvariable=self.search_var_alunos,
+                                width=30, font=('Arial', 10), relief='solid', bd=1)
+        search_entry.pack(side=tk.LEFT, padx=5)
+        search_entry.bind('<KeyRelease>', self.buscar_alunos)
+
+        # Tabela de alunos
+        colunas = ('ID', 'Nome', 'CPF', 'Email', 'Telefone', 'Turma', 'Status', 'Data Matrícula')
+        self.tree_alunos = self.criar_tabela(parent, colunas)
+
+        # Carregar dados
+        self.carregar_dados_alunos()
+
+    def carregar_aba_cadastro_alunos(self, parent):
+        """Carrega aba de cadastro de alunos"""
+        form_frame = tk.Frame(parent, bg='white')
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # Container com scroll
+        canvas = tk.Canvas(form_frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(form_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Formulário de cadastro
+        self.criar_formulario_aluno(scrollable_frame)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def carregar_aba_relatorios_alunos(self, parent):
+        """Carrega aba de relatórios de alunos"""
+        relatorios_frame = tk.Frame(parent, bg='#f8f9fa')
+        relatorios_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        tk.Label(relatorios_frame, text="Relatórios de Alunos", font=('Arial', 16, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w', pady=(0, 20))
+
+        # Grid de relatórios
+        grid_frame = tk.Frame(relatorios_frame, bg='#f8f9fa')
+        grid_frame.pack(fill=tk.BOTH, expand=True)
+
+        relatorios = [
+            ("📋 Lista Completa", self.gerar_relatorio_alunos_completo,
+             "Lista completa de todos os alunos cadastrados"),
+            ("🎓 Alunos por Turma", self.gerar_relatorio_alunos_turma,
+             "Relação de alunos organizada por turma"),
+            ("📊 Estatísticas Gerais", self.gerar_relatorio_estatisticas_alunos,
+             "Estatísticas e métricas dos alunos"),
+            ("📅 Aniversariantes", self.gerar_relatorio_aniversariantes,
+             "Lista de aniversariantes do mês"),
+            ("📍 Alunos por Bairro", self.gerar_relatorio_alunos_bairro,
+             "Distribuição geográfica dos alunos"),
+            ("🚨 Alunos Inativos", self.gerar_relatorio_alunos_inativos,
+             "Relação de alunos com matrícula inativa"),
+        ]
+
+        for i, (titulo, comando, descricao) in enumerate(relatorios):
+            row = i // 3
+            col = i % 3
+
+            card = tk.Frame(grid_frame, bg='white', relief='flat', bd=1,
+                            highlightbackground='#e0e0e0', highlightthickness=1)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky='nsew')
+            card.configure(width=250, height=120)
+
+            tk.Label(card, text=titulo, font=('Arial', 12, 'bold'),
+                     bg='white', fg='#0046AD').pack(pady=(15, 5))
+
+            tk.Label(card, text=descricao, font=('Arial', 9),
+                     bg='white', fg='#666666', wraplength=220).pack(pady=5, padx=10)
+
+            ModernButton(card, text="Gerar Relatório", command=comando,
+                         color='#0046AD', font=('Arial', 10)).pack(pady=10)
+
+        for i in range(3):
+            grid_frame.columnconfigure(i, weight=1)
+        for i in range(2):
+            grid_frame.rowconfigure(i, weight=1)
+
+    def criar_formulario_aluno(self, parent):
+        """Cria formulário de cadastro de aluno"""
+        # Dados Pessoais
+        dados_frame = tk.LabelFrame(parent, text="Dados Pessoais", font=('Arial', 12, 'bold'),
+                                    bg='white', fg='#0046AD', padx=15, pady=15)
+        dados_frame.pack(fill=tk.X, pady=10)
+
+        campos_dados = [
+            ("Nome Completo*", "entry", None),
+            ("CPF", "entry", None),
+            ("RG", "entry", None),
+            ("Data Nascimento", "entry", None),
+            ("Email", "entry", None),
+            ("Telefone", "entry", None),
+            ("Celular", "entry", None),
+        ]
+
+        self.entries_aluno = {}
+        linha = 0
+        coluna = 0
+
+        for label, tipo, valores in campos_dados:
+            tk.Label(dados_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=coluna * 2, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(dados_frame, width=25, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=coluna * 2 + 1, pady=5, padx=5, sticky='ew')
+                self.entries_aluno[label] = entry
+
+            coluna += 1
+            if coluna >= 2:
+                coluna = 0
+                linha += 1
+
+        # Endereço
+        endereco_frame = tk.LabelFrame(parent, text="Endereço", font=('Arial', 12, 'bold'),
+                                       bg='white', fg='#0046AD', padx=15, pady=15)
+        endereco_frame.pack(fill=tk.X, pady=10)
+
+        campos_endereco = [
+            ("Endereço", "entry", None),
+            ("Bairro", "entry", None),
+            ("Cidade", "entry", None),
+            ("Estado", "combo", ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+                                 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+                                 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']),
+            ("CEP", "entry", None),
+        ]
+
+        linha = 0
+        for label, tipo, valores in campos_endereco:
+            tk.Label(endereco_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=0, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(endereco_frame, width=40, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=1, pady=5, padx=5, sticky='ew', columnspan=3)
+                self.entries_aluno[label] = entry
+            elif tipo == "combo":
+                combo = ttk.Combobox(endereco_frame, values=valores, state='readonly', width=37)
+                combo.grid(row=linha, column=1, pady=5, padx=5, sticky='ew', columnspan=3)
+                self.entries_aluno[label] = combo
+
+            linha += 1
+
+        # Responsáveis
+        responsaveis_frame = tk.LabelFrame(parent, text="Responsáveis", font=('Arial', 12, 'bold'),
+                                           bg='white', fg='#0046AD', padx=15, pady=15)
+        responsaveis_frame.pack(fill=tk.X, pady=10)
+
+        campos_responsaveis = [
+            ("Nome do Pai", "entry", None),
+            ("Nome da Mãe", "entry", None),
+            ("Telefone Responsável", "entry", None),
+            ("Email Responsável", "entry", None),
+        ]
+
+        linha = 0
+        coluna = 0
+        for label, tipo, valores in campos_responsaveis:
+            tk.Label(responsaveis_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=coluna * 2, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(responsaveis_frame, width=25, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=coluna * 2 + 1, pady=5, padx=5, sticky='ew')
+                self.entries_aluno[label] = entry
+
+            coluna += 1
+            if coluna >= 2:
+                coluna = 0
+                linha += 1
+
+        # Informações Adicionais
+        info_frame = tk.LabelFrame(parent, text="Informações Adicionais", font=('Arial', 12, 'bold'),
+                                   bg='white', fg='#0046AD', padx=15, pady=15)
+        info_frame.pack(fill=tk.X, pady=10)
+
+        campos_info = [
+            ("Naturalidade", "entry", None),
+            ("Nacionalidade", "entry", None),
+            ("Religião", "entry", None),
+            ("Necessidades Especiais", "entry", None),
+            ("Medicamentos", "text", None),
+            ("Alergias", "text", None),
+            ("Plano de Saúde", "entry", None),
+            ("Contato Emergência", "entry", None),
+            ("Telefone Emergência", "entry", None),
+        ]
+
+        linha = 0
+        coluna = 0
+        for label, tipo, valores in campos_info:
+            tk.Label(info_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=coluna * 2, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(info_frame, width=25, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=coluna * 2 + 1, pady=5, padx=5, sticky='ew')
+                self.entries_aluno[label] = entry
+            elif tipo == "text":
+                text = tk.Text(info_frame, width=25, height=3, font=('Arial', 10), relief='solid', bd=1)
+                text.grid(row=linha, column=coluna * 2 + 1, pady=5, padx=5, sticky='ew')
+                self.entries_aluno[label] = text
+
+            coluna += 1
+            if coluna >= 2:
+                coluna = 0
+                linha += 1
+
+        # Status
+        status_frame = tk.Frame(parent, bg='white')
+        status_frame.pack(fill=tk.X, pady=10)
+
+        tk.Label(status_frame, text="Status:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        self.status_aluno = ttk.Combobox(status_frame, values=['Ativo', 'Inativo', 'Transferido'],
+                                         state='readonly', width=15)
+        self.status_aluno.set('Ativo')
+        self.status_aluno.pack(side=tk.LEFT, padx=5)
+
+        # Botões
+        botoes_frame = tk.Frame(parent, bg='white')
+        botoes_frame.pack(pady=20)
+
+        ModernButton(botoes_frame, text="🗑️ Limpar",
+                     command=self.limpar_formulario_aluno,
+                     color='#666666').pack(side=tk.LEFT, padx=10)
+
+        ModernButton(botoes_frame, text="💾 Salvar Aluno",
+                     command=self.salvar_aluno,
+                     color='#0046AD').pack(side=tk.LEFT, padx=10)
+
+        # Configurar pesos das colunas
+        for frame in [dados_frame, endereco_frame, responsaveis_frame, info_frame]:
+            frame.columnconfigure(1, weight=1)
+            frame.columnconfigure(3, weight=1)
+
+    def limpar_formulario_aluno(self):
+        """Limpa todos os campos do formulário de aluno"""
+        for entry in self.entries_aluno.values():
+            if isinstance(entry, tk.Entry):
+                entry.delete(0, tk.END)
+            elif isinstance(entry, tk.Text):
+                entry.delete('1.0', tk.END)
+            elif isinstance(entry, ttk.Combobox):
+                entry.set('')
+
+        self.status_aluno.set('Ativo')
+
+    def salvar_aluno(self):
+        """Salva os dados do aluno no banco de dados"""
         try:
-            query = """
-                SELECT id, nome, cpf, data_nascimento, turma, serie, 
-                       nome_mae, telefone_responsavel, status, data_matricula
-                FROM alunos
-                ORDER BY nome
-            """
+            # Validar campos obrigatórios
+            if not self.entries_aluno["Nome Completo*"].get().strip():
+                messagebox.showwarning("Aviso", "O campo Nome Completo é obrigatório!")
+                return
 
-            alunos = self.db.execute_query(query, fetch=True)
+            # Coletar dados
+            dados = {
+                'nome': self.entries_aluno["Nome Completo*"].get().strip(),
+                'cpf': self.entries_aluno["CPF"].get().strip(),
+                'rg': self.entries_aluno["RG"].get().strip(),
+                'data_nascimento': self.entries_aluno["Data Nascimento"].get().strip(),
+                'email': self.entries_aluno["Email"].get().strip(),
+                'telefone': self.entries_aluno["Telefone"].get().strip(),
+                'celular': self.entries_aluno["Celular"].get().strip(),
+                'endereco': self.entries_aluno["Endereço"].get().strip(),
+                'bairro': self.entries_aluno["Bairro"].get().strip(),
+                'cidade': self.entries_aluno["Cidade"].get().strip(),
+                'estado': self.entries_aluno["Estado"].get().strip(),
+                'cep': self.entries_aluno["CEP"].get().strip(),
+                'nome_pai': self.entries_aluno["Nome do Pai"].get().strip(),
+                'nome_mae': self.entries_aluno["Nome da Mãe"].get().strip(),
+                'telefone_responsavel': self.entries_aluno["Telefone Responsável"].get().strip(),
+                'email_responsavel': self.entries_aluno["Email Responsável"].get().strip(),
+                'naturalidade': self.entries_aluno["Naturalidade"].get().strip(),
+                'nacionalidade': self.entries_aluno["Nacionalidade"].get().strip(),
+                'religiao': self.entries_aluno["Religião"].get().strip(),
+                'necessidades_especiais': self.entries_aluno["Necessidades Especiais"].get().strip(),
+                'medicamentos': self.entries_aluno["Medicamentos"].get("1.0", tk.END).strip(),
+                'alergias': self.entries_aluno["Alergias"].get("1.0", tk.END).strip(),
+                'plano_saude': self.entries_aluno["Plano de Saúde"].get().strip(),
+                'contato_emergencia': self.entries_aluno["Contato Emergência"].get().strip(),
+                'telefone_emergencia': self.entries_aluno["Telefone Emergência"].get().strip(),
+                'status': self.status_aluno.get(),
+                'data_matricula': date.today().strftime("%Y-%m-%d")
+            }
 
-            self.tabela_alunos.setRowCount(0)
+            # Verificar se CPF já existe
+            if dados['cpf']:
+                self.cursor.execute("SELECT id FROM alunos WHERE cpf = ?", (dados['cpf'],))
+                if self.cursor.fetchone():
+                    messagebox.showerror("Erro", "CPF já cadastrado no sistema!")
+                    return
 
-            for row_num, aluno in enumerate(alunos):
-                self.tabela_alunos.insertRow(row_num)
+            # Inserir no banco
+            self.cursor.execute('''
+                INSERT INTO alunos (
+                    nome, cpf, rg, data_nascimento, email, telefone, celular,
+                    endereco, bairro, cidade, estado, cep, nome_pai, nome_mae,
+                    telefone_responsavel, email_responsavel, naturalidade, nacionalidade,
+                    religiao, necessidades_especiais, medicamentos, alergias, plano_saude,
+                    contato_emergencia, telefone_emergencia, status, data_matricula
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', tuple(dados.values()))
 
-                for col_num, valor in enumerate(aluno):
-                    if col_num == 2 and valor:  # CPF
-                        valor = ValidadorCampos.formatar_cpf(valor)
-                    elif col_num == 7 and valor:  # Telefone
-                        valor = ValidadorCampos.formatar_telefone(valor)
-                    elif col_num in [3, 9] and valor:  # Datas
-                        try:
-                            data_obj = datetime.strptime(valor, '%Y-%m-%d')
-                            valor = data_obj.strftime('%d/%m/%Y')
-                        except:
-                            pass
+            self.conn.commit()
 
-                    item = QTableWidgetItem(str(valor if valor else ""))
+            # Registrar log
+            self.registrar_log('CADASTRO', 'Alunos', f'Cadastrou aluno: {dados["nome"]}')
 
-                    # Colorir status
-                    if col_num == 8:  # Coluna de status
-                        if valor == 'Ativo':
-                            item.setForeground(QColor('#27ae60'))
-                            item.setFont(QFont('', weight=QFont.Bold))
-                        else:
-                            item.setForeground(QColor('#e74c3c'))
+            messagebox.showinfo("Sucesso", "Aluno cadastrado com sucesso!")
+            self.limpar_formulario_aluno()
+            self.carregar_dados_alunos()
 
-                    self.tabela_alunos.setItem(row_num, col_num, item)
-
+        except sqlite3.IntegrityError as e:
+            messagebox.showerror("Erro", f"Erro de integridade: {str(e)}")
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar alunos:\n{str(e)}")
+            messagebox.showerror("Erro", f"Erro ao salvar aluno: {str(e)}")
 
-    def buscar_alunos(self):
-        """Busca alunos baseado no texto da busca"""
-        texto = self.txt_busca_aluno.text().strip()
+    def carregar_dados_alunos(self, query=None, filtro_status='Ativo', filtro_turma='Todas'):
+        """Carrega dados dos alunos na tabela"""
+        for item in self.tree_alunos.get_children():
+            self.tree_alunos.delete(item)
 
-        if not texto:
-            self.carregar_tabela_alunos()
-            return
+        sql = '''
+            SELECT a.id, a.nome, a.cpf, a.email, a.telefone,
+                   COALESCE(t.nome, 'Sem turma'), a.status, a.data_matricula
+            FROM alunos a
+            LEFT JOIN matriculas m ON a.id = m.aluno_id AND m.status = 'Ativa'
+            LEFT JOIN turmas t ON m.turma_id = t.id
+            WHERE 1=1
+        '''
+        params = []
 
-        try:
-            query = f"""
-                SELECT id, nome, cpf, data_nascimento, turma, serie, 
-                       nome_mae, telefone_responsavel, status, data_matricula
-                FROM alunos
-                WHERE nome LIKE ? OR cpf LIKE ? OR turma LIKE ? OR serie LIKE ?
-                ORDER BY nome
-            """
+        if query:
+            sql += ' AND (a.nome LIKE ? OR a.cpf LIKE ? OR a.email LIKE ?)'
+            params.extend([f'%{query}%', f'%{query}%', f'%{query}%'])
 
-            parametro = f"%{texto}%"
-            alunos = self.db.execute_query(
-                query,
-                (parametro, parametro, parametro, parametro),
-                fetch=True
-            )
+        if filtro_status != 'Todos':
+            sql += ' AND a.status = ?'
+            params.append(filtro_status)
 
-            self.tabela_alunos.setRowCount(0)
+        if filtro_turma != 'Todas':
+            sql += ' AND t.nome = ?'
+            params.append(filtro_turma)
 
-            for row_num, aluno in enumerate(alunos):
-                self.tabela_alunos.insertRow(row_num)
+        sql += ' ORDER BY a.nome'
 
-                for col_num, valor in enumerate(aluno):
-                    item = QTableWidgetItem(str(valor if valor else ""))
-                    self.tabela_alunos.setItem(row_num, col_num, item)
+        self.cursor.execute(sql, params)
+        alunos = self.cursor.fetchall()
 
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao buscar alunos:\n{str(e)}")
+        for aluno in alunos:
+            self.tree_alunos.insert('', tk.END, values=aluno)
 
-    def cadastrar_aluno(self):
-        """Abre diÃ¡logo para cadastrar novo aluno"""
-        dialog = CadastroAlunoDialog(self)
-        if dialog.exec_():
-            self.carregar_tabela_alunos()
-            self.carregar_totais_alunos()
+    def buscar_alunos(self, event=None):
+        """Busca alunos na tabela"""
+        query = self.search_var_alunos.get()
+        self.carregar_dados_alunos(query)
+
+    def aplicar_filtros_alunos(self):
+        """Aplica filtros na tabela de alunos"""
+        status = self.filtro_status_alunos.get()
+        turma = self.filtro_turma_alunos.get()
+        self.carregar_dados_alunos(None, status, turma)
+
+    def obter_turmas_combo(self):
+        """Retorna lista de turmas para combobox"""
+        self.cursor.execute("SELECT nome FROM turmas WHERE status='Ativa' ORDER BY nome")
+        return [turma[0] for turma in self.cursor.fetchall()]
 
     def editar_aluno(self):
-        """Abre diÃ¡logo para editar aluno selecionado"""
-        selecionados = self.tabela_alunos.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione um aluno para editar.")
+        """Edita aluno selecionado"""
+        selection = self.tree_alunos.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione um aluno para editar!")
             return
 
-        id_aluno = int(self.tabela_alunos.item(selecionados[0].row(), 0).text())
-
-        dialog = CadastroAlunoDialog(self, id_aluno)
-        if dialog.exec_():
-            self.carregar_tabela_alunos()
+        item = self.tree_alunos.item(selection[0])
+        aluno_id = item['values'][0]
+        self.abrir_edicao_aluno(aluno_id)
 
     def excluir_aluno(self):
         """Exclui aluno selecionado"""
-        selecionados = self.tabela_alunos.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione um aluno para excluir.")
+        selection = self.tree_alunos.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione um aluno para excluir!")
             return
 
-        id_aluno = int(self.tabela_alunos.item(selecionados[0].row(), 0).text())
-        nome_aluno = self.tabela_alunos.item(selecionados[0].row(), 1).text()
+        item = self.tree_alunos.item(selection[0])
+        aluno_id, nome = item['values'][0], item['values'][1]
 
-        resposta = QMessageBox.question(
-            self, "Confirmar exclusÃ£o",
-            f"Tem certeza que deseja excluir o aluno '{nome_aluno}'?\n\n"
-            "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
+        resposta = messagebox.askyesno("Confirmar Exclusão",
+                                       f"Tem certeza que deseja excluir o aluno {nome}?\n\nEsta ação não pode ser desfeita!")
 
-        if resposta == QMessageBox.Yes:
+        if resposta:
             try:
-                self.db.execute_query(
-                    "DELETE FROM alunos WHERE id = ?",
-                    (id_aluno,)
-                )
+                self.cursor.execute("DELETE FROM alunos WHERE id = ?", (aluno_id,))
+                self.conn.commit()
 
-                QMessageBox.information(self, "Sucesso", "Aluno excluÃ­do com sucesso!")
-                self.carregar_tabela_alunos()
-                self.carregar_totais_alunos()
+                # Registrar log
+                self.registrar_log('EXCLUSAO', 'Alunos', f'Excluiu aluno: {nome}')
 
+                messagebox.showinfo("Sucesso", "Aluno excluído com sucesso!")
+                self.carregar_dados_alunos()
             except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao excluir aluno:\n{str(e)}")
+                messagebox.showerror("Erro", f"Erro ao excluir aluno: {str(e)}")
 
-    def ver_detalhes_aluno(self, index):
-        """Mostra detalhes do aluno em duplo clique"""
-        row = index.row()
-        id_aluno = int(self.tabela_alunos.item(row, 0).text())
+    def exportar_alunos(self):
+        """Exporta lista de alunos para CSV"""
+        try:
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv")],
+                title="Exportar lista de alunos"
+            )
 
-        dialog = DetalhesAlunoDialog(self, id_aluno)
-        dialog.exec_()
+            if filename:
+                self.cursor.execute('''
+                    SELECT a.nome, a.cpf, a.email, a.telefone, a.celular,
+                           a.endereco, a.bairro, a.cidade, a.estado, a.data_nascimento,
+                           a.nome_pai, a.nome_mae, a.telefone_responsavel, a.status,
+                           t.nome as turma
+                    FROM alunos a
+                    LEFT JOIN matriculas m ON a.id = m.aluno_id AND m.status = 'Ativa'
+                    LEFT JOIN turmas t ON m.turma_id = t.id
+                    ORDER BY a.nome
+                ''')
+
+                alunos = self.cursor.fetchall()
+
+                with open(filename, 'w', newline='', encoding='utf-8') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['Nome', 'CPF', 'Email', 'Telefone', 'Celular', 'Endereço',
+                                     'Bairro', 'Cidade', 'Estado', 'Data Nascimento', 'Nome Pai',
+                                     'Nome Mãe', 'Telefone Responsável', 'Status', 'Turma'])
+                    writer.writerows(alunos)
+
+                messagebox.showinfo("Sucesso", f"Lista de alunos exportada para: {filename}")
+
+                # Registrar log
+                self.registrar_log('EXPORTACAO', 'Alunos', 'Exportou lista de alunos para CSV')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar alunos: {str(e)}")
 
     def imprimir_lista_alunos(self):
-        """Imprime lista de alunos"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A impressÃ£o de listas serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def realizar_backup(self):
-        """Realiza backup do sistema"""
+        """Gera PDF com lista de alunos"""
         try:
-            backup_path = self.db.backup_database()
-
-            if backup_path:
-                QMessageBox.information(self, "Backup realizado",
-                                        f"Backup criado com sucesso em:\n{backup_path}")
-            else:
-                QMessageBox.warning(self, "Backup falhou",
-                                    "NÃ£o foi possÃ­vel criar o backup.")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro no backup", f"Erro ao realizar backup:\n{str(e)}")
-
-    def exportar_dados(self):
-        """Exporta dados do sistema"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A exportaÃ§Ã£o de dados serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def importar_dados(self):
-        """Importa dados para o sistema"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A importaÃ§Ã£o de dados serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def gerar_boletim(self):
-        """Gera boletim escolar"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A geraÃ§Ã£o de boletins serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def gerar_relatorio_alunos(self):
-        """Gera relatÃ³rio de alunos"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A geraÃ§Ã£o de relatÃ³rios serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def gerar_relatorio_notas(self):
-        """Gera relatÃ³rio de notas"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A geraÃ§Ã£o de relatÃ³rios serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def gerar_relatorio_frequencia(self):
-        """Gera relatÃ³rio de frequÃªncia"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A geraÃ§Ã£o de relatÃ³rios serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def relatorio_personalizado(self):
-        """Gera relatÃ³rio personalizado"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A geraÃ§Ã£o de relatÃ³rios serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def gerenciar_usuarios(self):
-        """Gerencia usuÃ¡rios do sistema"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "O gerenciamento de usuÃ¡rios serÃ¡ implementado na prÃ³xima versÃ£o.")
-
-    def trocar_usuario(self):
-        """Troca o usuÃ¡rio atual"""
-        resposta = QMessageBox.question(
-            self, "Trocar usuÃ¡rio",
-            "Deseja realmente sair e fazer login com outro usuÃ¡rio?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            self.close()
-            # Em uma implementaÃ§Ã£o real, aqui voltaria para a tela de login
-
-    def mostrar_sobre(self):
-        """Mostra informaÃ§Ãµes sobre o sistema"""
-        QMessageBox.about(self, "Sobre o Sistema",
-                          "Sistema de GestÃ£o Escolar - Escola Objetivo\n\n"
-                          "VersÃ£o: 2.0.0\n"
-                          "Desenvolvido por: Alessandro Matheusti\n"
-                          "Tecnologias: PyQt5, SQLite, Python\n\n"
-                          "Â© 2024 Todos os direitos reservados.")
-
-    def closeEvent(self, event):
-        """Evento ao fechar a janela principal"""
-        resposta = QMessageBox.question(
-            self, "Confirmar saÃ­da",
-            "Deseja realmente sair do sistema?\n\n"
-            "Certifique-se de que todos os dados foram salvos.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            event.accept()
-        else:
-            event.ignore()
-
-
-# ============================================
-# DIÃLOGOS E FORMULÃRIOS
-# ============================================
-
-class CadastroAlunoDialog(QDialog):
-    """DiÃ¡logo para cadastro/ediÃ§Ã£o de alunos"""
-
-    def __init__(self, parent=None, id_aluno=None):
-        super().__init__(parent)
-        self.id_aluno = id_aluno
-        self.db = DatabaseManager()
-        self.modo_edicao = id_aluno is not None
-
-        self.setWindowTitle("Cadastrar Aluno" if not self.modo_edicao else "Editar Aluno")
-        self.setFixedSize(800, 700)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_dados_aluno() if self.modo_edicao else None
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        titulo = "CADASTRAR NOVO ALUNO" if not self.modo_edicao else "EDITAR ALUNO"
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setObjectName("title")
-        lbl_titulo.setStyleSheet("""
-            QLabel#title {
-                font-size: 20px;
-                font-weight: 700;
-                color: #2c3e50;
-                text-align: center;
-                padding-bottom: 10px;
-                border-bottom: 2px solid #3498db;
-            }
-        """)
-
-        # Abas para organizaÃ§Ã£o
-        tab_widget = QTabWidget()
-        tab_widget.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #dce1e6;
-                border-radius: 6px;
-                background-color: white;
-            }
-        """)
-
-        # Aba: Dados Pessoais
-        aba_dados = QWidget()
-        layout_dados = QFormLayout(aba_dados)
-        layout_dados.setContentsMargins(20, 20, 20, 20)
-        layout_dados.setSpacing(15)
-        layout_dados.setLabelAlignment(Qt.AlignRight)
-
-        # Campos
-        self.txt_nome = QLineEdit()
-        self.txt_nome.setPlaceholderText("Nome completo do aluno")
-
-        self.txt_data_nasc = QDateEdit()
-        self.txt_data_nasc.setCalendarPopup(True)
-        self.txt_data_nasc.setDate(QDate.currentDate().addYears(-10))
-        self.txt_data_nasc.setDisplayFormat("dd/MM/yyyy")
-
-        self.txt_cpf = QLineEdit()
-        self.txt_cpf.setPlaceholderText("000.000.000-00")
-        self.txt_cpf.setInputMask("000.000.000-00")
-
-        self.txt_rg = QLineEdit()
-        self.txt_rg.setPlaceholderText("NÃºmero do RG")
-
-        self.txt_nome_mae = QLineEdit()
-        self.txt_nome_mae.setPlaceholderText("Nome completo da mÃ£e")
-
-        self.txt_nome_pai = QLineEdit()
-        self.txt_nome_pai.setPlaceholderText("Nome completo do pai")
-
-        self.txt_telefone = QLineEdit()
-        self.txt_telefone.setPlaceholderText("(00) 00000-0000")
-        self.txt_telefone.setInputMask("(00) 00000-0000")
-
-        self.txt_email = QLineEdit()
-        self.txt_email.setPlaceholderText("email@exemplo.com")
-
-        # Adicionar campos Ã  aba
-        layout_dados.addRow("Nome completo:", self.txt_nome)
-        layout_dados.addRow("Data de nascimento:", self.txt_data_nasc)
-        layout_dados.addRow("CPF:", self.txt_cpf)
-        layout_dados.addRow("RG:", self.txt_rg)
-        layout_dados.addRow("Nome da mÃ£e:", self.txt_nome_mae)
-        layout_dados.addRow("Nome do pai:", self.txt_nome_pai)
-        layout_dados.addRow("Telefone:", self.txt_telefone)
-        layout_dados.addRow("Email:", self.txt_email)
-
-        # Aba: EndereÃ§o e MatrÃ­cula
-        aba_endereco = QWidget()
-        layout_endereco = QFormLayout(aba_endereco)
-        layout_endereco.setContentsMargins(20, 20, 20, 20)
-        layout_endereco.setSpacing(15)
-
-        self.txt_endereco = QLineEdit()
-        self.txt_endereco.setPlaceholderText("Rua, nÃºmero, complemento")
-
-        self.txt_bairro = QLineEdit()
-        self.txt_bairro.setPlaceholderText("Bairro")
-
-        self.txt_cidade = QLineEdit()
-        self.txt_cidade.setPlaceholderText("Cidade")
-
-        self.txt_cep = QLineEdit()
-        self.txt_cep.setPlaceholderText("00000-000")
-        self.txt_cep.setInputMask("00000-000")
-
-        self.combo_serie = QComboBox()
-        series = self.db.get_config('series', '1Âº Ano,2Âº Ano,3Âº Ano,4Âº Ano,5Âº Ano').split(',')
-        self.combo_serie.addItems(series)
-
-        self.combo_turma = QComboBox()
-        self.combo_turma.addItems(["A", "B", "C", "D", "E"])
-
-        self.combo_turno = QComboBox()
-        turnos = self.db.get_config('turnos', 'Matutino,Vespertino,Noturno').split(',')
-        self.combo_turno.addItems(turnos)
-
-        self.txt_data_matricula = QDateEdit()
-        self.txt_data_matricula.setCalendarPopup(True)
-        self.txt_data_matricula.setDate(QDate.currentDate())
-        self.txt_data_matricula.setDisplayFormat("dd/MM/yyyy")
-
-        self.combo_status = QComboBox()
-        self.combo_status.addItems(["Ativo", "Inativo", "Transferido", "Evadido"])
-
-        self.txt_observacoes = QTextEdit()
-        self.txt_observacoes.setMaximumHeight(100)
-        self.txt_observacoes.setPlaceholderText("ObservaÃ§Ãµes sobre o aluno...")
-
-        # Adicionar campos Ã  aba
-        layout_endereco.addRow("EndereÃ§o:", self.txt_endereco)
-        layout_endereco.addRow("Bairro:", self.txt_bairro)
-        layout_endereco.addRow("Cidade:", self.txt_cidade)
-        layout_endereco.addRow("CEP:", self.txt_cep)
-        layout_endereco.addRow("SÃ©rie:", self.combo_serie)
-        layout_endereco.addRow("Turma:", self.combo_turma)
-        layout_endereco.addRow("Turno:", self.combo_turno)
-        layout_endereco.addRow("Data matrÃ­cula:", self.txt_data_matricula)
-        layout_endereco.addRow("Status:", self.combo_status)
-        layout_endereco.addRow("ObservaÃ§Ãµes:", self.txt_observacoes)
-
-        # Adicionar abas ao tab widget
-        tab_widget.addTab(aba_dados, "Dados Pessoais")
-        tab_widget.addTab(aba_endereco, "EndereÃ§o & MatrÃ­cula")
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        self.btn_salvar = AnimacaoBotao(
-            "SALVAR" if not self.modo_edicao else "ATUALIZAR",
-            cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b"
-        )
-        self.btn_salvar.setMinimumHeight(45)
-        self.btn_salvar.clicked.connect(self.salvar_aluno)
-
-        self.btn_cancelar = QPushButton("CANCELAR")
-        self.btn_cancelar.setObjectName("danger")
-        self.btn_cancelar.setMinimumHeight(45)
-        self.btn_cancelar.clicked.connect(self.reject)
-
-        if self.modo_edicao:
-            self.btn_excluir = QPushButton("EXCLUIR")
-            self.btn_excluir.setObjectName("warning")
-            self.btn_excluir.setMinimumHeight(45)
-            self.btn_excluir.clicked.connect(self.excluir_aluno)
-            botoes_layout.addWidget(self.btn_excluir)
-
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(self.btn_salvar)
-        botoes_layout.addWidget(self.btn_cancelar)
-
-        # Adicionar tudo ao layout principal
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(tab_widget)
-        layout.addLayout(botoes_layout)
-
-    def carregar_dados_aluno(self):
-        """Carrega dados do aluno para ediÃ§Ã£o"""
-        try:
-            aluno = self.db.execute_query(
-                "SELECT * FROM alunos WHERE id = ?",
-                (self.id_aluno,),
-                fetch=True
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                title="Salvar lista de alunos como PDF"
             )
 
-            if aluno and len(aluno) > 0:
-                dados = aluno[0]
+            if filename:
+                self.cursor.execute('''
+                    SELECT a.nome, a.cpf, a.email, a.telefone, t.nome as turma, a.status
+                    FROM alunos a
+                    LEFT JOIN matriculas m ON a.id = m.aluno_id AND m.status = 'Ativa'
+                    LEFT JOIN turmas t ON m.turma_id = t.id
+                    ORDER BY t.nome, a.nome
+                ''')
 
-                # Dados pessoais
-                self.txt_nome.setText(dados[1] if dados[1] else "")
+                alunos = self.cursor.fetchall()
 
-                if dados[2]:  # Data nascimento
-                    data_nasc = QDate.fromString(dados[2], 'yyyy-MM-dd')
-                    self.txt_data_nasc.setDate(data_nasc)
+                # Criar PDF
+                c = canvas.Canvas(filename, pagesize=A4)
+                width, height = A4
 
-                if dados[3]:  # CPF
-                    cpf_formatado = ValidadorCampos.formatar_cpf(dados[3])
-                    self.txt_cpf.setText(cpf_formatado)
+                # Cabeçalho
+                c.setFont("Helvetica-Bold", 16)
+                c.drawString(50, height - 50, "EXTERNATO COLÉGIO OBJETIVO")
+                c.setFont("Helvetica", 12)
+                c.drawString(50, height - 70, "Lista de Alunos")
+                c.drawString(50, height - 85, f"Data: {date.today().strftime('%d/%m/%Y')}")
 
-                self.txt_rg.setText(dados[4] if dados[4] else "")
-                self.txt_nome_mae.setText(dados[5] if dados[5] else "")
-                self.txt_nome_pai.setText(dados[6] if dados[6] else "")
+                # Tabela
+                data = [['Nome', 'CPF', 'Email', 'Telefone', 'Turma', 'Status']]
+                for aluno in alunos:
+                    data.append([aluno[0], aluno[1] or '', aluno[2] or '', aluno[3] or '', aluno[4] or '', aluno[5]])
 
-                if dados[7]:  # Telefone
-                    telefone_formatado = ValidadorCampos.formatar_telefone(dados[7])
-                    self.txt_telefone.setText(telefone_formatado)
+                table = Table(data, colWidths=[120, 100, 120, 80, 80, 60])
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0046AD')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
 
-                self.txt_email.setText(dados[8] if dados[8] else "")
+                table.wrapOn(c, width, height)
+                table.drawOn(c, 50, height - 150)
 
-                # EndereÃ§o
-                self.txt_endereco.setText(dados[9] if dados[9] else "")
-                self.txt_bairro.setText(dados[10] if dados[10] else "")
-                self.txt_cidade.setText(dados[11] if dados[11] else "")
-                self.txt_cep.setText(dados[12] if dados[12] else "")
+                c.save()
+                messagebox.showinfo("Sucesso", f"PDF gerado: {filename}")
 
-                # MatrÃ­cula
-                self.combo_serie.setCurrentText(dados[13] if dados[13] else "")
-                self.combo_turma.setCurrentText(dados[14] if dados[14] else "")
-                self.combo_turno.setCurrentText(dados[15] if dados[15] else "")
-
-                if dados[16]:  # Data matrÃ­cula
-                    data_mat = QDate.fromString(dados[16], 'yyyy-MM-dd')
-                    self.txt_data_matricula.setDate(data_mat)
-
-                if dados[17]:  # Status
-                    self.combo_status.setCurrentText(dados[17])
-
-                self.txt_observacoes.setText(dados[18] if dados[18] else "")
+                # Registrar log
+                self.registrar_log('IMPRESSAO', 'Alunos', 'Gerou PDF com lista de alunos')
 
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar dados do aluno:\n{str(e)}")
+            messagebox.showerror("Erro", f"Erro ao gerar PDF: {str(e)}")
 
-    def validar_campos(self):
-        """Valida os campos do formulÃ¡rio"""
-        erros = []
+    def abrir_edicao_aluno(self, aluno_id):
+        """Abre janela para editar aluno existente"""
+        try:
+            # Buscar dados do aluno
+            self.cursor.execute("SELECT * FROM alunos WHERE id = ?", (aluno_id,))
+            aluno = self.cursor.fetchone()
 
-        # Nome obrigatÃ³rio
-        if not self.txt_nome.text().strip():
-            erros.append("Nome completo Ã© obrigatÃ³rio.")
+            if not aluno:
+                messagebox.showerror("Erro", "Aluno não encontrado!")
+                return
 
-        # CPF vÃ¡lido
-        cpf = self.txt_cpf.text().replace('.', '').replace('-', '')
-        if cpf and not ValidadorCampos.validar_cpf(cpf):
-            erros.append("CPF invÃ¡lido.")
+            # Criar janela de edição
+            edit_window = tk.Toplevel(self.root)
+            edit_window.title(f"Editar Aluno - ID: {aluno_id}")
+            edit_window.geometry("800x600")
+            edit_window.configure(bg='white')
+            edit_window.transient(self.root)
+            edit_window.grab_set()
+            self.center_dialog(edit_window)
 
-        # Email vÃ¡lido se preenchido
-        email = self.txt_email.text().strip()
-        if email and not ValidadorCampos.validar_email(email):
-            erros.append("Email invÃ¡lido.")
+            # Header
+            header_frame = tk.Frame(edit_window, bg='#0046AD', height=60)
+            header_frame.pack(fill=tk.X)
+            header_frame.pack_propagate(False)
 
-        # Telefone vÃ¡lido
-        telefone = self.txt_telefone.text().replace('(', '').replace(')', '').replace('-', '').replace(' ', '')
-        if telefone and not ValidadorCampos.validar_telefone(telefone):
-            erros.append("Telefone invÃ¡lido.")
+            tk.Label(header_frame, text=f"Editar Aluno: {aluno[1]}",
+                     font=('Arial', 14, 'bold'), bg='#0046AD', fg='white').pack(expand=True)
 
-        return erros
+            # Container com scroll
+            container = tk.Frame(edit_window, bg='white')
+            container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-    def salvar_aluno(self):
-        """Salva ou atualiza o aluno no banco de dados"""
-        # Validar campos
-        erros = self.validar_campos()
-        if erros:
-            QMessageBox.warning(self, "Erros no formulÃ¡rio", "\n".join(erros))
+            canvas = tk.Canvas(container, bg='white', highlightthickness=0)
+            scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+            scrollable_frame = ttk.Frame(canvas)
+
+            scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            # Formulário de edição (similar ao de cadastro)
+            self.criar_formulario_edicao_aluno(scrollable_frame, aluno)
+
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+
+            # Botões
+            btn_frame = tk.Frame(edit_window, bg='white')
+            btn_frame.pack(pady=20)
+
+            ModernButton(btn_frame, text="Cancelar", command=edit_window.destroy,
+                         color='#666666').pack(side=tk.LEFT, padx=10)
+
+            ModernButton(btn_frame, text="Salvar Alterações",
+                         command=lambda: self.salvar_edicao_aluno(aluno_id, edit_window),
+                         color='#0046AD').pack(side=tk.LEFT, padx=10)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao abrir edição: {str(e)}")
+
+    def criar_formulario_edicao_aluno(self, parent, aluno):
+        """Cria formulário de edição preenchido com dados do aluno"""
+        colunas = [desc[0] for desc in self.cursor.description]
+        aluno_dict = dict(zip(colunas, aluno))
+
+        # Dados Pessoais
+        dados_frame = tk.LabelFrame(parent, text="Dados Pessoais", font=('Arial', 12, 'bold'),
+                                    bg='white', fg='#0046AD', padx=15, pady=15)
+        dados_frame.pack(fill=tk.X, pady=10)
+
+        campos = [
+            ("Nome Completo*", "entry", aluno_dict.get('nome', '')),
+            ("CPF", "entry", aluno_dict.get('cpf', '')),
+            ("RG", "entry", aluno_dict.get('rg', '')),
+            ("Data Nascimento", "entry", aluno_dict.get('data_nascimento', '')),
+            ("Email", "entry", aluno_dict.get('email', '')),
+            ("Telefone", "entry", aluno_dict.get('telefone', '')),
+            ("Celular", "entry", aluno_dict.get('celular', '')),
+        ]
+
+        self.entries_edicao_aluno = {}
+        linha = 0
+        coluna = 0
+
+        for label, tipo, valor in campos:
+            tk.Label(dados_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=coluna * 2, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(dados_frame, width=25, font=('Arial', 10), relief='solid', bd=1)
+                entry.insert(0, str(valor) if valor else '')
+                entry.grid(row=linha, column=coluna * 2 + 1, pady=5, padx=5, sticky='ew')
+                self.entries_edicao_aluno[label] = entry
+
+            coluna += 1
+            if coluna >= 2:
+                coluna = 0
+                linha += 1
+
+        # Status
+        status_frame = tk.Frame(parent, bg='white')
+        status_frame.pack(fill=tk.X, pady=10)
+
+        tk.Label(status_frame, text="Status:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        self.status_edicao_aluno = ttk.Combobox(status_frame, values=['Ativo', 'Inativo', 'Transferido'],
+                                                state='readonly', width=15)
+        self.status_edicao_aluno.set(aluno_dict.get('status', 'Ativo'))
+        self.status_edicao_aluno.pack(side=tk.LEFT, padx=5)
+
+        # Configurar pesos das colunas
+        dados_frame.columnconfigure(1, weight=1)
+        dados_frame.columnconfigure(3, weight=1)
+
+    def salvar_edicao_aluno(self, aluno_id, window):
+        """Salva as alterações do aluno editado"""
+        try:
+            # Coletar dados
+            dados = {
+                'nome': self.entries_edicao_aluno["Nome Completo*"].get().strip(),
+                'cpf': self.entries_edicao_aluno["CPF"].get().strip(),
+                'rg': self.entries_edicao_aluno["RG"].get().strip(),
+                'data_nascimento': self.entries_edicao_aluno["Data Nascimento"].get().strip(),
+                'email': self.entries_edicao_aluno["Email"].get().strip(),
+                'telefone': self.entries_edicao_aluno["Telefone"].get().strip(),
+                'celular': self.entries_edicao_aluno["Celular"].get().strip(),
+                'status': self.status_edicao_aluno.get()
+            }
+
+            # Validar campos obrigatórios
+            if not dados['nome']:
+                messagebox.showwarning("Aviso", "O campo Nome Completo é obrigatório!")
+                return
+
+            # Atualizar no banco
+            self.cursor.execute('''
+                UPDATE alunos SET nome=?, cpf=?, rg=?, data_nascimento=?,
+                email=?, telefone=?, celular=?, status=? WHERE id=?
+            ''', (dados['nome'], dados['cpf'], dados['rg'], dados['data_nascimento'],
+                  dados['email'], dados['telefone'], dados['celular'], dados['status'], aluno_id))
+
+            self.conn.commit()
+
+            # Registrar log
+            self.registrar_log('EDICAO', 'Alunos', f'Editou aluno: {dados["nome"]}')
+
+            messagebox.showinfo("Sucesso", "Aluno atualizado com sucesso!")
+            window.destroy()
+            self.carregar_dados_alunos()
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao atualizar aluno: {str(e)}")
+
+    # ========== FUNÇÕES DE RELATÓRIOS DE ALUNOS ==========
+
+    def gerar_relatorio_alunos_completo(self):
+        """Gera relatório completo de alunos"""
+        try:
+            self.cursor.execute('''
+                SELECT a.nome, a.cpf, a.email, a.telefone, a.celular, a.data_nascimento,
+                       a.endereco, a.bairro, a.cidade, a.estado, a.nome_pai, a.nome_mae,
+                       a.telefone_responsavel, a.status, t.nome as turma, a.data_matricula
+                FROM alunos a
+                LEFT JOIN matriculas m ON a.id = m.aluno_id AND m.status = 'Ativa'
+                LEFT JOIN turmas t ON m.turma_id = t.id
+                ORDER BY a.nome
+            ''')
+
+            alunos = self.cursor.fetchall()
+
+            relatorio = "RELATÓRIO COMPLETO DE ALUNOS\n"
+            relatorio += "=" * 50 + "\n\n"
+            relatorio += f"Total de alunos: {len(alunos)}\n"
+            relatorio += f"Data do relatório: {date.today().strftime('%d/%m/%Y')}\n\n"
+
+            for aluno in alunos:
+                relatorio += f"Nome: {aluno[0]}\n"
+                relatorio += f"CPF: {aluno[1] or 'Não informado'}\n"
+                relatorio += f"Email: {aluno[2] or 'Não informado'}\n"
+                relatorio += f"Telefone: {aluno[3] or 'Não informado'} | Celular: {aluno[4] or 'Não informado'}\n"
+                relatorio += f"Data Nascimento: {aluno[5] or 'Não informada'}\n"
+                relatorio += f"Endereço: {aluno[6] or 'Não informado'}, {aluno[7] or ''} - {aluno[8] or ''}/{aluno[9] or ''}\n"
+                relatorio += f"Responsáveis: {aluno[10] or 'Não informado'} / {aluno[11] or 'Não informado'}\n"
+                relatorio += f"Tel. Responsável: {aluno[12] or 'Não informado'}\n"
+                relatorio += f"Turma: {aluno[14] or 'Sem turma'} | Status: {aluno[13]}\n"
+                relatorio += f"Data Matrícula: {aluno[15] or 'Não informada'}\n"
+                relatorio += "-" * 50 + "\n"
+
+            self.mostrar_relatorio("Relatório Completo de Alunos", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    def gerar_relatorio_alunos_turma(self):
+        """Gera relatório de alunos por turma"""
+        try:
+            self.cursor.execute('''
+                SELECT t.nome as turma, a.nome, a.email, a.telefone, a.status
+                FROM alunos a
+                JOIN matriculas m ON a.id = m.aluno_id
+                JOIN turmas t ON m.turma_id = t.id
+                WHERE m.status = 'Ativa'
+                ORDER BY t.nome, a.nome
+            ''')
+
+            alunos_turma = self.cursor.fetchall()
+
+            relatorio = "RELATÓRIO DE ALUNOS POR TURMA\n"
+            relatorio += "=" * 40 + "\n\n"
+
+            turma_atual = None
+            for turma, nome, email, telefone, status in alunos_turma:
+                if turma != turma_atual:
+                    if turma_atual:
+                        relatorio += "\n"
+                    turma_atual = turma
+                    relatorio += f"TURMA: {turma}\n"
+                    relatorio += "-" * 30 + "\n"
+
+                relatorio += f"{nome} | {email or 'Sem email'} | {telefone or 'Sem telefone'} | {status}\n"
+
+            self.mostrar_relatorio("Alunos por Turma", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    def gerar_relatorio_estatisticas_alunos(self):
+        """Gera relatório de estatísticas dos alunos"""
+        try:
+            # Total por status
+            self.cursor.execute('''
+                SELECT status, COUNT(*) as total
+                FROM alunos
+                GROUP BY status
+            ''')
+            status_stats = self.cursor.fetchall()
+
+            # Total por turma
+            self.cursor.execute('''
+                SELECT t.nome, COUNT(*) as total
+                FROM alunos a
+                JOIN matriculas m ON a.id = m.aluno_id AND m.status = 'Ativa'
+                JOIN turmas t ON m.turma_id = t.id
+                GROUP BY t.nome
+                ORDER BY t.nome
+            ''')
+            turma_stats = self.cursor.fetchall()
+
+            # Idade média
+            self.cursor.execute('''
+                SELECT AVG((julianday('now') - julianday(data_nascimento)) / 365.25)
+                FROM alunos
+                WHERE data_nascimento IS NOT NULL
+            ''')
+            idade_media = self.cursor.fetchone()[0] or 0
+
+            relatorio = "ESTATÍSTICAS DE ALUNOS\n"
+            relatorio += "=" * 30 + "\n\n"
+
+            relatorio += "DISTRIBUIÇÃO POR STATUS:\n"
+            for status, total in status_stats:
+                relatorio += f"• {status}: {total} alunos\n"
+
+            relatorio += f"\nIDADE MÉDIA: {idade_media:.1f} anos\n"
+
+            relatorio += "\nDISTRIBUIÇÃO POR TURMA:\n"
+            for turma, total in turma_stats:
+                relatorio += f"• {turma}: {total} alunos\n"
+
+            self.mostrar_relatorio("Estatísticas de Alunos", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    def gerar_relatorio_aniversariantes(self):
+        """Gera relatório de aniversariantes do mês"""
+        try:
+            mes_atual = datetime.now().month
+            self.cursor.execute('''
+                SELECT nome, data_nascimento, email, telefone, t.nome as turma
+                FROM alunos a
+                LEFT JOIN matriculas m ON a.id = m.aluno_id AND m.status = 'Ativa'
+                LEFT JOIN turmas t ON m.turma_id = t.id
+                WHERE strftime('%m', data_nascimento) = ?
+                ORDER BY strftime('%d', data_nascimento), nome
+            ''', (str(mes_atual).zfill(2),))
+
+            aniversariantes = self.cursor.fetchall()
+
+            relatorio = f"ANIVERSARIANTES DO MÊS {mes_atual}\n"
+            relatorio += "=" * 40 + "\n\n"
+
+            if aniversariantes:
+                for nome, data_nasc, email, telefone, turma in aniversariantes:
+                    if data_nasc:
+                        dia = datetime.strptime(data_nasc, '%Y-%m-%d').day
+                        relatorio += f"• {dia:02d}/{mes_atual:02d} - {nome}"
+                        relatorio += f" | {turma or 'Sem turma'}"
+                        relatorio += f" | {telefone or 'Sem telefone'}\n"
+            else:
+                relatorio += "Nenhum aniversariante este mês.\n"
+
+            self.mostrar_relatorio("Aniversariantes", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    def gerar_relatorio_alunos_bairro(self):
+        """Gera relatório de alunos por bairro"""
+        try:
+            self.cursor.execute('''
+                SELECT bairro, COUNT(*) as total, cidade, estado
+                FROM alunos
+                WHERE bairro IS NOT NULL AND bairro != ''
+                GROUP BY bairro, cidade, estado
+                ORDER BY total DESC, bairro
+            ''')
+
+            bairros = self.cursor.fetchall()
+
+            relatorio = "DISTRIBUIÇÃO GEOGRÁFICA DOS ALUNOS\n"
+            relatorio += "=" * 50 + "\n\n"
+
+            total_alunos = 0
+            for bairro, total, cidade, estado in bairros:
+                relatorio += f"• {bairro}"
+                if cidade:
+                    relatorio += f" - {cidade}"
+                if estado:
+                    relatorio += f"/{estado}"
+                relatorio += f": {total} alunos\n"
+                total_alunos += total
+
+            relatorio += f"\nTOTAL DE ALUNOS COM ENDEREÇO: {total_alunos}\n"
+
+            self.mostrar_relatorio("Alunos por Bairro", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    def gerar_relatorio_alunos_inativos(self):
+        """Gera relatório de alunos inativos"""
+        try:
+            self.cursor.execute('''
+                SELECT nome, cpf, email, telefone, data_matricula,
+                       (SELECT nome FROM turmas t
+                        JOIN matriculas m ON t.id = m.turma_id
+                        WHERE m.aluno_id = a.id AND m.status != 'Ativa'
+                        ORDER BY m.id DESC LIMIT 1) as ultima_turma
+                FROM alunos a
+                WHERE status = 'Inativo'
+                ORDER BY nome
+            ''')
+
+            inativos = self.cursor.fetchall()
+
+            relatorio = "RELATÓRIO DE ALUNOS INATIVOS\n"
+            relatorio += "=" * 40 + "\n\n"
+
+            if inativos:
+                for nome, cpf, email, telefone, data_matricula, ultima_turma in inativos:
+                    relatorio += f"• {nome}\n"
+                    relatorio += f"  CPF: {cpf or 'Não informado'}\n"
+                    relatorio += f"  Email: {email or 'Não informado'}\n"
+                    relatorio += f"  Telefone: {telefone or 'Não informado'}\n"
+                    relatorio += f"  Data Matrícula: {data_matricula or 'Não informada'}\n"
+                    relatorio += f"  Última Turma: {ultima_turma or 'Não informada'}\n"
+                    relatorio += "-" * 30 + "\n"
+            else:
+                relatorio += "Nenhum aluno inativo encontrado.\n"
+
+            self.mostrar_relatorio("Alunos Inativos", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    def mostrar_relatorio(self, titulo, conteudo):
+        """Mostra relatório em uma janela"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(titulo)
+        dialog.geometry("800x600")
+        dialog.configure(bg='white')
+        self.center_dialog(dialog)
+
+        tk.Label(dialog, text=titulo, font=('Arial', 16, 'bold'),
+                 bg='white', fg='#0046AD').pack(pady=10)
+
+        text_frame = tk.Frame(dialog, bg='white')
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+        text_widget = tk.Text(text_frame, font=('Arial', 10), wrap=tk.WORD)
+        text_widget.insert(tk.END, conteudo)
+        text_widget.config(state=tk.DISABLED)
+
+        scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def exportar():
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[("Text files", "*.txt")],
+                title=f"Salvar {titulo}"
+            )
+            if filename:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(conteudo)
+                messagebox.showinfo("Sucesso", f"Relatório salvo em: {filename}")
+
+        ModernButton(dialog, text="💾 Exportar Relatório",
+                     command=exportar, color='#0046AD').pack(pady=10)
+
+    # ========== MÓDULO GESTÃO DE PROFESSORES ==========
+
+    def carregar_gestao_professores(self):
+        """Carrega o módulo completo de gestão de professores"""
+        self.limpar_conteudo()
+        self.ativar_botao("👨🏫 Gestão de Professores")
+        self.registrar_log('ACESSO', 'Gestão de Professores', 'Acessou módulo de gestão de professores')
+
+        # Título
+        title_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        title_frame.pack(fill=tk.X, pady=(0, 20))
+
+        tk.Label(title_frame, text="Gestão de Professores", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Cadastro, consulta e gestão completa do corpo docente",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook com abas
+        notebook = ttk.Notebook(self.content_frame, style='Custom.TNotebook')
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Aba 1: Lista de Professores
+        aba_lista = ttk.Frame(notebook)
+        notebook.add(aba_lista, text="👥 Lista de Professores")
+
+        self.carregar_aba_lista_professores(aba_lista)
+
+        # Aba 2: Cadastro de Professores
+        aba_cadastro = ttk.Frame(notebook)
+        notebook.add(aba_cadastro, text="➕ Cadastro")
+
+        self.carregar_aba_cadastro_professores(aba_cadastro)
+
+        # Aba 3: Relatórios de Professores
+        aba_relatorios = ttk.Frame(notebook)
+        notebook.add(aba_relatorios, text="📊 Relatórios")
+
+        self.carregar_aba_relatorios_professores(aba_relatorios)
+
+    def carregar_aba_lista_professores(self, parent):
+        """Carrega aba de lista de professores"""
+        # Barra de ferramentas
+        botoes = [
+            ("🔍 Buscar", self.buscar_professores, '#0046AD'),
+            ("📝 Editar", self.editar_professor, '#0046AD'),
+            ("🗑️ Excluir", self.excluir_professor, '#FF6B6B'),
+            ("📋 Exportar", self.exportar_professores, '#0046AD'),
+            ("🖨️ Imprimir", self.imprimir_lista_professores, '#0046AD'),
+        ]
+        toolbar = self.criar_toolbar(parent, botoes)
+
+        # Filtros
+        filtros_frame = tk.Frame(toolbar, bg='white')
+        filtros_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        tk.Label(filtros_frame, text="Filtro:", font=('Arial', 9),
+                 bg='white').pack(side=tk.LEFT, padx=5)
+
+        self.filtro_status_professores = ttk.Combobox(filtros_frame,
+                                                      values=['Todos', 'Ativo', 'Inativo'],
+                                                      state='readonly', width=12)
+        self.filtro_status_professores.pack(side=tk.LEFT, padx=5)
+        self.filtro_status_professores.set('Ativo')
+
+        ModernButton(filtros_frame, text="Aplicar",
+                     command=self.aplicar_filtros_professores,
+                     color='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        # Campo de busca
+        search_frame = tk.Frame(toolbar, bg='white')
+        search_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        self.search_var_professores = tk.StringVar()
+        search_entry = tk.Entry(search_frame, textvariable=self.search_var_professores,
+                                width=30, font=('Arial', 10), relief='solid', bd=1)
+        search_entry.pack(side=tk.LEFT, padx=5)
+        search_entry.bind('<KeyRelease>', self.buscar_professores)
+
+        # Tabela de professores
+        colunas = ('ID', 'Nome', 'CPF', 'Email', 'Telefone', 'Especialidade', 'Salário', 'Status')
+        self.tree_professores = self.criar_tabela(parent, colunas)
+
+        # Carregar dados
+        self.carregar_dados_professores()
+
+    def carregar_aba_cadastro_professores(self, parent):
+        """Carrega aba de cadastro de professores"""
+        form_frame = tk.Frame(parent, bg='white')
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # Container com scroll
+        canvas = tk.Canvas(form_frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(form_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Formulário de cadastro
+        self.criar_formulario_professor(scrollable_frame)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def carregar_aba_relatorios_professores(self, parent):
+        """Carrega aba de relatórios de professores"""
+        relatorios_frame = tk.Frame(parent, bg='#f8f9fa')
+        relatorios_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        tk.Label(relatorios_frame, text="Relatórios de Professores", font=('Arial', 16, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w', pady=(0, 20))
+
+        # Grid de relatórios
+        grid_frame = tk.Frame(relatorios_frame, bg='#f8f9fa')
+        grid_frame.pack(fill=tk.BOTH, expand=True)
+
+        relatorios = [
+            ("📋 Lista Completa", self.gerar_relatorio_professores_completo,
+             "Lista completa de todos os professores cadastrados"),
+            ("🎓 Professores por Disciplina", self.gerar_relatorio_professores_disciplina,
+             "Relação de professores organizada por disciplina"),
+            ("💰 Folha de Pagamento", self.gerar_relatorio_folha_pagamento,
+             "Relatório com dados salariais dos professores"),
+            ("📅 Aniversariantes", self.gerar_relatorio_aniversariantes_professores,
+             "Lista de aniversariantes do mês"),
+            ("📊 Estatísticas", self.gerar_relatorio_estatisticas_professores,
+             "Estatísticas e métricas do corpo docente"),
+        ]
+
+        for i, (titulo, comando, descricao) in enumerate(relatorios):
+            row = i // 3
+            col = i % 3
+
+            card = tk.Frame(grid_frame, bg='white', relief='flat', bd=1,
+                            highlightbackground='#e0e0e0', highlightthickness=1)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky='nsew')
+            card.configure(width=250, height=120)
+
+            tk.Label(card, text=titulo, font=('Arial', 12, 'bold'),
+                     bg='white', fg='#0046AD').pack(pady=(15, 5))
+
+            tk.Label(card, text=descricao, font=('Arial', 9),
+                     bg='white', fg='#666666', wraplength=220).pack(pady=5, padx=10)
+
+            ModernButton(card, text="Gerar Relatório", command=comando,
+                         color='#0046AD', font=('Arial', 10)).pack(pady=10)
+
+        for i in range(3):
+            grid_frame.columnconfigure(i, weight=1)
+        for i in range(2):
+            grid_frame.rowconfigure(i, weight=1)
+
+    def criar_formulario_professor(self, parent):
+        """Cria formulário de cadastro de professor"""
+        # Dados Pessoais
+        dados_frame = tk.LabelFrame(parent, text="Dados Pessoais", font=('Arial', 12, 'bold'),
+                                    bg='white', fg='#0046AD', padx=15, pady=15)
+        dados_frame.pack(fill=tk.X, pady=10)
+
+        campos_dados = [
+            ("Nome Completo*", "entry", None),
+            ("CPF", "entry", None),
+            ("RG", "entry", None),
+            ("Data Nascimento", "entry", None),
+            ("Email", "entry", None),
+            ("Telefone", "entry", None),
+            ("Celular", "entry", None),
+            ("Endereço", "entry", None),
+        ]
+
+        self.entries_professor = {}
+        linha = 0
+        coluna = 0
+
+        for label, tipo, valores in campos_dados:
+            tk.Label(dados_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=coluna * 2, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(dados_frame, width=25, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=coluna * 2 + 1, pady=5, padx=5, sticky='ew')
+                self.entries_professor[label] = entry
+
+            coluna += 1
+            if coluna >= 2:
+                coluna = 0
+                linha += 1
+
+        # Dados Profissionais
+        profissional_frame = tk.LabelFrame(parent, text="Dados Profissionais", font=('Arial', 12, 'bold'),
+                                           bg='white', fg='#0046AD', padx=15, pady=15)
+        profissional_frame.pack(fill=tk.X, pady=10)
+
+        campos_profissional = [
+            ("Formação Acadêmica", "entry", None),
+            ("Especialidade", "entry", None),
+            ("Data Contratação", "entry", None),
+            ("Salário (R$)", "entry", None),
+        ]
+
+        linha = 0
+        for label, tipo, valores in campos_profissional:
+            tk.Label(profissional_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=0, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(profissional_frame, width=40, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=1, pady=5, padx=5, sticky='ew', columnspan=3)
+                self.entries_professor[label] = entry
+
+            linha += 1
+
+        # Dados Bancários
+        bancario_frame = tk.LabelFrame(parent, text="Dados Bancários", font=('Arial', 12, 'bold'),
+                                       bg='white', fg='#0046AD', padx=15, pady=15)
+        bancario_frame.pack(fill=tk.X, pady=10)
+
+        campos_bancarios = [
+            ("Banco", "entry", None),
+            ("Agência", "entry", None),
+            ("Conta", "entry", None),
+            ("PIS", "entry", None),
+            ("CTPS", "entry", None),
+        ]
+
+        linha = 0
+        coluna = 0
+        for label, tipo, valores in campos_bancarios:
+            tk.Label(bancario_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=coluna * 2, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(bancario_frame, width=20, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=coluna * 2 + 1, pady=5, padx=5, sticky='ew')
+                self.entries_professor[label] = entry
+
+            coluna += 1
+            if coluna >= 2:
+                coluna = 0
+                linha += 1
+
+        # Status
+        status_frame = tk.Frame(parent, bg='white')
+        status_frame.pack(fill=tk.X, pady=10)
+
+        tk.Label(status_frame, text="Status:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        self.status_professor = ttk.Combobox(status_frame, values=['Ativo', 'Inativo'],
+                                             state='readonly', width=15)
+        self.status_professor.set('Ativo')
+        self.status_professor.pack(side=tk.LEFT, padx=5)
+
+        # Botões
+        botoes_frame = tk.Frame(parent, bg='white')
+        botoes_frame.pack(pady=20)
+
+        ModernButton(botoes_frame, text="🗑️ Limpar",
+                     command=self.limpar_formulario_professor,
+                     color='#666666').pack(side=tk.LEFT, padx=10)
+
+        ModernButton(botoes_frame, text="💾 Salvar Professor",
+                     command=self.salvar_professor,
+                     color='#0046AD').pack(side=tk.LEFT, padx=10)
+
+        # Configurar pesos das colunas
+        for frame in [dados_frame, profissional_frame, bancario_frame]:
+            frame.columnconfigure(1, weight=1)
+            frame.columnconfigure(3, weight=1)
+
+    def limpar_formulario_professor(self):
+        """Limpa todos os campos do formulário de professor"""
+        for entry in self.entries_professor.values():
+            if isinstance(entry, tk.Entry):
+                entry.delete(0, tk.END)
+
+        self.status_professor.set('Ativo')
+
+    def salvar_professor(self):
+        """Salva os dados do professor no banco de dados"""
+        try:
+            # Validar campos obrigatórios
+            if not self.entries_professor["Nome Completo*"].get().strip():
+                messagebox.showwarning("Aviso", "O campo Nome Completo é obrigatório!")
+                return
+
+            # Coletar dados
+            dados = {
+                'nome': self.entries_professor["Nome Completo*"].get().strip(),
+                'cpf': self.entries_professor["CPF"].get().strip(),
+                'rg': self.entries_professor["RG"].get().strip(),
+                'data_nascimento': self.entries_professor["Data Nascimento"].get().strip(),
+                'email': self.entries_professor["Email"].get().strip(),
+                'telefone': self.entries_professor["Telefone"].get().strip(),
+                'celular': self.entries_professor["Celular"].get().strip(),
+                'endereco': self.entries_professor["Endereço"].get().strip(),
+                'formacao': self.entries_professor["Formação Acadêmica"].get().strip(),
+                'especialidade': self.entries_professor["Especialidade"].get().strip(),
+                'data_contratacao': self.entries_professor["Data Contratação"].get().strip(),
+                'salario': float(self.entries_professor["Salário (R$)"].get() or 0),
+                'banco': self.entries_professor["Banco"].get().strip(),
+                'agencia': self.entries_professor["Agência"].get().strip(),
+                'conta': self.entries_professor["Conta"].get().strip(),
+                'pis': self.entries_professor["PIS"].get().strip(),
+                'ctps': self.entries_professor["CTPS"].get().strip(),
+                'status': self.status_professor.get()
+            }
+
+            # Verificar se CPF já existe
+            if dados['cpf']:
+                self.cursor.execute("SELECT id FROM professores WHERE cpf = ?", (dados['cpf'],))
+                if self.cursor.fetchone():
+                    messagebox.showerror("Erro", "CPF já cadastrado no sistema!")
+                    return
+
+            # Inserir no banco
+            self.cursor.execute('''
+                INSERT INTO professores (
+                    nome, cpf, rg, data_nascimento, email, telefone, celular, endereco,
+                    formacao, especialidade, data_contratacao, salario, banco, agencia,
+                    conta, pis, ctps, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (dados['nome'], dados['cpf'], dados['rg'], dados['data_nascimento'],
+                  dados['email'], dados['telefone'], dados['celular'], dados['endereco'],
+                  dados['formacao'], dados['especialidade'], dados['data_contratacao'],
+                  dados['salario'], dados['banco'], dados['agencia'], dados['conta'],
+                  dados['pis'], dados['ctps'], dados['status']))
+
+            self.conn.commit()
+
+            # Registrar log
+            self.registrar_log('CADASTRO', 'Professores', f'Cadastrou professor: {dados["nome"]}')
+
+            messagebox.showinfo("Sucesso", "Professor cadastrado com sucesso!")
+            self.limpar_formulario_professor()
+            self.carregar_dados_professores()
+
+        except sqlite3.IntegrityError as e:
+            messagebox.showerror("Erro", f"Erro de integridade: {str(e)}")
+        except ValueError as e:
+            messagebox.showerror("Erro", "Valor do salário inválido!")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar professor: {str(e)}")
+
+    def carregar_dados_professores(self, query=None, filtro_status='Ativo'):
+        """Carrega dados dos professores na tabela"""
+        for item in self.tree_professores.get_children():
+            self.tree_professores.delete(item)
+
+        sql = '''
+            SELECT id, nome, cpf, email, telefone, especialidade, salario, status
+            FROM professores
+            WHERE 1=1
+        '''
+        params = []
+
+        if query:
+            sql += ' AND (nome LIKE ? OR cpf LIKE ? OR email LIKE ? OR especialidade LIKE ?)'
+            params.extend([f'%{query}%', f'%{query}%', f'%{query}%', f'%{query}%'])
+
+        if filtro_status != 'Todos':
+            sql += ' AND status = ?'
+            params.append(filtro_status)
+
+        sql += ' ORDER BY nome'
+
+        self.cursor.execute(sql, params)
+        professores = self.cursor.fetchall()
+
+        for prof in professores:
+            # Formatar salário
+            prof_list = list(prof)
+            prof_list[6] = f"R$ {prof[6]:.2f}" if prof[6] else "R$ 0,00"
+            self.tree_professores.insert('', tk.END, values=prof_list)
+
+    def buscar_professores(self, event=None):
+        """Busca professores na tabela"""
+        query = self.search_var_professores.get()
+        self.carregar_dados_professores(query)
+
+    def aplicar_filtros_professores(self):
+        """Aplica filtros na tabela de professores"""
+        status = self.filtro_status_professores.get()
+        self.carregar_dados_professores(None, status)
+
+    def editar_professor(self):
+        """Edita professor selecionado"""
+        selection = self.tree_professores.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione um professor para editar!")
             return
 
-        # Preparar dados
-        dados = {
-            'nome': self.txt_nome.text().strip(),
-            'data_nascimento': self.txt_data_nasc.date().toString('yyyy-MM-dd'),
-            'cpf': self.txt_cpf.text().replace('.', '').replace('-', ''),
-            'rg': self.txt_rg.text().strip(),
-            'nome_mae': self.txt_nome_mae.text().strip(),
-            'nome_pai': self.txt_nome_pai.text().strip(),
-            'telefone_responsavel': self.txt_telefone.text().replace('(', '').replace(')', '').replace('-', '').replace(
-                ' ', ''),
-            'email': self.txt_email.text().strip(),
-            'endereco': self.txt_endereco.text().strip(),
-            'bairro': self.txt_bairro.text().strip(),
-            'cidade': self.txt_cidade.text().strip(),
-            'cep': self.txt_cep.text().replace('-', ''),
-            'serie': self.combo_serie.currentText(),
-            'turma': self.combo_turma.currentText(),
-            'turno': self.combo_turno.currentText(),
-            'data_matricula': self.txt_data_matricula.date().toString('yyyy-MM-dd'),
-            'status': self.combo_status.currentText(),
-            'observacoes': self.txt_observacoes.toPlainText().strip()
-        }
+        item = self.tree_professores.item(selection[0])
+        professor_id = item['values'][0]
+        self.abrir_edicao_professor(professor_id)
 
-        try:
-            if self.modo_edicao:
-                # Atualizar aluno existente
-                query = '''
-                    UPDATE alunos SET
-                        nome = ?, data_nascimento = ?, cpf = ?, rg = ?,
-                        nome_mae = ?, nome_pai = ?, telefone_responsavel = ?, email = ?,
-                        endereco = ?, bairro = ?, cidade = ?, cep = ?,
-                        serie = ?, turma = ?, turno = ?, data_matricula = ?,
-                        status = ?, observacoes = ?
-                    WHERE id = ?
-                '''
+    def excluir_professor(self):
+        """Exclui professor selecionado"""
+        selection = self.tree_professores.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione um professor para excluir!")
+            return
 
-                params = (
-                    dados['nome'], dados['data_nascimento'], dados['cpf'], dados['rg'],
-                    dados['nome_mae'], dados['nome_pai'], dados['telefone_responsavel'], dados['email'],
-                    dados['endereco'], dados['bairro'], dados['cidade'], dados['cep'],
-                    dados['serie'], dados['turma'], dados['turno'], dados['data_matricula'],
-                    dados['status'], dados['observacoes'], self.id_aluno
-                )
+        item = self.tree_professores.item(selection[0])
+        professor_id, nome = item['values'][0], item['values'][1]
 
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "Aluno atualizado com sucesso!")
+        resposta = messagebox.askyesno("Confirmar Exclusão",
+                                       f"Tem certeza que deseja excluir o professor {nome}?\n\nEsta ação não pode ser desfeita!")
 
-            else:
-                # Inserir novo aluno
-                query = '''
-                    INSERT INTO alunos (
-                        nome, data_nascimento, cpf, rg, nome_mae, nome_pai,
-                        telefone_responsavel, email, endereco, bairro, cidade, cep,
-                        serie, turma, turno, data_matricula, status, observacoes, data_cadastro
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                '''
-
-                params = (
-                    dados['nome'], dados['data_nascimento'], dados['cpf'], dados['rg'],
-                    dados['nome_mae'], dados['nome_pai'], dados['telefone_responsavel'], dados['email'],
-                    dados['endereco'], dados['bairro'], dados['cidade'], dados['cep'],
-                    dados['serie'], dados['turma'], dados['turno'], dados['data_matricula'],
-                    dados['status'], dados['observacoes']
-                )
-
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "Aluno cadastrado com sucesso!")
-
-            self.accept()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao salvar aluno:\n{str(e)}")
-
-    def excluir_aluno(self):
-        """Exclui o aluno atual"""
-        resposta = QMessageBox.question(
-            self, "Confirmar exclusÃ£o",
-            "Tem certeza que deseja excluir este aluno?\n\n"
-            "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
+        if resposta:
             try:
-                self.db.execute_query(
-                    "DELETE FROM alunos WHERE id = ?",
-                    (self.id_aluno,)
-                )
+                # Verificar se o professor está vinculado a alguma disciplina
+                self.cursor.execute("SELECT COUNT(*) FROM disciplinas WHERE professor_id = ?", (professor_id,))
+                if self.cursor.fetchone()[0] > 0:
+                    messagebox.showerror("Erro",
+                                         "Não é possível excluir o professor pois ele está vinculado a disciplinas!")
+                    return
 
-                QMessageBox.information(self, "Sucesso", "Aluno excluÃ­do com sucesso!")
-                self.accept()
+                self.cursor.execute("DELETE FROM professores WHERE id = ?", (professor_id,))
+                self.conn.commit()
 
+                # Registrar log
+                self.registrar_log('EXCLUSAO', 'Professores', f'Excluiu professor: {nome}')
+
+                messagebox.showinfo("Sucesso", "Professor excluído com sucesso!")
+                self.carregar_dados_professores()
             except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao excluir aluno:\n{str(e)}")
+                messagebox.showerror("Erro", f"Erro ao excluir professor: {str(e)}")
 
-
-class DetalhesAlunoDialog(QDialog):
-    """DiÃ¡logo para exibir detalhes completos do aluno"""
-
-    def __init__(self, parent=None, id_aluno=None):
-        super().__init__(parent)
-        self.id_aluno = id_aluno
-        self.db = DatabaseManager()
-
-        self.setWindowTitle("Detalhes do Aluno")
-        self.setFixedSize(900, 700)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_detalhes_aluno()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # CabeÃ§alho com nome do aluno
-        self.lbl_nome_aluno = QLabel()
-        self.lbl_nome_aluno.setObjectName("title")
-        self.lbl_nome_aluno.setStyleSheet("""
-            QLabel#title {
-                font-size: 22px;
-                font-weight: 700;
-                color: #2c3e50;
-                text-align: center;
-                padding: 15px;
-                background-color: #e3f2fd;
-                border-radius: 8px;
-                border: 2px solid #3498db;
-            }
-        """)
-
-        # Abas para diferentes informaÃ§Ãµes
-        tab_widget = QTabWidget()
-
-        # Aba: InformaÃ§Ãµes Pessoais
-        aba_info = QWidget()
-        self.layout_info = QFormLayout(aba_info)
-        self.layout_info.setContentsMargins(20, 20, 20, 20)
-        self.layout_info.setSpacing(10)
-
-        # Aba: HistÃ³rico AcadÃªmico
-        aba_academico = QWidget()
-        layout_academico = QVBoxLayout(aba_academico)
-
-        self.tabela_notas = QTableWidget()
-        self.tabela_notas.setColumnCount(6)
-        self.tabela_notas.setHorizontalHeaderLabels([
-            "Disciplina", "1Âº Bim", "2Âº Bim", "3Âº Bim", "4Âº Bim", "MÃ©dia"
-        ])
-
-        layout_academico.addWidget(QLabel("HistÃ³rico de Notas:"))
-        layout_academico.addWidget(self.tabela_notas)
-
-        # Aba: FrequÃªncia
-        aba_frequencia = QWidget()
-        layout_frequencia = QVBoxLayout(aba_frequencia)
-
-        self.tabela_frequencia = QTableWidget()
-        self.tabela_frequencia.setColumnCount(4)
-        self.tabela_frequencia.setHorizontalHeaderLabels([
-            "Data", "Disciplina", "PresenÃ§a", "ObservaÃ§Ãµes"
-        ])
-
-        layout_frequencia.addWidget(QLabel("Registro de FrequÃªncia:"))
-        layout_frequencia.addWidget(self.tabela_frequencia)
-
-        # Adicionar abas
-        tab_widget.addTab(aba_info, "InformaÃ§Ãµes")
-        tab_widget.addTab(aba_academico, "Notas")
-        tab_widget.addTab(aba_frequencia, "FrequÃªncia")
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_fechar = AnimacaoBotao("FECHAR", cor_normal="#7f8c8d", cor_hover="#95a5a6", cor_press="#5d6d7e")
-        btn_fechar.clicked.connect(self.close)
-
-        btn_imprimir = AnimacaoBotao("IMPRIMIR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_imprimir.clicked.connect(self.imprimir_detalhes)
-
-        btn_editar = AnimacaoBotao("EDITAR", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_editar.clicked.connect(self.editar_aluno)
-
-        botoes_layout.addWidget(btn_editar)
-        botoes_layout.addWidget(btn_imprimir)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(self.lbl_nome_aluno)
-        layout.addWidget(tab_widget)
-        layout.addLayout(botoes_layout)
-
-    def carregar_detalhes_aluno(self):
-        """Carrega detalhes completos do aluno"""
+    def exportar_professores(self):
+        """Exporta lista de professores para CSV"""
         try:
-            # Carregar informaÃ§Ãµes bÃ¡sicas
-            aluno = self.db.execute_query(
-                "SELECT * FROM alunos WHERE id = ?",
-                (self.id_aluno,),
-                fetch=True
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv")],
+                title="Exportar lista de professores"
             )
 
-            if aluno and len(aluno) > 0:
-                dados = aluno[0]
+            if filename:
+                self.cursor.execute('''
+                    SELECT nome, cpf, email, telefone, celular, formacao, especialidade,
+                           data_contratacao, salario, banco, agencia, conta, status
+                    FROM professores
+                    ORDER BY nome
+                ''')
 
-                # Atualizar tÃ­tulo
-                self.lbl_nome_aluno.setText(dados[1])
+                professores = self.cursor.fetchall()
 
-                # Adicionar informaÃ§Ãµes pessoais
-                self.adicionar_info("CPF:", ValidadorCampos.formatar_cpf(dados[3]) if dados[3] else "NÃ£o informado")
-                self.adicionar_info("RG:", dados[4] if dados[4] else "NÃ£o informado")
-                self.adicionar_info("Data Nascimento:",
-                                    datetime.strptime(dados[2], '%Y-%m-%d').strftime('%d/%m/%Y') if dados[
-                                        2] else "NÃ£o informada")
-                self.adicionar_info("Idade:", self.calcular_idade(dados[2]) if dados[2] else "NÃ£o informada")
-                self.adicionar_info("Nome da MÃ£e:", dados[5] if dados[5] else "NÃ£o informado")
-                self.adicionar_info("Nome do Pai:", dados[6] if dados[6] else "NÃ£o informado")
-                self.adicionar_info("Telefone:",
-                                    ValidadorCampos.formatar_telefone(dados[7]) if dados[7] else "NÃ£o informado")
-                self.adicionar_info("Email:", dados[8] if dados[8] else "NÃ£o informado")
+                with open(filename, 'w', newline='', encoding='utf-8') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['Nome', 'CPF', 'Email', 'Telefone', 'Celular', 'Formação',
+                                     'Especialidade', 'Data Contratação', 'Salário', 'Banco',
+                                     'Agência', 'Conta', 'Status'])
+                    writer.writerows(professores)
 
-                self.layout_info.addRow(QLabel(""), QLabel(""))  # EspaÃ§ador
+                messagebox.showinfo("Sucesso", f"Lista de professores exportada para: {filename}")
 
-                # InformaÃ§Ãµes de endereÃ§o
-                self.adicionar_info("EndereÃ§o:", dados[9] if dados[9] else "NÃ£o informado")
-                self.adicionar_info("Bairro:", dados[10] if dados[10] else "NÃ£o informado")
-                self.adicionar_info("Cidade:", dados[11] if dados[11] else "NÃ£o informado")
-                self.adicionar_info("CEP:", dados[12] if dados[12] else "NÃ£o informado")
-
-                self.layout_info.addRow(QLabel(""), QLabel(""))  # EspaÃ§ador
-
-                # InformaÃ§Ãµes acadÃªmicas
-                self.adicionar_info("SÃ©rie:", dados[13] if dados[13] else "NÃ£o informado")
-                self.adicionar_info("Turma:", dados[14] if dados[14] else "NÃ£o informado")
-                self.adicionar_info("Turno:", dados[15] if dados[15] else "NÃ£o informado")
-                self.adicionar_info("Data MatrÃ­cula:",
-                                    datetime.strptime(dados[16], '%Y-%m-%d').strftime('%d/%m/%Y') if dados[
-                                        16] else "NÃ£o informada")
-                self.adicionar_info("Status:", dados[17] if dados[17] else "NÃ£o informado")
-
-                # Carregar notas
-                self.carregar_notas_aluno()
-
-                # Carregar frequÃªncia
-                self.carregar_frequencia_aluno()
+                # Registrar log
+                self.registrar_log('EXPORTACAO', 'Professores', 'Exportou lista de professores para CSV')
 
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar detalhes do aluno:\n{str(e)}")
+            messagebox.showerror("Erro", f"Erro ao exportar professores: {str(e)}")
 
-    def adicionar_info(self, label, valor):
-        """Adiciona uma linha de informaÃ§Ã£o ao formulÃ¡rio"""
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet("color: #34495e;")
-
-        self.layout_info.addRow(lbl_label, lbl_valor)
-
-    def calcular_idade(self, data_nascimento):
-        """Calcula idade a partir da data de nascimento"""
+    def imprimir_lista_professores(self):
+        """Gera PDF com lista de professores"""
         try:
-            nascimento = datetime.strptime(data_nascimento, '%Y-%m-%d')
-            hoje = datetime.now()
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                title="Salvar lista de professores como PDF"
+            )
 
-            idade = hoje.year - nascimento.year
+            if filename:
+                self.cursor.execute('''
+                    SELECT nome, cpf, email, telefone, especialidade, salario, status
+                    FROM professores
+                    ORDER BY nome
+                ''')
 
-            # Ajustar se ainda nÃ£o fez aniversÃ¡rio este ano
-            if (hoje.month, hoje.day) < (nascimento.month, nascimento.day):
-                idade -= 1
+                professores = self.cursor.fetchall()
 
-            return f"{idade} anos"
-        except:
-            return "NÃ£o calculada"
+                # Criar PDF
+                c = canvas.Canvas(filename, pagesize=A4)
+                width, height = A4
 
-    def carregar_notas_aluno(self):
-        """Carrega notas do aluno"""
+                # Cabeçalho
+                c.setFont("Helvetica-Bold", 16)
+                c.drawString(50, height - 50, "EXTERNATO COLÉGIO OBJETIVO")
+                c.setFont("Helvetica", 12)
+                c.drawString(50, height - 70, "Lista de Professores")
+                c.drawString(50, height - 85, f"Data: {date.today().strftime('%d/%m/%Y')}")
+
+                # Tabela
+                data = [['Nome', 'CPF', 'Email', 'Telefone', 'Especialidade', 'Salário', 'Status']]
+                for prof in professores:
+                    salario = f"R$ {prof[5]:.2f}" if prof[5] else "R$ 0,00"
+                    data.append([prof[0], prof[1] or '', prof[2] or '', prof[3] or '', prof[4] or '', salario, prof[6]])
+
+                table = Table(data, colWidths=[100, 80, 100, 80, 80, 70, 60])
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0046AD')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+
+                table.wrapOn(c, width, height)
+                table.drawOn(c, 30, height - 150)
+
+                c.save()
+                messagebox.showinfo("Sucesso", f"PDF gerado: {filename}")
+
+                # Registrar log
+                self.registrar_log('IMPRESSAO', 'Professores', 'Gerou PDF com lista de professores')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar PDF: {str(e)}")
+
+    # ========== FUNÇÕES DE RELATÓRIOS DE PROFESSORES ==========
+
+    def gerar_relatorio_professores_completo(self):
+        """Gera relatório completo de professores"""
         try:
-            notas = self.db.execute_query('''
-                SELECT d.nome, n.bimestre, n.nota1, n.nota2, n.nota3, n.nota4, n.media
-                FROM notas n
-                JOIN disciplinas d ON n.disciplina_id = d.id
-                WHERE n.aluno_id = ?
-                ORDER BY d.nome, n.bimestre
-            ''', (self.id_aluno,), fetch=True)
+            self.cursor.execute('''
+                SELECT nome, cpf, email, telefone, celular, formacao, especialidade,
+                       data_contratacao, salario, endereco, status
+                FROM professores
+                ORDER BY nome
+            ''')
 
-            # Organizar por disciplina
-            notas_por_disciplina = {}
-            for disciplina, bimestre, n1, n2, n3, n4, media in notas:
-                if disciplina not in notas_por_disciplina:
-                    notas_por_disciplina[disciplina] = [None, None, None, None, 0.0]  # 4 bimestres + mÃ©dia
+            professores = self.cursor.fetchall()
 
-                if 1 <= bimestre <= 4:
-                    # Calcular mÃ©dia do bimestre
-                    notas_bimestre = [n for n in [n1, n2, n3, n4] if n is not None]
-                    media_bimestre = sum(notas_bimestre) / len(notas_bimestre) if notas_bimestre else 0.0
+            relatorio = "RELATÓRIO COMPLETO DE PROFESSORES\n"
+            relatorio += "=" * 50 + "\n\n"
+            relatorio += f"Total de professores: {len(professores)}\n"
+            relatorio += f"Data do relatório: {date.today().strftime('%d/%m/%Y')}\n\n"
 
-                    notas_por_disciplina[disciplina][bimestre - 1] = f"{media_bimestre:.1f}"
+            for prof in professores:
+                relatorio += f"Nome: {prof[0]}\n"
+                relatorio += f"CPF: {prof[1] or 'Não informado'}\n"
+                relatorio += f"Email: {prof[2] or 'Não informado'}\n"
+                relatorio += f"Telefone: {prof[3] or 'Não informado'} | Celular: {prof[4] or 'Não informado'}\n"
+                relatorio += f"Formação: {prof[5] or 'Não informada'}\n"
+                relatorio += f"Especialidade: {prof[6] or 'Não informada'}\n"
+                relatorio += f"Data Contratação: {prof[7] or 'Não informada'}\n"
+                relatorio += f"Salário: R$ {prof[8]:.2f if prof[8] else 0:.2f}\n"
+                relatorio += f"Endereço: {prof[9] or 'Não informado'}\n"
+                relatorio += f"Status: {prof[10]}\n"
+                relatorio += "-" * 50 + "\n"
 
-                # Atualizar mÃ©dia geral se disponÃ­vel
-                if media:
-                    notas_por_disciplina[disciplina][4] = media
+            self.mostrar_relatorio("Relatório Completo de Professores", relatorio)
 
-            # Preencher tabela
-            self.tabela_notas.setRowCount(len(notas_por_disciplina))
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
 
-            for row, (disciplina, dados) in enumerate(notas_por_disciplina.items()):
-                self.tabela_notas.setItem(row, 0, QTableWidgetItem(disciplina))
+    def gerar_relatorio_professores_disciplina(self):
+        """Gera relatório de professores por disciplina"""
+        try:
+            self.cursor.execute('''
+                SELECT p.nome, p.especialidade, d.nome as disciplina, t.nome as turma
+                FROM professores p
+                LEFT JOIN disciplinas d ON p.id = d.professor_id
+                LEFT JOIN turmas t ON d.turma_id = t.id
+                WHERE p.status = 'Ativo'
+                ORDER BY p.nome, d.nome
+            ''')
 
-                for bim in range(4):
-                    item = QTableWidgetItem(dados[bim] if dados[bim] else "-")
+            professores_disc = self.cursor.fetchall()
 
-                    # Colorir notas baixas
-                    if dados[bim] and float(dados[bim]) < 5.0:
-                        item.setForeground(QColor('#e74c3c'))
-                    elif dados[bim] and float(dados[bim]) < 7.0:
-                        item.setForeground(QColor('#f39c12'))
-                    else:
-                        item.setForeground(QColor('#27ae60'))
+            relatorio = "PROFESSORES E SUAS DISCIPLINAS\n"
+            relatorio += "=" * 40 + "\n\n"
 
-                    self.tabela_notas.setItem(row, bim + 1, item)
+            professor_atual = None
+            for professor, especialidade, disciplina, turma in professores_disc:
+                if professor != professor_atual:
+                    if professor_atual:
+                        relatorio += "\n"
+                    professor_atual = professor
+                    relatorio += f"PROFESSOR: {professor}\n"
+                    relatorio += f"Especialidade: {especialidade or 'Não informada'}\n"
+                    relatorio += "Disciplinas:\n"
 
-                # MÃ©dia final
-                item_media = QTableWidgetItem(f"{dados[4]:.1f}" if dados[4] else "-")
-                item_media.setFont(QFont('', weight=QFont.Bold))
+                if disciplina:
+                    relatorio += f"  • {disciplina}"
+                    if turma:
+                        relatorio += f" ({turma})"
+                    relatorio += "\n"
+                else:
+                    relatorio += "  • Nenhuma disciplina atribuída\n"
 
-                if dados[4]:
-                    if dados[4] < 5.0:
-                        item_media.setForeground(QColor('#e74c3c'))
-                    elif dados[4] < 7.0:
-                        item_media.setForeground(QColor('#f39c12'))
-                    else:
-                        item_media.setForeground(QColor('#27ae60'))
+            self.mostrar_relatorio("Professores por Disciplina", relatorio)
 
-                self.tabela_notas.setItem(row, 5, item_media)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    def gerar_relatorio_folha_pagamento(self):
+        """Gera relatório da folha de pagamento"""
+        try:
+            self.cursor.execute('''
+                SELECT nome, especialidade, salario, data_contratacao, status
+                FROM professores
+                WHERE status = 'Ativo'
+                ORDER BY salario DESC
+            ''')
+
+            folha = self.cursor.fetchall()
+
+            total_salarios = sum(prof[2] for prof in folha if prof[2])
+
+            relatorio = "FOLHA DE PAGAMENTO - PROFESSORES\n"
+            relatorio += "=" * 50 + "\n\n"
+
+            relatorio += f"Total de professores ativos: {len(folha)}\n"
+            relatorio += f"Total da folha: R$ {total_salarios:.2f}\n"
+            relatorio += f"Média salarial: R$ {total_salarios / len(folha) if folha else 0:.2f}\n\n"
+
+            relatorio += "DETALHAMENTO:\n"
+            relatorio += "-" * 50 + "\n"
+
+            for nome, especialidade, salario, data_contratacao, status in folha:
+                relatorio += f"{nome}\n"
+                relatorio += f"  Especialidade: {especialidade or 'Não informada'}\n"
+                relatorio += f"  Salário: R$ {salario:.2f if salario else 0:.2f}\n"
+                relatorio += f"  Data Contratação: {data_contratacao or 'Não informada'}\n\n"
+
+            self.mostrar_relatorio("Folha de Pagamento", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    def gerar_relatorio_aniversariantes_professores(self):
+        """Gera relatório de aniversariantes do mês"""
+        try:
+            mes_atual = datetime.now().month
+            self.cursor.execute('''
+                SELECT nome, data_nascimento, email, telefone, especialidade
+                FROM professores
+                WHERE strftime('%m', data_nascimento) = ?
+                ORDER BY strftime('%d', data_nascimento), nome
+            ''', (str(mes_atual).zfill(2),))
+
+            aniversariantes = self.cursor.fetchall()
+
+            relatorio = f"ANIVERSARIANTES DO MÊS {mes_atual} - PROFESSORES\n"
+            relatorio += "=" * 50 + "\n\n"
+
+            if aniversariantes:
+                for nome, data_nasc, email, telefone, especialidade in aniversariantes:
+                    if data_nasc:
+                        dia = datetime.strptime(data_nasc, '%Y-%m-%d').day
+                        relatorio += f"• {dia:02d}/{mes_atual:02d} - {nome}"
+                        relatorio += f" | {especialidade or 'Sem especialidade'}"
+                        relatorio += f" | {telefone or 'Sem telefone'}\n"
+            else:
+                relatorio += "Nenhum aniversariante este mês.\n"
+
+            self.mostrar_relatorio("Aniversariantes - Professores", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    def gerar_relatorio_estatisticas_professores(self):
+        """Gera relatório de estatísticas dos professores"""
+        try:
+            # Total por status
+            self.cursor.execute('''
+                SELECT status, COUNT(*) as total
+                FROM professores
+                GROUP BY status
+            ''')
+            status_stats = self.cursor.fetchall()
+
+            # Total por especialidade
+            self.cursor.execute('''
+                SELECT especialidade, COUNT(*) as total
+                FROM professores
+                WHERE especialidade IS NOT NULL AND especialidade != ''
+                GROUP BY especialidade
+                ORDER BY total DESC
+            ''')
+            especialidade_stats = self.cursor.fetchall()
+
+            # Tempo médio de casa
+            self.cursor.execute('''
+                SELECT AVG((julianday('now') - julianday(data_contratacao)) / 365.25)
+                FROM professores
+                WHERE data_contratacao IS NOT NULL AND status = 'Ativo'
+            ''')
+            tempo_medio = self.cursor.fetchone()[0] or 0
+
+            relatorio = "ESTATÍSTICAS DO CORPO DOCENTE\n"
+            relatorio += "=" * 40 + "\n\n"
+
+            relatorio += "DISTRIBUIÇÃO POR STATUS:\n"
+            for status, total in status_stats:
+                relatorio += f"• {status}: {total} professores\n"
+
+            relatorio += f"\nTEMPO MÉDIO DE CASA: {tempo_medio:.1f} anos\n"
+
+            relatorio += "\nDISTRIBUIÇÃO POR ESPECIALIDADE:\n"
+            for especialidade, total in especialidade_stats:
+                relatorio += f"• {especialidade}: {total} professores\n"
+
+            self.mostrar_relatorio("Estatísticas de Professores", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    # ========== FUNÇÕES AUXILIARES ==========
+
+    def abrir_configuracoes(self):
+        """Abre janela de configurações do sistema"""
+        self.carregar_configuracoes_sistema()
+
+    def novo_aluno(self):
+        """Abre cadastro de novo aluno"""
+        self.carregar_gestao_alunos()
+        # Seleciona a aba de cadastro
+        notebook = self.content_frame.winfo_children()[0]
+        if isinstance(notebook, ttk.Notebook):
+            notebook.select(1)  # Seleciona segunda aba (cadastro)
+
+    def novo_professor(self):
+        """Abre cadastro de novo professor"""
+        self.carregar_gestao_professores()
+        # Seleciona a aba de cadastro
+        notebook = self.content_frame.winfo_children()[0]
+        if isinstance(notebook, ttk.Notebook):
+            notebook.select(1)  # Seleciona segunda aba (cadastro)
+
+    def nova_turma(self):
+        """Abre cadastro de nova turma"""
+        self.carregar_gestao_turmas()
+
+    def lancar_notas(self):
+        """Abre lançamento de notas"""
+        self.carregar_sistema_notas()
+
+    def nova_aula_diario(self):
+        """Abre registro de nova aula"""
+        self.carregar_diario_classe()
+
+    def novo_comunicado(self):
+        """Abre criação de novo comunicado"""
+        self.carregar_comunicados_avisos()
+
+    def novo_evento(self):
+        """Abre criação de novo evento"""
+        self.carregar_calendario_escolar()
+
+    def gerar_relatorio_rapido(self):
+        """Gera relatório rápido do sistema"""
+        try:
+            # Estatísticas rápidas
+            total_alunos = self.cursor.execute("SELECT COUNT(*) FROM alunos WHERE status='Ativo'").fetchone()[0]
+            total_professores = self.cursor.execute("SELECT COUNT(*) FROM professores WHERE status='Ativo'").fetchone()[
+                0]
+            total_turmas = self.cursor.execute("SELECT COUNT(*) FROM turmas WHERE status='Ativa'").fetchone()[0]
+
+            relatorio = "RELATÓRIO RÁPIDO DO SISTEMA\n"
+            relatorio += "=" * 35 + "\n\n"
+            relatorio += f"📊 ESTATÍSTICAS GERAIS:\n"
+            relatorio += f"• Alunos ativos: {total_alunos}\n"
+            relatorio += f"• Professores ativos: {total_professores}\n"
+            relatorio += f"• Turmas ativas: {total_turmas}\n"
+            relatorio += f"• Data: {date.today().strftime('%d/%m/%Y')}\n"
+            relatorio += f"• Usuário: {self.usuario_nome}\n"
+
+            self.mostrar_relatorio("Relatório Rápido", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    # ========== MÓDULO GESTÃO DE TURMAS (COMPLETO) ==========
+
+    def carregar_gestao_turmas(self):
+        """Carrega o módulo completo de gestão de turmas"""
+        self.limpar_conteudo()
+        self.ativar_botao("🏫 Gestão de Turmas")
+        self.registrar_log('ACESSO', 'Gestão de Turmas', 'Acessou módulo de gestão de turmas')
+
+        # Título
+        title_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        title_frame.pack(fill=tk.X, pady=(0, 20))
+
+        tk.Label(title_frame, text="Gestão de Turmas", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Cadastro, consulta e gestão completa das turmas escolares",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook com abas
+        notebook = ttk.Notebook(self.content_frame, style='Custom.TNotebook')
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Aba 1: Lista de Turmas
+        aba_lista = ttk.Frame(notebook)
+        notebook.add(aba_lista, text="🏫 Lista de Turmas")
+
+        self.carregar_aba_lista_turmas(aba_lista)
+
+        # Aba 2: Cadastro de Turmas
+        aba_cadastro = ttk.Frame(notebook)
+        notebook.add(aba_cadastro, text="➕ Nova Turma")
+
+        self.carregar_aba_cadastro_turmas(aba_cadastro)
+
+        # Aba 3: Alunos por Turma
+        aba_alunos = ttk.Frame(notebook)
+        notebook.add(aba_alunos, text="👨🎓 Alunos por Turma")
+
+        self.carregar_aba_alunos_turma(aba_alunos)
+
+    def carregar_aba_lista_turmas(self, parent):
+        """Carrega aba de lista de turmas"""
+        # Barra de ferramentas
+        botoes = [
+            ("🔍 Buscar", self.buscar_turmas, '#0046AD'),
+            ("📝 Editar", self.editar_turma, '#0046AD'),
+            ("🗑️ Excluir", self.excluir_turma, '#FF6B6B'),
+            ("📋 Exportar", self.exportar_turmas, '#0046AD'),
+            ("🖨️ Imprimir", self.imprimir_lista_turmas, '#0046AD'),
+        ]
+        toolbar = self.criar_toolbar(parent, botoes)
+
+        # Filtros
+        filtros_frame = tk.Frame(toolbar, bg='white')
+        filtros_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        tk.Label(filtros_frame, text="Filtro:", font=('Arial', 9),
+                 bg='white').pack(side=tk.LEFT, padx=5)
+
+        self.filtro_status_turmas = ttk.Combobox(filtros_frame,
+                                                 values=['Todas', 'Ativa', 'Inativa'],
+                                                 state='readonly', width=12)
+        self.filtro_status_turmas.pack(side=tk.LEFT, padx=5)
+        self.filtro_status_turmas.set('Ativa')
+
+        self.filtro_turno_turmas = ttk.Combobox(filtros_frame,
+                                                values=['Todos', 'Manhã', 'Tarde', 'Noite'],
+                                                state='readonly', width=12)
+        self.filtro_turno_turmas.pack(side=tk.LEFT, padx=5)
+        self.filtro_turno_turmas.set('Todos')
+
+        ModernButton(filtros_frame, text="Aplicar",
+                     command=self.aplicar_filtros_turmas,
+                     color='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        # Campo de busca
+        search_frame = tk.Frame(toolbar, bg='white')
+        search_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        self.search_var_turmas = tk.StringVar()
+        search_entry = tk.Entry(search_frame, textvariable=self.search_var_turmas,
+                                width=30, font=('Arial', 10), relief='solid', bd=1)
+        search_entry.pack(side=tk.LEFT, padx=5)
+        search_entry.bind('<KeyRelease>', self.buscar_turmas)
+
+        # Tabela de turmas
+        colunas = ('ID', 'Nome', 'Série', 'Turno', 'Professor', 'Capacidade', 'Sala', 'Alunos', 'Status')
+        self.tree_turmas = self.criar_tabela(parent, colunas)
+
+        # Carregar dados
+        self.carregar_dados_turmas()
+
+    def carregar_dados_turmas(self, query=None, filtro_status='Ativa', filtro_turno='Todos'):
+        """Carrega dados das turmas na tabela"""
+        for item in self.tree_turmas.get_children():
+            self.tree_turmas.delete(item)
+
+        sql = '''
+            SELECT t.id, t.nome, t.serie, t.turno, p.nome, t.capacidade, t.sala,
+                   (SELECT COUNT(*) FROM matriculas m WHERE m.turma_id = t.id AND m.status = 'Ativa'),
+                   t.status
+            FROM turmas t
+            LEFT JOIN professores p ON t.professor_id = p.id
+            WHERE 1=1
+        '''
+        params = []
+
+        if query:
+            sql += ' AND (t.nome LIKE ? OR t.serie LIKE ? OR p.nome LIKE ? OR t.sala LIKE ?)'
+            params.extend([f'%{query}%', f'%{query}%', f'%{query}%', f'%{query}%'])
+
+        if filtro_status != 'Todas':
+            sql += ' AND t.status = ?'
+            params.append(filtro_status)
+
+        if filtro_turno != 'Todos':
+            sql += ' AND t.turno = ?'
+            params.append(filtro_turno)
+
+        sql += ' ORDER BY t.serie, t.nome'
+
+        self.cursor.execute(sql, params)
+        turmas = self.cursor.fetchall()
+
+        for turma in turmas:
+            self.tree_turmas.insert('', tk.END, values=turma)
+
+    def carregar_aba_cadastro_turmas(self, parent):
+        """Carrega aba de cadastro de turmas"""
+        form_frame = tk.Frame(parent, bg='white')
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # Container com scroll
+        canvas = tk.Canvas(form_frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(form_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Formulário de cadastro
+        self.criar_formulario_turma(scrollable_frame)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def criar_formulario_turma(self, parent):
+        """Cria formulário de cadastro de turma"""
+        # Dados Básicos
+        dados_frame = tk.LabelFrame(parent, text="Dados da Turma", font=('Arial', 12, 'bold'),
+                                    bg='white', fg='#0046AD', padx=15, pady=15)
+        dados_frame.pack(fill=tk.X, pady=10)
+
+        campos_dados = [
+            ("Nome da Turma*", "entry", None),
+            ("Série/Ano*", "combo", ['1º Ano', '2º Ano', '3º Ano', '4º Ano', '5º Ano',
+                                     '6º Ano', '7º Ano', '8º Ano', '9º Ano', '1º EM', '2º EM', '3º EM']),
+            ("Turno*", "combo", ['Manhã', 'Tarde', 'Noite']),
+            ("Professor Responsável", "combo", self.obter_professores_combo()),
+            ("Capacidade*", "entry", None),
+            ("Sala", "entry", None),
+            ("Ano Letivo", "entry", None),
+        ]
+
+        self.entries_turma = {}
+        linha = 0
+        coluna = 0
+
+        for label, tipo, valores in campos_dados:
+            tk.Label(dados_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=coluna * 2, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(dados_frame, width=25, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=coluna * 2 + 1, pady=5, padx=5, sticky='ew')
+                self.entries_turma[label] = entry
+            elif tipo == "combo":
+                combo = ttk.Combobox(dados_frame, values=valores, state='readonly', width=22)
+                combo.grid(row=linha, column=coluna * 2 + 1, pady=5, padx=5, sticky='ew')
+                self.entries_turma[label] = combo
+
+            coluna += 1
+            if coluna >= 2:
+                coluna = 0
+                linha += 1
+
+        # Horários
+        horarios_frame = tk.LabelFrame(parent, text="Horários de Aula", font=('Arial', 12, 'bold'),
+                                       bg='white', fg='#0046AD', padx=15, pady=15)
+        horarios_frame.pack(fill=tk.X, pady=10)
+
+        campos_horarios = [
+            ("Horário Início", "entry", None),
+            ("Horário Fim", "entry", None),
+            ("Dias da Semana", "combo", ['Segunda a Sexta', 'Segunda a Sábado', 'Personalizado']),
+        ]
+
+        linha = 0
+        for label, tipo, valores in campos_horarios:
+            tk.Label(horarios_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=0, sticky='w', pady=5, padx=5)
+
+            if tipo == "entry":
+                entry = tk.Entry(horarios_frame, width=30, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=1, pady=5, padx=5, sticky='ew', columnspan=3)
+                self.entries_turma[label] = entry
+            elif tipo == "combo":
+                combo = ttk.Combobox(horarios_frame, values=valores, state='readonly', width=27)
+                combo.grid(row=linha, column=1, pady=5, padx=5, sticky='ew', columnspan=3)
+                self.entries_turma[label] = combo
+
+            linha += 1
+
+        # Status
+        status_frame = tk.Frame(parent, bg='white')
+        status_frame.pack(fill=tk.X, pady=10)
+
+        tk.Label(status_frame, text="Status:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        self.status_turma = ttk.Combobox(status_frame, values=['Ativa', 'Inativa'],
+                                         state='readonly', width=15)
+        self.status_turma.set('Ativa')
+        self.status_turma.pack(side=tk.LEFT, padx=5)
+
+        # Botões
+        botoes_frame = tk.Frame(parent, bg='white')
+        botoes_frame.pack(pady=20)
+
+        ModernButton(botoes_frame, text="🗑️ Limpar",
+                     command=self.limpar_formulario_turma,
+                     color='#666666').pack(side=tk.LEFT, padx=10)
+
+        ModernButton(botoes_frame, text="💾 Salvar Turma",
+                     command=self.salvar_turma,
+                     color='#0046AD').pack(side=tk.LEFT, padx=10)
+
+        # Configurar pesos das colunas
+        dados_frame.columnconfigure(1, weight=1)
+        dados_frame.columnconfigure(3, weight=1)
+        horarios_frame.columnconfigure(1, weight=1)
+
+    def obter_professores_combo(self):
+        """Retorna lista de professores para combobox"""
+        self.cursor.execute("SELECT nome FROM professores WHERE status='Ativo' ORDER BY nome")
+        return [''] + [prof[0] for prof in self.cursor.fetchall()]
+
+    def limpar_formulario_turma(self):
+        """Limpa todos os campos do formulário de turma"""
+        for entry in self.entries_turma.values():
+            if isinstance(entry, tk.Entry):
+                entry.delete(0, tk.END)
+            elif isinstance(entry, ttk.Combobox):
+                entry.set('')
+
+        self.status_turma.set('Ativa')
+        # Definir ano letivo atual como padrão
+        if "Ano Letivo" in self.entries_turma:
+            self.entries_turma["Ano Letivo"].insert(0, str(datetime.now().year))
+
+    def salvar_turma(self):
+        """Salva os dados da turma no banco de dados"""
+        try:
+            # Validar campos obrigatórios
+            if not self.entries_turma["Nome da Turma*"].get().strip():
+                messagebox.showwarning("Aviso", "O campo Nome da Turma é obrigatório!")
+                return
+            if not self.entries_turma["Série/Ano*"].get().strip():
+                messagebox.showwarning("Aviso", "O campo Série/Ano é obrigatório!")
+                return
+            if not self.entries_turma["Turno*"].get().strip():
+                messagebox.showwarning("Aviso", "O campo Turno é obrigatório!")
+                return
+
+            # Obter ID do professor
+            professor_nome = self.entries_turma["Professor Responsável"].get()
+            professor_id = None
+            if professor_nome:
+                self.cursor.execute("SELECT id FROM professores WHERE nome = ?", (professor_nome,))
+                result = self.cursor.fetchone()
+                professor_id = result[0] if result else None
+
+            # Coletar dados
+            dados = {
+                'nome': self.entries_turma["Nome da Turma*"].get().strip(),
+                'serie': self.entries_turma["Série/Ano*"].get().strip(),
+                'turno': self.entries_turma["Turno*"].get().strip(),
+                'professor_id': professor_id,
+                'capacidade': int(self.entries_turma["Capacidade*"].get() or 0),
+                'sala': self.entries_turma["Sala"].get().strip(),
+                'ano_letivo': self.entries_turma["Ano Letivo"].get().strip() or str(datetime.now().year),
+                'horario_inicio': self.entries_turma["Horário Início"].get().strip(),
+                'horario_fim': self.entries_turma["Horário Fim"].get().strip(),
+                'dias_semana': self.entries_turma["Dias da Semana"].get().strip(),
+                'status': self.status_turma.get()
+            }
+
+            # Verificar se turma já existe
+            self.cursor.execute("SELECT id FROM turmas WHERE nome = ? AND ano_letivo = ?",
+                                (dados['nome'], dados['ano_letivo']))
+            if self.cursor.fetchone():
+                messagebox.showerror("Erro", "Já existe uma turma com este nome no ano letivo!")
+                return
+
+            # Inserir no banco
+            self.cursor.execute('''
+                INSERT INTO turmas (
+                    nome, serie, turno, professor_id, capacidade, sala, ano_letivo,
+                    horario_inicio, horario_fim, dias_semana, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (dados['nome'], dados['serie'], dados['turno'], dados['professor_id'],
+                  dados['capacidade'], dados['sala'], dados['ano_letivo'],
+                  dados['horario_inicio'], dados['horario_fim'], dados['dias_semana'],
+                  dados['status']))
+
+            self.conn.commit()
+
+            # Registrar log
+            self.registrar_log('CADASTRO', 'Turmas', f'Cadastrou turma: {dados["nome"]}')
+
+            messagebox.showinfo("Sucesso", "Turma cadastrada com sucesso!")
+            self.limpar_formulario_turma()
+            self.carregar_dados_turmas()
+
+        except ValueError as e:
+            messagebox.showerror("Erro", "Capacidade deve ser um número válido!")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar turma: {str(e)}")
+
+    def carregar_aba_alunos_turma(self, parent):
+        """Carrega aba de alunos por turma"""
+        # Frame de seleção
+        selecao_frame = tk.Frame(parent, bg='white', relief='flat', bd=1, padx=20, pady=15)
+        selecao_frame.pack(fill=tk.X, pady=(0, 20))
+
+        tk.Label(selecao_frame, text="Selecionar Turma:", font=('Arial', 11, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        self.turma_selecionada = ttk.Combobox(selecao_frame,
+                                              values=self.obter_turmas_combo(),
+                                              state='readonly', width=30)
+        self.turma_selecionada.pack(side=tk.LEFT, padx=5)
+        self.turma_selecionada.bind('<<ComboboxSelected>>', self.carregar_alunos_turma_selecionada)
+
+        ModernButton(selecao_frame, text="🔄 Atualizar",
+                     command=self.carregar_alunos_turma_selecionada,
+                     color='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        # Tabela de alunos da turma
+        colunas = ('ID', 'Nome', 'CPF', 'Email', 'Telefone', 'Data Matrícula', 'Status')
+        self.tree_alunos_turma = self.criar_tabela(parent, colunas)
+
+        # Informações da turma
+        self.info_turma_label = tk.Label(parent, text="Selecione uma turma para ver os alunos",
+                                         font=('Arial', 11), bg='#f8f9fa', fg='#666666')
+        self.info_turma_label.pack(pady=10)
+
+    def carregar_alunos_turma_selecionada(self, event=None):
+        """Carrega alunos da turma selecionada"""
+        turma_nome = self.turma_selecionada.get()
+        if not turma_nome:
+            return
+
+        # Limpar tabela
+        for item in self.tree_alunos_turma.get_children():
+            self.tree_alunos_turma.delete(item)
+
+        try:
+            # Buscar ID da turma
+            self.cursor.execute("SELECT id FROM turmas WHERE nome = ?", (turma_nome,))
+            turma_id = self.cursor.fetchone()
+            if not turma_id:
+                return
+
+            turma_id = turma_id[0]
+
+            # Buscar alunos da turma
+            self.cursor.execute('''
+                SELECT a.id, a.nome, a.cpf, a.email, a.telefone, m.data_matricula, a.status
+                FROM alunos a
+                JOIN matriculas m ON a.id = m.aluno_id
+                WHERE m.turma_id = ? AND m.status = 'Ativa'
+                ORDER BY a.nome
+            ''', (turma_id,))
+
+            alunos = self.cursor.fetchall()
+
+            for aluno in alunos:
+                self.tree_alunos_turma.insert('', tk.END, values=aluno)
+
+            # Atualizar informações
+            self.cursor.execute('''
+                SELECT capacidade, COUNT(*) as total_alunos
+                FROM turmas t
+                LEFT JOIN matriculas m ON t.id = m.turma_id AND m.status = 'Ativa'
+                WHERE t.id = ?
+                GROUP BY t.capacidade
+            ''', (turma_id,))
+
+            info = self.cursor.fetchone()
+            if info:
+                capacidade, total_alunos = info
+                vagas_disponiveis = capacidade - total_alunos
+                self.info_turma_label.config(
+                    text=f"Turma: {turma_nome} | Alunos: {total_alunos}/{capacidade} | Vagas: {vagas_disponiveis}"
+                )
+
+        except Exception as e:
+            print(f"Erro ao carregar alunos da turma: {e}")
+
+    def buscar_turmas(self, event=None):
+        """Busca turmas na tabela"""
+        query = self.search_var_turmas.get()
+        self.carregar_dados_turmas(query)
+
+    def aplicar_filtros_turmas(self):
+        """Aplica filtros na tabela de turmas"""
+        status = self.filtro_status_turmas.get()
+        turno = self.filtro_turno_turmas.get()
+        self.carregar_dados_turmas(None, status, turno)
+
+    def editar_turma(self):
+        """Edita turma selecionada"""
+        selection = self.tree_turmas.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione uma turma para editar!")
+            return
+
+        item = self.tree_turmas.item(selection[0])
+        turma_id = item['values'][0]
+        self.abrir_edicao_turma(turma_id)
+
+    def excluir_turma(self):
+        """Exclui turma selecionada"""
+        selection = self.tree_turmas.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione uma turma para excluir!")
+            return
+
+        item = self.tree_turmas.item(selection[0])
+        turma_id, nome = item['values'][0], item['values'][1]
+
+        # Verificar se há alunos na turma
+        self.cursor.execute("SELECT COUNT(*) FROM matriculas WHERE turma_id = ? AND status = 'Ativa'", (turma_id,))
+        total_alunos = self.cursor.fetchone()[0]
+
+        if total_alunos > 0:
+            messagebox.showerror("Erro",
+                                 f"Não é possível excluir a turma {nome} pois existem {total_alunos} alunos matriculados!")
+            return
+
+        resposta = messagebox.askyesno("Confirmar Exclusão",
+                                       f"Tem certeza que deseja excluir a turma {nome}?\n\nEsta ação não pode ser desfeita!")
+
+        if resposta:
+            try:
+                self.cursor.execute("DELETE FROM turmas WHERE id = ?", (turma_id,))
+                self.conn.commit()
+
+                # Registrar log
+                self.registrar_log('EXCLUSAO', 'Turmas', f'Excluiu turma: {nome}')
+
+                messagebox.showinfo("Sucesso", "Turma excluída com sucesso!")
+                self.carregar_dados_turmas()
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao excluir turma: {str(e)}")
+
+    def exportar_turmas(self):
+        """Exporta lista de turmas para CSV"""
+        try:
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv")],
+                title="Exportar lista de turmas"
+            )
+
+            if filename:
+                self.cursor.execute('''
+                    SELECT t.nome, t.serie, t.turno, p.nome as professor, t.capacidade, t.sala,
+                           t.ano_letivo, t.horario_inicio, t.horario_fim, t.dias_semana, t.status,
+                           (SELECT COUNT(*) FROM matriculas m WHERE m.turma_id = t.id AND m.status = 'Ativa') as alunos
+                FROM turmas t
+                LEFT JOIN professores p ON t.professor_id = p.id
+                ORDER BY t.serie, t.nome
+                ''')
+
+                turmas = self.cursor.fetchall()
+
+                with open(filename, 'w', newline='', encoding='utf-8') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['Nome', 'Série', 'Turno', 'Professor', 'Capacidade', 'Sala',
+                                     'Ano Letivo', 'Horário Início', 'Horário Fim', 'Dias Semana',
+                                     'Status', 'Alunos Matriculados'])
+                    writer.writerows(turmas)
+
+                messagebox.showinfo("Sucesso", f"Lista de turmas exportada para: {filename}")
+
+                # Registrar log
+                self.registrar_log('EXPORTACAO', 'Turmas', 'Exportou lista de turmas para CSV')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar turmas: {str(e)}")
+
+    def imprimir_lista_turmas(self):
+        """Gera PDF com lista de turmas"""
+        try:
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                title="Salvar lista de turmas como PDF"
+            )
+
+            if filename:
+                self.cursor.execute('''
+                    SELECT t.nome, t.serie, t.turno, p.nome as professor, t.capacidade, t.sala,
+                           (SELECT COUNT(*) FROM matriculas m WHERE m.turma_id = t.id AND m.status = 'Ativa') as alunos,
+                           t.status
+                FROM turmas t
+                LEFT JOIN professores p ON t.professor_id = p.id
+                ORDER BY t.serie, t.nome
+                ''')
+
+                turmas = self.cursor.fetchall()
+
+                # Criar PDF
+                c = canvas.Canvas(filename, pagesize=A4)
+                width, height = A4
+
+                # Cabeçalho
+                c.setFont("Helvetica-Bold", 16)
+                c.drawString(50, height - 50, "EXTERNATO COLÉGIO OBJETIVO")
+                c.setFont("Helvetica", 12)
+                c.drawString(50, height - 70, "Lista de Turmas")
+                c.drawString(50, height - 85, f"Data: {date.today().strftime('%d/%m/%Y')}")
+
+                # Tabela
+                data = [['Nome', 'Série', 'Turno', 'Professor', 'Capacidade', 'Sala', 'Alunos', 'Status']]
+                for turma in turmas:
+                    data.append([turma[0], turma[1], turma[2], turma[3] or '', str(turma[4]),
+                                 turma[5] or '', str(turma[6]), turma[7]])
+
+                table = Table(data, colWidths=[80, 60, 60, 80, 60, 50, 50, 50])
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0046AD')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+
+                table.wrapOn(c, width, height)
+                table.drawOn(c, 30, height - 150)
+
+                c.save()
+                messagebox.showinfo("Sucesso", f"PDF gerado: {filename}")
+
+                # Registrar log
+                self.registrar_log('IMPRESSAO', 'Turmas', 'Gerou PDF com lista de turmas')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar PDF: {str(e)}")
+
+    # ========== MÓDULO SISTEMA DE NOTAS (COMPLETO) ==========
+
+    def carregar_sistema_notas(self):
+        """Carrega o módulo completo de sistema de notas"""
+        self.limpar_conteudo()
+        self.ativar_botao("📝 Sistema de Notas")
+        self.registrar_log('ACESSO', 'Sistema de Notas', 'Acessou módulo de sistema de notas')
+
+        # Título
+        title_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        title_frame.pack(fill=tk.X, pady=(0, 20))
+
+        tk.Label(title_frame, text="Sistema de Notas", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Lançamento e consulta de notas dos alunos",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Frame de seleção
+        selecao_frame = tk.Frame(self.content_frame, bg='white', relief='flat', bd=1, padx=20, pady=15)
+        selecao_frame.pack(fill=tk.X, pady=(0, 20))
+
+        # Linha 1: Turma e Disciplina
+        linha1 = tk.Frame(selecao_frame, bg='white')
+        linha1.pack(fill=tk.X, pady=5)
+
+        tk.Label(linha1, text="Turma:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        self.turma_notas = ttk.Combobox(linha1, values=self.obter_turmas_combo(),
+                                        state='readonly', width=25)
+        self.turma_notas.pack(side=tk.LEFT, padx=5)
+        self.turma_notas.bind('<<ComboboxSelected>>', self.carregar_disciplinas_turma)
+
+        tk.Label(linha1, text="Disciplina:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=(20, 5))
+
+        self.disciplina_notas = ttk.Combobox(linha1, state='readonly', width=25)
+        self.disciplina_notas.pack(side=tk.LEFT, padx=5)
+        self.disciplina_notas.bind('<<ComboboxSelected>>', self.carregar_notas_turma)
+
+        # Linha 2: Bimestre e Ano Letivo
+        linha2 = tk.Frame(selecao_frame, bg='white')
+        linha2.pack(fill=tk.X, pady=5)
+
+        tk.Label(linha2, text="Bimestre:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        self.bimestre_notas = ttk.Combobox(linha2, values=['1', '2', '3', '4'],
+                                           state='readonly', width=10)
+        self.bimestre_notas.set(str(self.obter_bimestre_atual()))
+        self.bimestre_notas.pack(side=tk.LEFT, padx=5)
+        self.bimestre_notas.bind('<<ComboboxSelected>>', self.carregar_notas_turma)
+
+        tk.Label(linha2, text="Ano Letivo:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=(20, 5))
+
+        self.ano_letivo_notas = ttk.Combobox(linha2, values=[str(datetime.now().year), str(datetime.now().year + 1)],
+                                             state='readonly', width=10)
+        self.ano_letivo_notas.set(str(datetime.now().year))
+        self.ano_letivo_notas.pack(side=tk.LEFT, padx=5)
+        self.ano_letivo_notas.bind('<<ComboboxSelected>>', self.carregar_notas_turma)
+
+        ModernButton(linha2, text="🔄 Carregar Notas",
+                     command=self.carregar_notas_turma,
+                     color='#0046AD').pack(side=tk.LEFT, padx=20)
+
+        # Tabela de notas
+        colunas = ('ID Aluno', 'Nome', 'Nota 1', 'Nota 2', 'Nota 3', 'Nota 4', 'Média', 'Situação', 'Ações')
+        self.tree_notas = self.criar_tabela(self.content_frame, colunas)
+
+        # Barra de ferramentas
+        botoes_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        botoes_frame.pack(fill=tk.X, pady=10)
+
+        ModernButton(botoes_frame, text="💾 Salvar Todas as Notas",
+                     command=self.salvar_todas_notas,
+                     color='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        ModernButton(botoes_frame, text="📊 Calcular Médias",
+                     command=self.calcular_medias,
+                     color='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        ModernButton(botoes_frame, text="📋 Relatório de Notas",
+                     command=self.gerar_relatorio_notas,
+                     color='#0046AD').pack(side=tk.LEFT, padx=5)
+
+        # Dicionário para armazenar entradas de notas
+        self.entries_notas = {}
+
+    def carregar_disciplinas_turma(self, event=None):
+        """Carrega disciplinas da turma selecionada"""
+        turma_nome = self.turma_notas.get()
+        if not turma_nome:
+            return
+
+        try:
+            # Buscar ID da turma
+            self.cursor.execute("SELECT id FROM turmas WHERE nome = ?", (turma_nome,))
+            turma_id = self.cursor.fetchone()
+            if not turma_id:
+                return
+
+            turma_id = turma_id[0]
+
+            # Buscar disciplinas da turma
+            self.cursor.execute('''
+                SELECT d.nome 
+                FROM disciplinas d 
+                WHERE d.turma_id = ? AND d.status = 'Ativa'
+                ORDER BY d.nome
+            ''', (turma_id,))
+
+            disciplinas = [disc[0] for disc in self.cursor.fetchall()]
+            self.disciplina_notas['values'] = disciplinas
+
+            if disciplinas:
+                self.disciplina_notas.set(disciplinas[0])
+                self.carregar_notas_turma()
+
+        except Exception as e:
+            print(f"Erro ao carregar disciplinas: {e}")
+
+    def carregar_notas_turma(self, event=None):
+        """Carrega notas dos alunos da turma selecionada"""
+        turma_nome = self.turma_notas.get()
+        disciplina_nome = self.disciplina_notas.get()
+        bimestre = self.bimestre_notas.get()
+        ano_letivo = self.ano_letivo_notas.get()
+
+        if not all([turma_nome, disciplina_nome, bimestre, ano_letivo]):
+            return
+
+        # Limpar tabela e dicionário de entradas
+        for item in self.tree_notas.get_children():
+            self.tree_notas.delete(item)
+        self.entries_notas.clear()
+
+        try:
+            # Buscar IDs
+            self.cursor.execute("SELECT id FROM turmas WHERE nome = ?", (turma_nome,))
+            turma_id = self.cursor.fetchone()[0]
+
+            self.cursor.execute("SELECT id FROM disciplinas WHERE nome = ? AND turma_id = ?",
+                                (disciplina_nome, turma_id))
+            disciplina_id = self.cursor.fetchone()[0]
+
+            # Buscar alunos da turma
+            self.cursor.execute('''
+                SELECT a.id, a.nome
+                FROM alunos a
+                JOIN matriculas m ON a.id = m.aluno_id
+                WHERE m.turma_id = ? AND m.status = 'Ativa'
+                ORDER BY a.nome
+            ''', (turma_id,))
+
+            alunos = self.cursor.fetchall()
+
+            for aluno_id, aluno_nome in alunos:
+                # Buscar notas existentes
+                self.cursor.execute('''
+                    SELECT nota1, nota2, nota3, nota4, media, situacao
+                    FROM notas
+                    WHERE aluno_id = ? AND disciplina_id = ? AND bimestre = ? AND ano_letivo = ?
+                ''', (aluno_id, disciplina_id, bimestre, ano_letivo))
+
+                nota_data = self.cursor.fetchone()
+                if nota_data:
+                    nota1, nota2, nota3, nota4, media, situacao = nota_data
+                else:
+                    nota1 = nota2 = nota3 = nota4 = media = 0.0
+                    situacao = 'Cursando'
+
+                # Inserir na tabela
+                valores = (aluno_id, aluno_nome,
+                           f"{nota1:.1f}" if nota1 else "0.0",
+                           f"{nota2:.1f}" if nota2 else "0.0",
+                           f"{nota3:.1f}" if nota3 else "0.0",
+                           f"{nota4:.1f}" if nota4 else "0.0",
+                           f"{media:.1f}" if media else "0.0",
+                           situacao,
+                           "Editar")
+
+                item = self.tree_notas.insert('', tk.END, values=valores)
+
+                # Armazenar referências para as entradas
+                self.entries_notas[aluno_id] = {
+                    'item': item,
+                    'nota1': nota1,
+                    'nota2': nota2,
+                    'nota3': nota3,
+                    'nota4': nota4,
+                    'media': media,
+                    'situacao': situacao
+                }
+
+            # Configurar duplo clique para editar
+            self.tree_notas.bind('<Double-1>', self.editar_nota_aluno)
 
         except Exception as e:
             print(f"Erro ao carregar notas: {e}")
 
-    def carregar_frequencia_aluno(self):
-        """Carrega frequÃªncia do aluno"""
-        try:
-            frequencia = self.db.execute_query('''
-                SELECT f.data, d.nome, f.presente, f.observacoes
-                FROM frequencia f
-                LEFT JOIN disciplinas d ON f.disciplina_id = d.id
-                WHERE f.aluno_id = ?
-                ORDER BY f.data DESC
-                LIMIT 50
-            ''', (self.id_aluno,), fetch=True)
-
-            self.tabela_frequencia.setRowCount(len(frequencia))
-
-            for row, (data, disciplina, presente, obs) in enumerate(frequencia):
-                # Data
-                data_formatada = datetime.strptime(data, '%Y-%m-%d').strftime('%d/%m/%Y')
-                self.tabela_frequencia.setItem(row, 0, QTableWidgetItem(data_formatada))
-
-                # Disciplina
-                self.tabela_frequencia.setItem(row, 1, QTableWidgetItem(disciplina if disciplina else "Geral"))
-
-                # PresenÃ§a
-                status = "Presente" if presente == 1 else "Faltou"
-                item_presenca = QTableWidgetItem(status)
-
-                if presente == 1:
-                    item_presenca.setForeground(QColor('#27ae60'))
-                    item_presenca.setFont(QFont('', weight=QFont.Bold))
-                else:
-                    item_presenca.setForeground(QColor('#e74c3c'))
-                    item_presenca.setFont(QFont('', weight=QFont.Bold))
-
-                self.tabela_frequencia.setItem(row, 2, item_presenca)
-
-                # ObservaÃ§Ãµes
-                self.tabela_frequencia.setItem(row, 3, QTableWidgetItem(obs if obs else ""))
-
-        except Exception as e:
-            print(f"Erro ao carregar frequÃªncia: {e}")
-
-    def imprimir_detalhes(self):
-        """Imprime detalhes do aluno"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A impressÃ£o de detalhes serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def editar_aluno(self):
-        """Abre diÃ¡logo para editar o aluno"""
-        self.close()
-        # Em uma implementaÃ§Ã£o real, aqui abriria o diÃ¡logo de ediÃ§Ã£o
-
-
-# ============================================
-# FUNÃ‡ÃƒO PRINCIPAL E INICIALIZAÃ‡ÃƒO
-# ============================================
-
-def main():
-    """FunÃ§Ã£o principal do aplicativo"""
-    app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # Estilo moderno
-
-    # Aplicar stylesheet global
-    app.setStyleSheet(GLOBAL_STYLESHEET)
-
-    # Verificar e inicializar banco de dados
-    db_manager = DatabaseManager()
-    if not db_manager.init_database():
-        QMessageBox.critical(None, "Erro CrÃ­tico",
-                             "NÃ£o foi possÃ­vel inicializar o banco de dados.\n"
-                             "O aplicativo serÃ¡ fechado.")
-        sys.exit(1)
-
-    # Mostrar tela de login
-    login_window = JanelaLogin()
-    login_window.show()
-
-    def on_login_sucesso(tipo_usuario, dados_json):
-        """Callback para login bem-sucedido"""
-        dados_usuario = json.loads(dados_json)
-
-        # Fechar tela de login
-        login_window.close()
-
-        # Abrir tela principal
-        main_window = JanelaPrincipal(tipo_usuario, dados_usuario)
-        main_window.show()
-
-    # Conectar sinal de login
-    login_window.login_sucesso.connect(on_login_sucesso)
-
-    # Executar aplicaÃ§Ã£o
-    sys.exit(app.exec_())
-
-
-if __name__ == "__main__":
-    main()
-"""
-PROJETO ESCOLA - SISTEMA DE GESTÃƒO ESCOLAR
-Parte 2/10 - ContinuaÃ§Ã£o das funcionalidades principais
-"""
-
-
-# ============================================
-# PÃGINA DE PROFESSORES (COMPLETA)
-# ============================================
-
-def criar_pagina_professores(self):
-    """Cria a pÃ¡gina de gerenciamento de professores - COMPLETA"""
-    pagina = QWidget()
-    layout = QVBoxLayout(pagina)
-    layout.setContentsMargins(20, 20, 20, 20)
-    layout.setSpacing(20)
-
-    # CabeÃ§alho
-    cabecalho_layout = QHBoxLayout()
-
-    lbl_titulo = QLabel("GESTÃƒO DE PROFESSORES")
-    lbl_titulo.setObjectName("title")
-
-    # Barra de busca
-    self.txt_busca_professor = QLineEdit()
-    self.txt_busca_professor.setPlaceholderText("Buscar professor por nome, CPF ou matÃ©ria...")
-    self.txt_busca_professor.setMinimumHeight(40)
-    self.txt_busca_professor.textChanged.connect(self.buscar_professores)
-
-    # BotÃµes de aÃ§Ã£o
-    btn_novo = AnimacaoBotao("Novo Professor", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-    btn_novo.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
-    btn_novo.clicked.connect(self.cadastrar_professor)
-
-    btn_editar = AnimacaoBotao("Editar", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-    btn_editar.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-    btn_editar.clicked.connect(self.editar_professor)
-
-    btn_excluir = AnimacaoBotao("Excluir", cor_normal="#e74c3c", cor_hover="#c0392b", cor_press="#a93226")
-    btn_excluir.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
-    btn_excluir.clicked.connect(self.excluir_professor)
-
-    btn_horarios = AnimacaoBotao("HorÃ¡rios", cor_normal="#9b59b6", cor_hover="#8e44ad", cor_press="#7d3c98")
-    btn_horarios.setIcon(self.style().standardIcon(QStyle.SP_FileDialogListView))
-    btn_horarios.clicked.connect(self.ver_horarios_professor)
-
-    cabecalho_layout.addWidget(lbl_titulo)
-    cabecalho_layout.addStretch()
-    cabecalho_layout.addWidget(self.txt_busca_professor, 2)
-    cabecalho_layout.addWidget(btn_novo)
-    cabecalho_layout.addWidget(btn_editar)
-    cabecalho_layout.addWidget(btn_excluir)
-    cabecalho_layout.addWidget(btn_horarios)
-
-    # Tabela de professores
-    self.tabela_professores = QTableWidget()
-    self.tabela_professores.setColumnCount(10)
-    self.tabela_professores.setHorizontalHeaderLabels([
-        "ID", "Nome", "CPF", "MatÃ©ria", "FormaÃ§Ã£o", "Telefone",
-        "Email", "Data ContrataÃ§Ã£o", "SalÃ¡rio", "Status"
-    ])
-
-    # Configurar tabela
-    self.tabela_professores.setAlternatingRowColors(True)
-    self.tabela_professores.setSelectionBehavior(QTableWidget.SelectRows)
-    self.tabela_professores.setSelectionMode(QTableWidget.SingleSelection)
-    self.tabela_professores.setEditTriggers(QTableWidget.NoEditTriggers)
-
-    # Ajustar largura das colunas
-    header = self.tabela_professores.horizontalHeader()
-    header.setSectionResizeMode(1, QHeaderView.Stretch)  # Nome
-    header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # MatÃ©ria
-    header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Status
-
-    # Conectar duplo clique
-    self.tabela_professores.doubleClicked.connect(self.ver_detalhes_professor)
-
-    # EstatÃ­sticas
-    stats_layout = QHBoxLayout()
-
-    self.lbl_total_prof = QLabel("Total de professores: 0")
-    self.lbl_total_prof.setObjectName("info-badge")
-
-    self.lbl_prof_ativos = QLabel("Ativos: 0")
-    self.lbl_prof_ativos.setObjectName("success-badge")
-
-    self.lbl_prof_inativos = QLabel("Inativos: 0")
-    self.lbl_prof_inativos.setObjectName("danger-badge")
-
-    stats_layout.addWidget(self.lbl_total_prof)
-    stats_layout.addWidget(self.lbl_prof_ativos)
-    stats_layout.addWidget(self.lbl_prof_inativos)
-    stats_layout.addStretch()
-
-    # Adicionar tudo ao layout
-    layout.addLayout(cabecalho_layout)
-    layout.addWidget(self.tabela_professores)
-    layout.addLayout(stats_layout)
-
-    self.paginas['professores'] = pagina
-    self.central_widget.addWidget(pagina)
-
-    # Carregar dados iniciais
-    self.carregar_tabela_professores()
-
-
-def carregar_tabela_professores(self):
-    """Carrega dados na tabela de professores"""
-    try:
-        query = """
-                SELECT id, nome, cpf, materia, formacao, telefone, 
-                       email, data_contratacao, salario, ativo
-                FROM professores
-                ORDER BY nome
-            """
-
-        professores = self.db.execute_query(query, fetch=True)
-
-        self.tabela_professores.setRowCount(0)
-
-        for row_num, professor in enumerate(professores):
-            self.tabela_professores.insertRow(row_num)
-
-            for col_num, valor in enumerate(professor):
-                if col_num == 2 and valor:  # CPF
-                    valor = ValidadorCampos.formatar_cpf(valor)
-                elif col_num == 5 and valor:  # Telefone
-                    valor = ValidadorCampos.formatar_telefone(valor)
-                elif col_num == 7 and valor:  # Data contrataÃ§Ã£o
-                    try:
-                        data_obj = datetime.strptime(valor, '%Y-%m-%d')
-                        valor = data_obj.strftime('%d/%m/%Y')
-                    except:
-                        pass
-                elif col_num == 8 and valor:  # SalÃ¡rio
-                    valor = f"R$ {float(valor):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-                elif col_num == 9:  # Status
-                    valor = "Ativo" if valor == 1 else "Inativo"
-
-                item = QTableWidgetItem(str(valor if valor else ""))
-
-                # Colorir status
-                if col_num == 9:
-                    if professor[9] == 1:  # Ativo
-                        item.setForeground(QColor('#27ae60'))
-                        item.setFont(QFont('', weight=QFont.Bold))
-                    else:
-                        item.setForeground(QColor('#e74c3c'))
-
-                self.tabela_professores.setItem(row_num, col_num, item)
-
-        # Atualizar estatÃ­sticas
-        self.atualizar_estatisticas_professores(professores)
-
-    except Exception as e:
-        QMessageBox.critical(self, "Erro", f"Falha ao carregar professores:\n{str(e)}")
-
-
-def atualizar_estatisticas_professores(self, professores):
-    """Atualiza as estatÃ­sticas de professores"""
-    total = len(professores)
-    ativos = sum(1 for p in professores if p[9] == 1)
-    inativos = total - ativos
-
-    self.lbl_total_prof.setText(f"Total de professores: {total}")
-    self.lbl_prof_ativos.setText(f"Ativos: {ativos}")
-    self.lbl_prof_inativos.setText(f"Inativos: {inativos}")
-
-
-def buscar_professores(self):
-    """Busca professores baseado no texto da busca"""
-    texto = self.txt_busca_professor.text().strip()
-
-    if not texto:
-        self.carregar_tabela_professores()
-        return
-
-    try:
-        query = f"""
-                SELECT id, nome, cpf, materia, formacao, telefone, 
-                       email, data_contratacao, salario, ativo
-                FROM professores
-                WHERE nome LIKE ? OR cpf LIKE ? OR materia LIKE ? OR formacao LIKE ?
-                ORDER BY nome
-            """
-
-        parametro = f"%{texto}%"
-        professores = self.db.execute_query(
-            query,
-            (parametro, parametro, parametro, parametro),
-            fetch=True
-        )
-
-        self.tabela_professores.setRowCount(0)
-
-        for row_num, professor in enumerate(professores):
-            self.tabela_professores.insertRow(row_num)
-
-            for col_num, valor in enumerate(professor):
-                item = QTableWidgetItem(str(valor if valor else ""))
-                self.tabela_professores.setItem(row_num, col_num, item)
-
-        self.atualizar_estatisticas_professores(professores)
-
-    except Exception as e:
-        QMessageBox.critical(self, "Erro", f"Falha ao buscar professores:\n{str(e)}")
-
-
-def cadastrar_professor(self):
-    """Abre diÃ¡logo para cadastrar novo professor"""
-    dialog = CadastroProfessorDialog(self)
-    if dialog.exec_():
-        self.carregar_tabela_professores()
-
-
-def editar_professor(self):
-    """Abre diÃ¡logo para editar professor selecionado"""
-    selecionados = self.tabela_professores.selectedItems()
-
-    if not selecionados:
-        QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                            "Por favor, selecione um professor para editar.")
-        return
-
-    id_professor = int(self.tabela_professores.item(selecionados[0].row(), 0).text())
-
-    dialog = CadastroProfessorDialog(self, id_professor)
-    if dialog.exec_():
-        self.carregar_tabela_professores()
-
-
-def excluir_professor(self):
-    """Exclui professor selecionado"""
-    selecionados = self.tabela_professores.selectedItems()
-
-    if not selecionados:
-        QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                            "Por favor, selecione um professor para excluir.")
-        return
-
-    id_professor = int(self.tabela_professores.item(selecionados[0].row(), 0).text())
-    nome_professor = self.tabela_professores.item(selecionados[0].row(), 1).text()
-
-    resposta = QMessageBox.question(
-        self, "Confirmar exclusÃ£o",
-        f"Tem certeza que deseja excluir o professor '{nome_professor}'?\n\n"
-        "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-        QMessageBox.Yes | QMessageBox.No,
-        QMessageBox.No
-    )
-
-    if resposta == QMessageBox.Yes:
-        try:
-            # Verificar se o professor tem disciplinas associadas
-            disciplinas = self.db.execute_query(
-                "SELECT COUNT(*) FROM disciplinas WHERE professor_id = ?",
-                (id_professor,),
-                fetch=True
-            )
-
-            if disciplinas and disciplinas[0][0] > 0:
-                QMessageBox.warning(self, "Professor possui disciplinas",
-                                    "Este professor estÃ¡ vinculado a disciplinas.\n"
-                                    "Remova as associaÃ§Ãµes primeiro.")
-                return
-
-            self.db.execute_query(
-                "DELETE FROM professores WHERE id = ?",
-                (id_professor,)
-            )
-
-            QMessageBox.information(self, "Sucesso", "Professor excluÃ­do com sucesso!")
-            self.carregar_tabela_professores()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao excluir professor:\n{str(e)}")
-
-
-def ver_detalhes_professor(self, index):
-    """Mostra detalhes do professor em duplo clique"""
-    row = index.row()
-    id_professor = int(self.tabela_professores.item(row, 0).text())
-
-    dialog = DetalhesProfessorDialog(self, id_professor)
-    dialog.exec_()
-
-
-def ver_horarios_professor(self):
-    """Mostra horÃ¡rios do professor selecionado"""
-    selecionados = self.tabela_professores.selectedItems()
-
-    if not selecionados:
-        QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                            "Por favor, selecione um professor para ver horÃ¡rios.")
-        return
-
-    id_professor = int(self.tabela_professores.item(selecionados[0].row(), 0).text())
-    nome_professor = self.tabela_professores.item(selecionados[0].row(), 1).text()
-
-    dialog = HorariosProfessorDialog(self, id_professor, nome_professor)
-    dialog.exec_()
-
-
-# ============================================
-# DIÃLOGO DE CADASTRO DE PROFESSOR
-# ============================================
-
-class CadastroProfessorDialog(QDialog):
-    """DiÃ¡logo para cadastro/ediÃ§Ã£o de professores"""
-
-    def __init__(self, parent=None, id_professor=None):
-        super().__init__(parent)
-        self.id_professor = id_professor
-        self.db = DatabaseManager()
-        self.modo_edicao = id_professor is not None
-
-        self.setWindowTitle("Cadastrar Professor" if not self.modo_edicao else "Editar Professor")
-        self.setFixedSize(800, 750)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_dados_professor() if self.modo_edicao else None
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        titulo = "CADASTRAR NOVO PROFESSOR" if not self.modo_edicao else "EDITAR PROFESSOR"
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setObjectName("title")
-
-        # Abas para organizaÃ§Ã£o
-        tab_widget = QTabWidget()
-
-        # Aba: Dados Pessoais
-        aba_dados = QWidget()
-        layout_dados = QFormLayout(aba_dados)
-        layout_dados.setContentsMargins(20, 20, 20, 20)
-        layout_dados.setSpacing(15)
-
-        # Campos de dados pessoais
-        self.txt_nome = QLineEdit()
-        self.txt_nome.setPlaceholderText("Nome completo do professor")
-
-        self.txt_cpf = QLineEdit()
-        self.txt_cpf.setPlaceholderText("000.000.000-00")
-        self.txt_cpf.setInputMask("000.000.000-00")
-
-        self.txt_telefone = QLineEdit()
-        self.txt_telefone.setPlaceholderText("(00) 00000-0000")
-        self.txt_telefone.setInputMask("(00) 00000-0000")
-
-        self.txt_email = QLineEdit()
-        self.txt_email.setPlaceholderText("professor@escola.com")
-
-        self.txt_endereco = QLineEdit()
-        self.txt_endereco.setPlaceholderText("EndereÃ§o completo")
-
-        # Adicionar campos Ã  aba
-        layout_dados.addRow("Nome completo:", self.txt_nome)
-        layout_dados.addRow("CPF:", self.txt_cpf)
-        layout_dados.addRow("Telefone:", self.txt_telefone)
-        layout_dados.addRow("Email:", self.txt_email)
-        layout_dados.addRow("EndereÃ§o:", self.txt_endereco)
-
-        # Aba: Dados Profissionais
-        aba_profissional = QWidget()
-        layout_profissional = QFormLayout(aba_profissional)
-        layout_profissional.setContentsMargins(20, 20, 20, 20)
-        layout_profissional.setSpacing(15)
-
-        self.txt_materia = QLineEdit()
-        self.txt_materia.setPlaceholderText("Ex: MatemÃ¡tica, PortuguÃªs, HistÃ³ria")
-
-        self.txt_formacao = QLineEdit()
-        self.txt_formacao.setPlaceholderText("Ex: Licenciatura em MatemÃ¡tica")
-
-        self.txt_data_contratacao = QDateEdit()
-        self.txt_data_contratacao.setCalendarPopup(True)
-        self.txt_data_contratacao.setDate(QDate.currentDate())
-        self.txt_data_contratacao.setDisplayFormat("dd/MM/yyyy")
-
-        self.txt_salario = QDoubleSpinBox()
-        self.txt_salario.setRange(0, 99999.99)
-        self.txt_salario.setPrefix("R$ ")
-        self.txt_salario.setDecimals(2)
-        self.txt_salario.setSingleStep(500.00)
-        self.txt_salario.setValue(2000.00)
-
-        self.combo_status = QComboBox()
-        self.combo_status.addItems(["Ativo", "Inativo"])
-
-        self.txt_observacoes = QTextEdit()
-        self.txt_observacoes.setMaximumHeight(100)
-        self.txt_observacoes.setPlaceholderText("ObservaÃ§Ãµes sobre o professor...")
-
-        # Adicionar campos Ã  aba
-        layout_profissional.addRow("MatÃ©ria principal:", self.txt_materia)
-        layout_profissional.addRow("FormaÃ§Ã£o acadÃªmica:", self.txt_formacao)
-        layout_profissional.addRow("Data de contrataÃ§Ã£o:", self.txt_data_contratacao)
-        layout_profissional.addRow("SalÃ¡rio:", self.txt_salario)
-        layout_profissional.addRow("Status:", self.combo_status)
-        layout_profissional.addRow("ObservaÃ§Ãµes:", self.txt_observacoes)
-
-        # Aba: Credenciais de Acesso
-        aba_credenciais = QWidget()
-        layout_credenciais = QFormLayout(aba_credenciais)
-        layout_credenciais.setContentsMargins(20, 20, 20, 20)
-        layout_credenciais.setSpacing(15)
-
-        self.txt_usuario = QLineEdit()
-        self.txt_usuario.setPlaceholderText("Nome de usuÃ¡rio para login")
-
-        self.txt_senha = QLineEdit()
-        self.txt_senha.setPlaceholderText("Senha para acesso ao sistema")
-        self.txt_senha.setEchoMode(QLineEdit.Password)
-
-        self.txt_confirmar_senha = QLineEdit()
-        self.txt_confirmar_senha.setPlaceholderText("Confirmar senha")
-        self.txt_confirmar_senha.setEchoMode(QLineEdit.Password)
-
-        # Checkbox para gerar senha automÃ¡tica
-        self.check_gerar_senha = QCheckBox("Gerar senha automÃ¡tica")
-        self.check_gerar_senha.stateChanged.connect(self.toggle_gerar_senha)
-
-        # BotÃ£o para gerar senha
-        self.btn_gerar_senha = QPushButton("Gerar Senha")
-        self.btn_gerar_senha.setObjectName("secondary")
-        self.btn_gerar_senha.clicked.connect(self.gerar_senha_automatica)
-
-        layout_credenciais.addRow("UsuÃ¡rio:", self.txt_usuario)
-        layout_credenciais.addRow("Senha:", self.txt_senha)
-        layout_credenciais.addRow("Confirmar senha:", self.txt_confirmar_senha)
-        layout_credenciais.addRow("", self.check_gerar_senha)
-        layout_credenciais.addRow("", self.btn_gerar_senha)
-
-        # Adicionar abas ao tab widget
-        tab_widget.addTab(aba_dados, "Dados Pessoais")
-        tab_widget.addTab(aba_profissional, "Dados Profissionais")
-        tab_widget.addTab(aba_credenciais, "Credenciais de Acesso")
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        self.btn_salvar = AnimacaoBotao(
-            "SALVAR" if not self.modo_edicao else "ATUALIZAR",
-            cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b"
-        )
-        self.btn_salvar.setMinimumHeight(45)
-        self.btn_salvar.clicked.connect(self.salvar_professor)
-
-        self.btn_cancelar = QPushButton("CANCELAR")
-        self.btn_cancelar.setObjectName("danger")
-        self.btn_cancelar.setMinimumHeight(45)
-        self.btn_cancelar.clicked.connect(self.reject)
-
-        if self.modo_edicao:
-            self.btn_excluir = QPushButton("EXCLUIR")
-            self.btn_excluir.setObjectName("warning")
-            self.btn_excluir.setMinimumHeight(45)
-            self.btn_excluir.clicked.connect(self.excluir_professor)
-            botoes_layout.addWidget(self.btn_excluir)
-
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(self.btn_salvar)
-        botoes_layout.addWidget(self.btn_cancelar)
-
-        # Adicionar tudo ao layout principal
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(tab_widget)
-        layout.addLayout(botoes_layout)
-
-        # Inicializar estado dos campos de senha
-        self.toggle_gerar_senha()
-
-    def carregar_dados_professor(self):
-        """Carrega dados do professor para ediÃ§Ã£o"""
-        try:
-            professor = self.db.execute_query(
-                "SELECT * FROM professores WHERE id = ?",
-                (self.id_professor,),
-                fetch=True
-            )
-
-            if professor and len(professor) > 0:
-                dados = professor[0]
-
-                # Dados pessoais
-                self.txt_nome.setText(dados[1] if dados[1] else "")
-
-                if dados[2]:  # CPF
-                    cpf_formatado = ValidadorCampos.formatar_cpf(dados[2])
-                    self.txt_cpf.setText(cpf_formatado)
-
-                if dados[3]:  # Telefone
-                    telefone_formatado = ValidadorCampos.formatar_telefone(dados[3])
-                    self.txt_telefone.setText(telefone_formatado)
-
-                self.txt_email.setText(dados[4] if dados[4] else "")
-                self.txt_materia.setText(dados[5] if dados[5] else "")
-                self.txt_formacao.setText(dados[6] if dados[6] else "")
-
-                if dados[7]:  # Data contrataÃ§Ã£o
-                    data_contr = QDate.fromString(dados[7], 'yyyy-MM-dd')
-                    self.txt_data_contratacao.setDate(data_contr)
-
-                if dados[8]:  # SalÃ¡rio
-                    self.txt_salario.setValue(float(dados[8]))
-
-                self.txt_endereco.setText(dados[9] if dados[9] else "")
-                self.txt_observacoes.setText(dados[10] if dados[10] else "")
-
-                # Status
-                self.combo_status.setCurrentIndex(0 if dados[11] == 1 else 1)
-
-                # Credenciais
-                self.txt_usuario.setText(dados[12] if dados[12] else "")
-                # Senha nÃ£o Ã© carregada por seguranÃ§a
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar dados do professor:\n{str(e)}")
-
-    def toggle_gerar_senha(self):
-        """Ativa/desativa campos de senha baseado no checkbox"""
-        if self.check_gerar_senha.isChecked():
-            self.txt_senha.setEnabled(False)
-            self.txt_confirmar_senha.setEnabled(False)
-            self.btn_gerar_senha.setEnabled(True)
-        else:
-            self.txt_senha.setEnabled(True)
-            self.txt_confirmar_senha.setEnabled(True)
-            self.btn_gerar_senha.setEnabled(False)
-
-    def gerar_senha_automatica(self):
-        """Gera uma senha aleatÃ³ria"""
-        import random
-        import string
-
-        # Gerar senha de 8 caracteres com letras e nÃºmeros
-        caracteres = string.ascii_letters + string.digits
-        senha = ''.join(random.choice(caracteres) for i in range(8))
-
-        self.txt_senha.setText(senha)
-        self.txt_confirmar_senha.setText(senha)
-
-        QMessageBox.information(self, "Senha Gerada",
-                                f"Senha gerada: {senha}\n\n"
-                                "Anote esta senha para fornecÃª-la ao professor.")
-
-    def validar_campos(self):
-        """Valida os campos do formulÃ¡rio"""
-        erros = []
-
-        # Nome obrigatÃ³rio
-        if not self.txt_nome.text().strip():
-            erros.append("Nome completo Ã© obrigatÃ³rio.")
-
-        # CPF vÃ¡lido
-        cpf = self.txt_cpf.text().replace('.', '').replace('-', '')
-        if cpf and not ValidadorCampos.validar_cpf(cpf):
-            erros.append("CPF invÃ¡lido.")
-
-        # Email vÃ¡lido se preenchido
-        email = self.txt_email.text().strip()
-        if email and not ValidadorCampos.validar_email(email):
-            erros.append("Email invÃ¡lido.")
-
-        # MatÃ©ria obrigatÃ³ria
-        if not self.txt_materia.text().strip():
-            erros.append("MatÃ©ria Ã© obrigatÃ³ria.")
-
-        # ValidaÃ§Ã£o de credenciais (apenas para novo professor)
-        if not self.modo_edicao:
-            usuario = self.txt_usuario.text().strip()
-            senha = self.txt_senha.text().strip()
-            confirmar_senha = self.txt_confirmar_senha.text().strip()
-
-            if not usuario:
-                erros.append("UsuÃ¡rio Ã© obrigatÃ³rio.")
-            else:
-                # Verificar se usuÃ¡rio jÃ¡ existe
-                resultado = self.db.execute_query(
-                    "SELECT COUNT(*) FROM professores WHERE usuario = ?",
-                    (usuario,),
-                    fetch=True
-                )
-                if resultado and resultado[0][0] > 0:
-                    erros.append("UsuÃ¡rio jÃ¡ estÃ¡ em uso.")
-
-            if not self.check_gerar_senha.isChecked():
-                if not senha:
-                    erros.append("Senha Ã© obrigatÃ³ria.")
-                elif len(senha) < 6:
-                    erros.append("Senha deve ter no mÃ­nimo 6 caracteres.")
-                elif senha != confirmar_senha:
-                    erros.append("As senhas nÃ£o conferem.")
-
-        return erros
-
-    def salvar_professor(self):
-        """Salva ou atualiza o professor no banco de dados"""
-        # Validar campos
-        erros = self.validar_campos()
-        if erros:
-            QMessageBox.warning(self, "Erros no formulÃ¡rio", "\n".join(erros))
-            return
-
-        # Preparar dados
-        dados = {
-            'nome': self.txt_nome.text().strip(),
-            'cpf': self.txt_cpf.text().replace('.', '').replace('-', ''),
-            'telefone': self.txt_telefone.text().replace('(', '').replace(')', '').replace('-', '').replace(' ', ''),
-            'email': self.txt_email.text().strip(),
-            'materia': self.txt_materia.text().strip(),
-            'formacao': self.txt_formacao.text().strip(),
-            'data_contratacao': self.txt_data_contratacao.date().toString('yyyy-MM-dd'),
-            'salario': self.txt_salario.value(),
-            'endereco': self.txt_endereco.text().strip(),
-            'observacoes': self.txt_observacoes.toPlainText().strip(),
-            'ativo': 1 if self.combo_status.currentText() == "Ativo" else 0,
-            'usuario': self.txt_usuario.text().strip(),
-            'senha': ""
-        }
-
-        # Gerar senha hash se necessÃ¡rio
-        if not self.modo_edicao or self.txt_senha.text():
-            senha = self.txt_senha.text() if not self.check_gerar_senha.isChecked() else self.txt_senha.text()
-            dados['senha'] = hashlib.sha256(senha.encode()).hexdigest()
-
-        try:
-            if self.modo_edicao:
-                # Atualizar professor existente
-                if dados['senha']:
-                    query = '''
-                        UPDATE professores SET
-                            nome = ?, cpf = ?, telefone = ?, email = ?, materia = ?,
-                            formacao = ?, data_contratacao = ?, salario = ?, endereco = ?,
-                            observacoes = ?, ativo = ?, usuario = ?, senha = ?
-                        WHERE id = ?
-                    '''
-                    params = (
-                        dados['nome'], dados['cpf'], dados['telefone'], dados['email'],
-                        dados['materia'], dados['formacao'], dados['data_contratacao'],
-                        dados['salario'], dados['endereco'], dados['observacoes'],
-                        dados['ativo'], dados['usuario'], dados['senha'], self.id_professor
-                    )
-                else:
-                    query = '''
-                        UPDATE professores SET
-                            nome = ?, cpf = ?, telefone = ?, email = ?, materia = ?,
-                            formacao = ?, data_contratacao = ?, salario = ?, endereco = ?,
-                            observacoes = ?, ativo = ?, usuario = ?
-                        WHERE id = ?
-                    '''
-                    params = (
-                        dados['nome'], dados['cpf'], dados['telefone'], dados['email'],
-                        dados['materia'], dados['formacao'], dados['data_contratacao'],
-                        dados['salario'], dados['endereco'], dados['observacoes'],
-                        dados['ativo'], dados['usuario'], self.id_professor
-                    )
-
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "Professor atualizado com sucesso!")
-
-            else:
-                # Inserir novo professor
-                query = '''
-                    INSERT INTO professores (
-                        nome, cpf, telefone, email, materia, formacao,
-                        data_contratacao, salario, endereco, observacoes,
-                        ativo, usuario, senha, data_cadastro
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                '''
-
-                params = (
-                    dados['nome'], dados['cpf'], dados['telefone'], dados['email'],
-                    dados['materia'], dados['formacao'], dados['data_contratacao'],
-                    dados['salario'], dados['endereco'], dados['observacoes'],
-                    dados['ativo'], dados['usuario'], dados['senha']
-                )
-
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "Professor cadastrado com sucesso!")
-
-            self.accept()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao salvar professor:\n{str(e)}")
-
-    def excluir_professor(self):
-        """Exclui o professor atual"""
-        resposta = QMessageBox.question(
-            self, "Confirmar exclusÃ£o",
-            "Tem certeza que deseja excluir este professor?\n\n"
-            "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
+    def editar_nota_aluno(self, event):
+        """Abre janela para editar notas de um aluno"""
+        item = self.tree_notas.selection()[0]
+        valores = self.tree_notas.item(item, 'values')
+
+        aluno_id = int(valores[0])
+        aluno_nome = valores[1]
+
+        # Criar janela de edição
+        edit_window = tk.Toplevel(self.root)
+        edit_window.title(f"Editar Notas - {aluno_nome}")
+        edit_window.geometry("400x300")
+        edit_window.configure(bg='white')
+        edit_window.transient(self.root)
+        edit_window.grab_set()
+        self.center_dialog(edit_window)
+
+        # Header
+        header_frame = tk.Frame(edit_window, bg='#0046AD', height=60)
+        header_frame.pack(fill=tk.X)
+        header_frame.pack_propagate(False)
+
+        tk.Label(header_frame, text=f"Editar Notas: {aluno_nome}",
+                 font=('Arial', 14, 'bold'), bg='#0046AD', fg='white').pack(expand=True)
+
+        # Formulário
+        form_frame = tk.Frame(edit_window, bg='white', padx=20, pady=20)
+        form_frame.pack(fill=tk.BOTH, expand=True)
+
+        dados_aluno = self.entries_notas[aluno_id]
+
+        campos = [
+            ("Nota 1:", dados_aluno['nota1']),
+            ("Nota 2:", dados_aluno['nota2']),
+            ("Nota 3:", dados_aluno['nota3']),
+            ("Nota 4:", dados_aluno['nota4']),
+        ]
+
+        entries = {}
+        for i, (label, valor) in enumerate(campos):
+            tk.Label(form_frame, text=label, font=('Arial', 11, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=i, column=0, sticky='w', pady=10)
+
+            entry = tk.Entry(form_frame, width=10, font=('Arial', 11), justify='center')
+            entry.insert(0, str(valor) if valor else "0.0")
+            entry.grid(row=i, column=1, pady=10, padx=10)
+            entries[label] = entry
+
+        # Média atual
+        tk.Label(form_frame, text="Média Atual:", font=('Arial', 11, 'bold'),
+                 bg='white', fg='#0046AD').grid(row=4, column=0, sticky='w', pady=10)
+
+        media_label = tk.Label(form_frame, text=f"{dados_aluno['media']:.1f}",
+                               font=('Arial', 11, 'bold'), bg='white', fg='#0046AD')
+        media_label.grid(row=4, column=1, pady=10, padx=10)
+
+        def calcular_e_salvar():
             try:
-                self.db.execute_query(
-                    "DELETE FROM professores WHERE id = ?",
-                    (self.id_professor,)
-                )
+                # Coletar notas
+                notas = []
+                for label in ["Nota 1:", "Nota 2:", "Nota 3:", "Nota 4:"]:
+                    valor = entries[label].get().replace(',', '.')
+                    nota = float(valor) if valor else 0.0
+                    notas.append(nota)
 
-                QMessageBox.information(self, "Sucesso", "Professor excluÃ­do com sucesso!")
-                self.accept()
+                # Calcular média
+                media = sum(notas) / len(notas)
+                media_label.config(text=f"{media:.1f}")
 
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao excluir professor:\n{str(e)}")
+                # Determinar situação
+                situacao = 'Aprovado' if media >= 6.0 else 'Recuperação' if media >= 4.0 else 'Reprovado'
 
+                # Atualizar dados
+                dados_aluno.update({
+                    'nota1': notas[0],
+                    'nota2': notas[1],
+                    'nota3': notas[2],
+                    'nota4': notas[3],
+                    'media': media,
+                    'situacao': situacao
+                })
 
-# ============================================
-# DIÃLOGO DE DETALHES DO PROFESSOR
-# ============================================
+                # Atualizar tabela
+                novos_valores = (aluno_id, aluno_nome,
+                                 f"{notas[0]:.1f}", f"{notas[1]:.1f}",
+                                 f"{notas[2]:.1f}", f"{notas[3]:.1f}",
+                                 f"{media:.1f}", situacao, "Editar")
+                self.tree_notas.item(item, values=novos_valores)
 
-class DetalhesProfessorDialog(QDialog):
-    """DiÃ¡logo para exibir detalhes completos do professor"""
+                messagebox.showinfo("Sucesso", "Notas atualizadas com sucesso!")
+                edit_window.destroy()
 
-    def __init__(self, parent=None, id_professor=None):
-        super().__init__(parent)
-        self.id_professor = id_professor
-        self.db = DatabaseManager()
+            except ValueError:
+                messagebox.showerror("Erro", "Por favor, insira valores numéricos válidos!")
 
-        self.setWindowTitle("Detalhes do Professor")
-        self.setFixedSize(900, 700)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
+        # Botões
+        btn_frame = tk.Frame(edit_window, bg='white')
+        btn_frame.pack(pady=20)
 
-        self.init_ui()
-        self.carregar_detalhes_professor()
+        ModernButton(btn_frame, text="Calcular Média",
+                     command=calcular_e_salvar,
+                     color='#0046AD').pack(side=tk.LEFT, padx=10)
 
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+        ModernButton(btn_frame, text="Cancelar",
+                     command=edit_window.destroy,
+                     color='#666666').pack(side=tk.LEFT, padx=10)
 
-        # CabeÃ§alho com nome do professor
-        self.lbl_nome_professor = QLabel()
-        self.lbl_nome_professor.setObjectName("title")
-        self.lbl_nome_professor.setStyleSheet("""
-            QLabel#title {
-                font-size: 22px;
-                font-weight: 700;
-                color: #2c3e50;
-                text-align: center;
-                padding: 15px;
-                background-color: #e8f6f3;
-                border-radius: 8px;
-                border: 2px solid #27ae60;
-            }
-        """)
+    def salvar_todas_notas(self):
+        """Salva todas as notas no banco de dados"""
+        turma_nome = self.turma_notas.get()
+        disciplina_nome = self.disciplina_notas.get()
+        bimestre = self.bimestre_notas.get()
+        ano_letivo = self.ano_letivo_notas.get()
 
-        # Abas para diferentes informaÃ§Ãµes
-        tab_widget = QTabWidget()
+        if not all([turma_nome, disciplina_nome, bimestre, ano_letivo]):
+            messagebox.showwarning("Aviso", "Selecione turma, disciplina, bimestre e ano letivo!")
+            return
 
-        # Aba: InformaÃ§Ãµes Pessoais
-        aba_info = QWidget()
-        self.layout_info = QFormLayout(aba_info)
-        self.layout_info.setContentsMargins(20, 20, 20, 20)
-        self.layout_info.setSpacing(10)
-
-        # Aba: Disciplinas Ministradas
-        aba_disciplinas = QWidget()
-        layout_disciplinas = QVBoxLayout(aba_disciplinas)
-
-        self.tabela_disciplinas = QTableWidget()
-        self.tabela_disciplinas.setColumnCount(5)
-        self.tabela_disciplinas.setHorizontalHeaderLabels([
-            "CÃ³digo", "Disciplina", "SÃ©rie", "Carga HorÃ¡ria", "Status"
-        ])
-
-        layout_disciplinas.addWidget(QLabel("Disciplinas Ministradas:"))
-        layout_disciplinas.addWidget(self.tabela_disciplinas)
-
-        # Aba: HorÃ¡rios
-        aba_horarios = QWidget()
-        layout_horarios = QVBoxLayout(aba_horarios)
-
-        self.tabela_horarios = QTableWidget()
-        self.tabela_horarios.setColumnCount(6)
-        self.tabela_horarios.setHorizontalHeaderLabels([
-            "Dia", "HorÃ¡rio", "Disciplina", "Turma", "Sala", "Status"
-        ])
-
-        layout_horarios.addWidget(QLabel("HorÃ¡rios de Aula:"))
-        layout_horarios.addWidget(self.tabela_horarios)
-
-        # Adicionar abas
-        tab_widget.addTab(aba_info, "InformaÃ§Ãµes")
-        tab_widget.addTab(aba_disciplinas, "Disciplinas")
-        tab_widget.addTab(aba_horarios, "HorÃ¡rios")
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_fechar = AnimacaoBotao("FECHAR", cor_normal="#7f8c8d", cor_hover="#95a5a6", cor_press="#5d6d7e")
-        btn_fechar.clicked.connect(self.close)
-
-        btn_editar = AnimacaoBotao("EDITAR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_editar.clicked.connect(self.editar_professor)
-
-        botoes_layout.addWidget(btn_editar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(self.lbl_nome_professor)
-        layout.addWidget(tab_widget)
-        layout.addLayout(botoes_layout)
-
-    def carregar_detalhes_professor(self):
-        """Carrega detalhes completos do professor"""
         try:
-            # Carregar informaÃ§Ãµes bÃ¡sicas
-            professor = self.db.execute_query(
-                "SELECT * FROM professores WHERE id = ?",
-                (self.id_professor,),
-                fetch=True
-            )
+            # Buscar IDs
+            self.cursor.execute("SELECT id FROM turmas WHERE nome = ?", (turma_nome,))
+            turma_id = self.cursor.fetchone()[0]
 
-            if professor and len(professor) > 0:
-                dados = professor[0]
+            self.cursor.execute("SELECT id FROM disciplinas WHERE nome = ? AND turma_id = ?",
+                                (disciplina_nome, turma_id))
+            disciplina_id = self.cursor.fetchone()[0]
 
-                # Atualizar tÃ­tulo
-                self.lbl_nome_professor.setText(dados[1])
+            # Obter professor da disciplina
+            self.cursor.execute("SELECT professor_id FROM disciplinas WHERE id = ?", (disciplina_id,))
+            professor_id = self.cursor.fetchone()[0]
 
-                # Adicionar informaÃ§Ãµes pessoais
-                self.adicionar_info("CPF:", ValidadorCampos.formatar_cpf(dados[2]) if dados[2] else "NÃ£o informado")
-                self.adicionar_info("Telefone:",
-                                    ValidadorCampos.formatar_telefone(dados[3]) if dados[3] else "NÃ£o informado")
-                self.adicionar_info("Email:", dados[4] if dados[4] else "NÃ£o informado")
-                self.adicionar_info("MatÃ©ria Principal:", dados[5] if dados[5] else "NÃ£o informado")
-                self.adicionar_info("FormaÃ§Ã£o:", dados[6] if dados[6] else "NÃ£o informado")
+            total_salvas = 0
+            for aluno_id, dados in self.entries_notas.items():
+                # Verificar se já existe registro
+                self.cursor.execute('''
+                    SELECT id FROM notas 
+                    WHERE aluno_id = ? AND disciplina_id = ? AND bimestre = ? AND ano_letivo = ?
+                ''', (aluno_id, disciplina_id, bimestre, ano_letivo))
 
-                if dados[7]:  # Data contrataÃ§Ã£o
-                    data_contr = datetime.strptime(dados[7], '%Y-%m-%d').strftime('%d/%m/%Y')
-                    tempo_servico = self.calcular_tempo_servico(dados[7])
-                    self.adicionar_info("Data ContrataÃ§Ã£o:", f"{data_contr} ({tempo_servico})")
+                existe = self.cursor.fetchone()
+
+                if existe:
+                    # Atualizar
+                    self.cursor.execute('''
+                        UPDATE notas SET nota1=?, nota2=?, nota3=?, nota4=?, media=?, situacao=?
+                        WHERE aluno_id=? AND disciplina_id=? AND bimestre=? AND ano_letivo=?
+                    ''', (dados['nota1'], dados['nota2'], dados['nota3'], dados['nota4'],
+                          dados['media'], dados['situacao'], aluno_id, disciplina_id, bimestre, ano_letivo))
                 else:
-                    self.adicionar_info("Data ContrataÃ§Ã£o:", "NÃ£o informada")
+                    # Inserir novo
+                    self.cursor.execute('''
+                        INSERT INTO notas (aluno_id, disciplina_id, nota1, nota2, nota3, nota4,
+                                         media, situacao, bimestre, ano_letivo, professor_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (aluno_id, disciplina_id, dados['nota1'], dados['nota2'], dados['nota3'],
+                          dados['nota4'], dados['media'], dados['situacao'], bimestre, ano_letivo, professor_id))
 
-                if dados[8]:  # SalÃ¡rio
-                    salario_formatado = f"R$ {float(dados[8]):,.2f}".replace(',', 'X').replace('.', ',').replace('X',
-                                                                                                                 '.')
-                    self.adicionar_info("SalÃ¡rio:", salario_formatado)
-                else:
-                    self.adicionar_info("SalÃ¡rio:", "NÃ£o informado")
+                total_salvas += 1
 
-                self.adicionar_info("EndereÃ§o:", dados[9] if dados[9] else "NÃ£o informado")
-                self.adicionar_info("ObservaÃ§Ãµes:", dados[10] if dados[10] else "Nenhuma")
+            self.conn.commit()
 
-                status = "Ativo" if dados[11] == 1 else "Inativo"
-                status_cor = "#27ae60" if dados[11] == 1 else "#e74c3c"
-                self.adicionar_info_colorido("Status:", status, status_cor)
+            # Registrar log
+            self.registrar_log('ATUALIZACAO', 'Notas',
+                               f'Salvou {total_salvas} notas - {disciplina_nome} - {turma_nome}')
 
-                # Carregar disciplinas
-                self.carregar_disciplinas_professor()
-
-                # Carregar horÃ¡rios
-                self.carregar_horarios_professor()
+            messagebox.showinfo("Sucesso", f"{total_salvas} notas salvas com sucesso!")
 
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar detalhes do professor:\n{str(e)}")
-
-    def adicionar_info(self, label, valor):
-        """Adiciona uma linha de informaÃ§Ã£o ao formulÃ¡rio"""
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet("color: #34495e;")
-
-        self.layout_info.addRow(lbl_label, lbl_valor)
-
-    def adicionar_info_colorido(self, label, valor, cor):
-        """Adiciona uma linha de informaÃ§Ã£o com cor especÃ­fica"""
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet(f"color: {cor}; font-weight: 600;")
-
-        self.layout_info.addRow(lbl_label, lbl_valor)
-
-    def calcular_tempo_servico(self, data_contratacao):
-        """Calcula tempo de serviÃ§o a partir da data de contrataÃ§Ã£o"""
-        try:
-            contrato = datetime.strptime(data_contratacao, '%Y-%m-%d')
-            hoje = datetime.now()
-
-            anos = hoje.year - contrato.year
-            meses = hoje.month - contrato.month
-
-            if meses < 0:
-                anos -= 1
-                meses += 12
-
-            if anos > 0:
-                return f"{anos} ano{'s' if anos > 1 else ''}"
-            else:
-                return f"{meses} mes{'es' if meses > 1 else ''}"
-        except:
-            return "NÃ£o calculado"
-
-    def carregar_disciplinas_professor(self):
-        """Carrega disciplinas ministradas pelo professor"""
-        try:
-            disciplinas = self.db.execute_query('''
-                SELECT codigo, nome, serie, carga_horaria, ativa
-                FROM disciplinas
-                WHERE professor_id = ?
-                ORDER BY serie, nome
-            ''', (self.id_professor,), fetch=True)
-
-            self.tabela_disciplinas.setRowCount(len(disciplinas))
-
-            for row, (codigo, nome, serie, carga_horaria, ativa) in enumerate(disciplinas):
-                self.tabela_disciplinas.setItem(row, 0, QTableWidgetItem(codigo if codigo else "-"))
-                self.tabela_disciplinas.setItem(row, 1, QTableWidgetItem(nome))
-                self.tabela_disciplinas.setItem(row, 2, QTableWidgetItem(serie if serie else "Geral"))
-
-                item_carga = QTableWidgetItem(str(carga_horaria) if carga_horaria else "-")
-                self.tabela_disciplinas.setItem(row, 3, item_carga)
-
-                status = "Ativa" if ativa == 1 else "Inativa"
-                item_status = QTableWidgetItem(status)
-
-                if ativa == 1:
-                    item_status.setForeground(QColor('#27ae60'))
-                    item_status.setFont(QFont('', weight=QFont.Bold))
-                else:
-                    item_status.setForeground(QColor('#e74c3c'))
-
-                self.tabela_disciplinas.setItem(row, 4, item_status)
-
-        except Exception as e:
-            print(f"Erro ao carregar disciplinas: {e}")
-
-    def carregar_horarios_professor(self):
-        """Carrega horÃ¡rios do professor"""
-        try:
-            horarios = self.db.execute_query('''
-                SELECT h.dia_semana, h.hora_inicio, h.hora_fim, 
-                       d.nome, t.nome, h.sala, h.ativo
-                FROM horarios h
-                JOIN disciplinas d ON h.disciplina_id = d.id
-                JOIN turmas t ON h.turma_id = t.id
-                WHERE h.professor_id = ?
-                ORDER BY 
-                    CASE h.dia_semana
-                        WHEN 'Segunda' THEN 1
-                        WHEN 'TerÃ§a' THEN 2
-                        WHEN 'Quarta' THEN 3
-                        WHEN 'Quinta' THEN 4
-                        WHEN 'Sexta' THEN 5
-                        WHEN 'SÃ¡bado' THEN 6
-                        ELSE 7
-                    END,
-                    h.hora_inicio
-            ''', (self.id_professor,), fetch=True)
-
-            self.tabela_horarios.setRowCount(len(horarios))
-
-            for row, (dia, inicio, fim, disciplina, turma, sala, ativo) in enumerate(horarios):
-                self.tabela_horarios.setItem(row, 0, QTableWidgetItem(dia))
-
-                # Formatar horÃ¡rio
-                horario_formatado = f"{inicio} - {fim}" if inicio and fim else "NÃ£o definido"
-                self.tabela_horarios.setItem(row, 1, QTableWidgetItem(horario_formatado))
-
-                self.tabela_horarios.setItem(row, 2, QTableWidgetItem(disciplina))
-                self.tabela_horarios.setItem(row, 3, QTableWidgetItem(turma))
-                self.tabela_horarios.setItem(row, 4, QTableWidgetItem(sala if sala else "-"))
-
-                status = "Ativo" if ativo == 1 else "Inativo"
-                item_status = QTableWidgetItem(status)
-
-                if ativo == 1:
-                    item_status.setForeground(QColor('#27ae60'))
-                else:
-                    item_status.setForeground(QColor('#e74c3c'))
-
-                self.tabela_horarios.setItem(row, 5, item_status)
-
-        except Exception as e:
-            print(f"Erro ao carregar horÃ¡rios: {e}")
-
-    def editar_professor(self):
-        """Abre diÃ¡logo para editar o professor"""
-        self.close()
-        # Em uma implementaÃ§Ã£o real, aqui abriria o diÃ¡logo de ediÃ§Ã£o
-
-
-# ============================================
-# DIÃLOGO DE HORÃRIOS DO PROFESSOR
-# ============================================
-
-class HorariosProfessorDialog(QDialog):
-    """DiÃ¡logo para visualizaÃ§Ã£o e gerenciamento de horÃ¡rios do professor"""
-
-    def __init__(self, parent=None, id_professor=None, nome_professor=""):
-        super().__init__(parent)
-        self.id_professor = id_professor
-        self.nome_professor = nome_professor
-        self.db = DatabaseManager()
-
-        self.setWindowTitle(f"HorÃ¡rios - {nome_professor}")
-        self.setFixedSize(1000, 700)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_horarios()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # CabeÃ§alho
-        cabecalho_layout = QHBoxLayout()
-
-        lbl_titulo = QLabel(f"HORÃRIOS DE AULA - {self.nome_professor.upper()}")
-        lbl_titulo.setObjectName("title")
-
-        # Filtros
-        filtros_layout = QHBoxLayout()
-
-        lbl_dia = QLabel("Dia da semana:")
-        self.combo_dia = QComboBox()
-        self.combo_dia.addItems(["Todos", "Segunda", "TerÃ§a", "Quarta", "Quinta", "Sexta", "SÃ¡bado"])
-        self.combo_dia.currentIndexChanged.connect(self.filtrar_horarios)
-
-        lbl_status = QLabel("Status:")
-        self.combo_status = QComboBox()
-        self.combo_status.addItems(["Todos", "Ativos", "Inativos"])
-        self.combo_status.currentIndexChanged.connect(self.filtrar_horarios)
-
-        filtros_layout.addWidget(lbl_dia)
-        filtros_layout.addWidget(self.combo_dia)
-        filtros_layout.addWidget(lbl_status)
-        filtros_layout.addWidget(self.combo_status)
-        filtros_layout.addStretch()
-
-        # BotÃµes de aÃ§Ã£o
-        btn_novo = AnimacaoBotao("Novo HorÃ¡rio", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_novo.clicked.connect(self.novo_horario)
-
-        btn_editar = AnimacaoBotao("Editar", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_editar.clicked.connect(self.editar_horario)
-
-        btn_excluir = AnimacaoBotao("Excluir", cor_normal="#e74c3c", cor_hover="#c0392b", cor_press="#a93226")
-        btn_excluir.clicked.connect(self.excluir_horario)
-
-        # Tabela de horÃ¡rios
-        self.tabela_horarios = QTableWidget()
-        self.tabela_horarios.setColumnCount(8)
-        self.tabela_horarios.setHorizontalHeaderLabels([
-            "ID", "Dia", "HorÃ¡rio", "Disciplina", "Turma", "Sala", "Status", "AÃ§Ãµes"
-        ])
-
-        # Configurar tabela
-        self.tabela_horarios.setAlternatingRowColors(True)
-        self.tabela_horarios.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabela_horarios.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabela_horarios.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Ocultar coluna ID
-        self.tabela_horarios.setColumnHidden(0, True)
-
-        # Ajustar largura das colunas
-        header = self.tabela_horarios.horizontalHeader()
-        header.setSectionResizeMode(3, QHeaderView.Stretch)  # Disciplina
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # AÃ§Ãµes
-
-        # Resumo
-        self.lbl_resumo = QLabel()
-        self.lbl_resumo.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #2c3e50;
-                font-weight: 600;
-                padding: 10px;
-                background-color: #f8f9fa;
-                border-radius: 6px;
-                border: 1px solid #dce1e6;
-            }
-        """)
-
-        # BotÃµes inferiores
-        botoes_layout = QHBoxLayout()
-
-        btn_imprimir = AnimacaoBotao("Imprimir Grade", cor_normal="#f39c12", cor_hover="#d68910", cor_press="#b9770e")
-        btn_imprimir.clicked.connect(self.imprimir_grade)
-
-        btn_fechar = QPushButton("FECHAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.clicked.connect(self.close)
-
-        botoes_layout.addWidget(btn_imprimir)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Montar layout
-        cabecalho_layout.addWidget(lbl_titulo)
-        cabecalho_layout.addStretch()
-        cabecalho_layout.addWidget(btn_novo)
-        cabecalho_layout.addWidget(btn_editar)
-        cabecalho_layout.addWidget(btn_excluir)
-
-        layout.addLayout(cabecalho_layout)
-        layout.addLayout(filtros_layout)
-        layout.addWidget(self.tabela_horarios)
-        layout.addWidget(self.lbl_resumo)
-        layout.addLayout(botoes_layout)
-
-    def carregar_horarios(self):
-        """Carrega todos os horÃ¡rios do professor"""
-        try:
-            self.horarios_completos = self.db.execute_query('''
-                SELECT h.id, h.dia_semana, h.hora_inicio, h.hora_fim, 
-                       d.nome as disciplina, t.nome as turma, 
-                       h.sala, h.ativo
-                FROM horarios h
-                JOIN disciplinas d ON h.disciplina_id = d.id
-                JOIN turmas t ON h.turma_id = t.id
-                WHERE h.professor_id = ?
-                ORDER BY 
-                    CASE h.dia_semana
-                        WHEN 'Segunda' THEN 1
-                        WHEN 'TerÃ§a' THEN 2
-                        WHEN 'Quarta' THEN 3
-                        WHEN 'Quinta' THEN 4
-                        WHEN 'Sexta' THEN 5
-                        WHEN 'SÃ¡bado' THEN 6
-                        ELSE 7
-                    END,
-                    h.hora_inicio
-            ''', (self.id_professor,), fetch=True)
-
-            self.aplicar_filtros()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar horÃ¡rios:\n{str(e)}")
-
-    def aplicar_filtros(self):
-        """Aplica filtros aos horÃ¡rios"""
-        if not self.horarios_completos:
-            self.tabela_horarios.setRowCount(0)
-            self.lbl_resumo.setText("Nenhum horÃ¡rio encontrado.")
-            return
-
-        # Filtrar por dia
-        dia_filtro = self.combo_dia.currentText()
-        status_filtro = self.combo_status.currentText()
-
-        horarios_filtrados = []
-
-        for horario in self.horarios_completos:
-            id_horario, dia, inicio, fim, disciplina, turma, sala, ativo = horario
-
-            # Aplicar filtro de dia
-            if dia_filtro != "Todos" and dia != dia_filtro:
-                continue
-
-            # Aplicar filtro de status
-            status_texto = "Ativo" if ativo == 1 else "Inativo"
-            if status_filtro == "Ativos" and ativo != 1:
-                continue
-            elif status_filtro == "Inativos" and ativo != 0:
-                continue
-
-            horarios_filtrados.append(horario)
-
-        # Atualizar tabela
-        self.tabela_horarios.setRowCount(len(horarios_filtrados))
-
-        for row, (id_horario, dia, inicio, fim, disciplina, turma, sala, ativo) in enumerate(horarios_filtrados):
-            # ID (oculto)
-            self.tabela_horarios.setItem(row, 0, QTableWidgetItem(str(id_horario)))
-
-            # Dia
-            self.tabela_horarios.setItem(row, 1, QTableWidgetItem(dia))
-
-            # HorÃ¡rio
-            horario_formatado = f"{inicio} - {fim}" if inicio and fim else "NÃ£o definido"
-            self.tabela_horarios.setItem(row, 2, QTableWidgetItem(horario_formatado))
-
-            # Disciplina
-            self.tabela_horarios.setItem(row, 3, QTableWidgetItem(disciplina))
-
-            # Turma
-            self.tabela_horarios.setItem(row, 4, QTableWidgetItem(turma))
-
-            # Sala
-            self.tabela_horarios.setItem(row, 5, QTableWidgetItem(sala if sala else "-"))
-
-            # Status
-            status = "Ativo" if ativo == 1 else "Inativo"
-            item_status = QTableWidgetItem(status)
-
-            if ativo == 1:
-                item_status.setForeground(QColor('#27ae60'))
-                item_status.setFont(QFont('', weight=QFont.Bold))
-            else:
-                item_status.setForeground(QColor('#e74c3c'))
-
-            self.tabela_horarios.setItem(row, 6, item_status)
-
-            # BotÃµes de aÃ§Ã£o
-            widget_acoes = QWidget()
-            layout_acoes = QHBoxLayout(widget_acoes)
-            layout_acoes.setContentsMargins(5, 2, 5, 2)
-            layout_acoes.setSpacing(5)
-
-            btn_ativar = QPushButton("Ativar" if ativo == 0 else "Desativar")
-            btn_ativar.setFixedSize(80, 25)
-            btn_ativar.setObjectName("warning" if ativo == 1 else "success")
-            btn_ativar.clicked.connect(lambda checked, id=id_horario: self.toggle_status_horario(id))
-
-            layout_acoes.addWidget(btn_ativar)
-            widget_acoes.setLayout(layout_acoes)
-
-            self.tabela_horarios.setCellWidget(row, 7, widget_acoes)
-
-        # Atualizar resumo
-        total = len(horarios_filtrados)
-        ativos = sum(1 for h in horarios_filtrados if h[7] == 1)
-        horas_semana = self.calcular_horas_semana(horarios_filtrados)
-
-        self.lbl_resumo.setText(
-            f"Total de horÃ¡rios: {total} | "
-            f"Ativos: {ativos} | "
-            f"Inativos: {total - ativos} | "
-            f"Carga horÃ¡ria semanal: {horas_semana} horas"
-        )
-
-    def filtrar_horarios(self):
-        """Aplica filtros quando selecionados"""
-        self.aplicar_filtros()
-
-    def calcular_horas_semana(self, horarios):
-        """Calcula a carga horÃ¡ria semanal total"""
-        total_minutos = 0
-
-        for horario in horarios:
-            inicio = horario[2]  # hora_inicio
-            fim = horario[3]  # hora_fim
-
-            if inicio and fim:
-                try:
-                    # Converter strings HH:MM para minutos
-                    h1, m1 = map(int, inicio.split(':'))
-                    h2, m2 = map(int, fim.split(':'))
-
-                    minutos = (h2 * 60 + m2) - (h1 * 60 + m1)
-                    if minutos > 0:
-                        total_minutos += minutos
-                except:
-                    continue
-
-        horas = total_minutos // 60
-        minutos = total_minutos % 60
-
-        return f"{horas}:{minutos:02d}"
-
-    def novo_horario(self):
-        """Abre diÃ¡logo para criar novo horÃ¡rio"""
-        dialog = CadastroHorarioDialog(self, self.id_professor)
-        if dialog.exec_():
-            self.carregar_horarios()
-
-    def editar_horario(self):
-        """Abre diÃ¡logo para editar horÃ¡rio selecionado"""
-        selecionados = self.tabela_horarios.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione um horÃ¡rio para editar.")
-            return
-
-        id_horario = int(self.tabela_horarios.item(selecionados[0].row(), 0).text())
-
-        dialog = CadastroHorarioDialog(self, self.id_professor, id_horario)
-        if dialog.exec_():
-            self.carregar_horarios()
-
-    def excluir_horario(self):
-        """Exclui horÃ¡rio selecionado"""
-        selecionados = self.tabela_horarios.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione um horÃ¡rio para excluir.")
-            return
-
-        id_horario = int(self.tabela_horarios.item(selecionados[0].row(), 0).text())
-
-        resposta = QMessageBox.question(
-            self, "Confirmar exclusÃ£o",
-            "Tem certeza que deseja excluir este horÃ¡rio?\n\n"
-            "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            try:
-                self.db.execute_query(
-                    "DELETE FROM horarios WHERE id = ?",
-                    (id_horario,)
-                )
-
-                QMessageBox.information(self, "Sucesso", "HorÃ¡rio excluÃ­do com sucesso!")
-                self.carregar_horarios()
-
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao excluir horÃ¡rio:\n{str(e)}")
-
-    def toggle_status_horario(self, id_horario):
-        """Alterna status do horÃ¡rio (ativo/inativo)"""
-        try:
-            # Obter status atual
-            resultado = self.db.execute_query(
-                "SELECT ativo FROM horarios WHERE id = ?",
-                (id_horario,),
-                fetch=True
-            )
-
-            if resultado:
-                novo_status = 0 if resultado[0][0] == 1 else 1
-
-                self.db.execute_query(
-                    "UPDATE horarios SET ativo = ? WHERE id = ?",
-                    (novo_status, id_horario)
-                )
-
-                status_text = "ativado" if novo_status == 1 else "desativado"
-                QMessageBox.information(self, "Sucesso", f"HorÃ¡rio {status_text} com sucesso!")
-                self.carregar_horarios()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao alterar status do horÃ¡rio:\n{str(e)}")
-
-    def imprimir_grade(self):
-        """Imprime grade de horÃ¡rios do professor"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A impressÃ£o da grade de horÃ¡rios serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-
-"""
-PROJETO ESCOLA - SISTEMA DE GESTÃƒO ESCOLAR
-Parte 3/10 - ContinuaÃ§Ã£o: Disciplinas, Turmas e Cadastro de HorÃ¡rios
-"""
-
-
-# ============================================
-# DIÃLOGO DE CADASTRO DE HORÃRIO
-# ============================================
-
-class CadastroHorarioDialog(QDialog):
-    """DiÃ¡logo para cadastro/ediÃ§Ã£o de horÃ¡rios"""
-
-    def __init__(self, parent=None, id_professor=None, id_horario=None):
-        super().__init__(parent)
-        self.id_professor = id_professor
-        self.id_horario = id_horario
-        self.db = DatabaseManager()
-        self.modo_edicao = id_horario is not None
-
-        self.setWindowTitle("Cadastrar HorÃ¡rio" if not self.modo_edicao else "Editar HorÃ¡rio")
-        self.setFixedSize(600, 500)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_disciplinas()
-        self.carregar_turmas()
-        self.carregar_dados_horario() if self.modo_edicao else None
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        titulo = "CADASTRAR NOVO HORÃRIO" if not self.modo_edicao else "EDITAR HORÃRIO"
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setObjectName("title")
-
-        # FormulÃ¡rio
-        form_layout = QFormLayout()
-        form_layout.setContentsMargins(10, 10, 10, 10)
-        form_layout.setSpacing(15)
-        form_layout.setLabelAlignment(Qt.AlignRight)
-
-        # Dia da semana
-        self.combo_dia = QComboBox()
-        self.combo_dia.addItems(["Segunda", "TerÃ§a", "Quarta", "Quinta", "Sexta", "SÃ¡bado"])
-
-        # HorÃ¡rio de inÃ­cio
-        self.time_inicio = QTimeEdit()
-        self.time_inicio.setDisplayFormat("HH:mm")
-        self.time_inicio.setTime(QTime(7, 0))  # 07:00 padrÃ£o
-
-        # HorÃ¡rio de fim
-        self.time_fim = QTimeEdit()
-        self.time_fim.setDisplayFormat("HH:mm")
-        self.time_fim.setTime(QTime(8, 0))  # 08:00 padrÃ£o
-
-        # Disciplina
-        self.combo_disciplina = QComboBox()
-
-        # Turma
-        self.combo_turma = QComboBox()
-
-        # Sala
-        self.txt_sala = QLineEdit()
-        self.txt_sala.setPlaceholderText("Ex: Sala 101, LaboratÃ³rio 2")
-
-        # Status
-        self.combo_status = QComboBox()
-        self.combo_status.addItems(["Ativo", "Inativo"])
-
-        # Adicionar campos ao formulÃ¡rio
-        form_layout.addRow("Dia da semana:", self.combo_dia)
-
-        horario_layout = QHBoxLayout()
-        horario_layout.addWidget(self.time_inicio)
-        horario_layout.addWidget(QLabel("atÃ©"))
-        horario_layout.addWidget(self.time_fim)
-        form_layout.addRow("HorÃ¡rio:", horario_layout)
-
-        form_layout.addRow("Disciplina:", self.combo_disciplina)
-        form_layout.addRow("Turma:", self.combo_turma)
-        form_layout.addRow("Sala:", self.txt_sala)
-        form_layout.addRow("Status:", self.combo_status)
-
-        # ValidaÃ§Ã£o de horÃ¡rio
-        self.lbl_validacao = QLabel()
-        self.lbl_validacao.setStyleSheet("color: #e74c3c; font-weight: 600;")
-        self.lbl_validacao.setVisible(False)
-
-        # Conectar validaÃ§Ã£o de horÃ¡rio
-        self.time_inicio.timeChanged.connect(self.validar_horario)
-        self.time_fim.timeChanged.connect(self.validar_horario)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        self.btn_salvar = AnimacaoBotao(
-            "SALVAR" if not self.modo_edicao else "ATUALIZAR",
-            cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b"
-        )
-        self.btn_salvar.setMinimumHeight(45)
-        self.btn_salvar.clicked.connect(self.salvar_horario)
-
-        self.btn_cancelar = QPushButton("CANCELAR")
-        self.btn_cancelar.setObjectName("danger")
-        self.btn_cancelar.setMinimumHeight(45)
-        self.btn_cancelar.clicked.connect(self.reject)
-
-        if self.modo_edicao:
-            self.btn_excluir = QPushButton("EXCLUIR")
-            self.btn_excluir.setObjectName("warning")
-            self.btn_excluir.setMinimumHeight(45)
-            self.btn_excluir.clicked.connect(self.excluir_horario)
-            botoes_layout.addWidget(self.btn_excluir)
-
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(self.btn_salvar)
-        botoes_layout.addWidget(self.btn_cancelar)
-
-        # Adicionar tudo ao layout principal
-        layout.addWidget(lbl_titulo)
-        layout.addLayout(form_layout)
-        layout.addWidget(self.lbl_validacao)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def carregar_disciplinas(self):
-        """Carrega disciplinas do professor no combobox"""
-        try:
-            disciplinas = self.db.execute_query('''
-                SELECT id, nome, serie 
-                FROM disciplinas 
-                WHERE professor_id = ? AND ativa = 1
-                ORDER BY nome
-            ''', (self.id_professor,), fetch=True)
-
-            self.combo_disciplina.clear()
-
-            for id_disciplina, nome, serie in disciplinas:
-                texto = f"{nome} ({serie})" if serie else nome
-                self.combo_disciplina.addItem(texto, id_disciplina)
-
-            if self.combo_disciplina.count() == 0:
-                self.combo_disciplina.addItem("Nenhuma disciplina disponÃ­vel", -1)
-                self.combo_disciplina.setEnabled(False)
-
-        except Exception as e:
-            print(f"Erro ao carregar disciplinas: {e}")
-
-    def carregar_turmas(self):
-        """Carrega turmas disponÃ­veis no combobox"""
-        try:
-            turmas = self.db.execute_query('''
-                SELECT id, nome, serie 
-                FROM turmas 
-                WHERE ativa = 1
-                ORDER BY serie, nome
-            ''', fetch=True)
-
-            self.combo_turma.clear()
-
-            for id_turma, nome, serie in turmas:
-                texto = f"{nome} - {serie}" if serie else nome
-                self.combo_turma.addItem(texto, id_turma)
-
-            if self.combo_turma.count() == 0:
-                self.combo_turma.addItem("Nenhuma turma disponÃ­vel", -1)
-                self.combo_turma.setEnabled(False)
-
-        except Exception as e:
-            print(f"Erro ao carregar turmas: {e}")
-
-    def carregar_dados_horario(self):
-        """Carrega dados do horÃ¡rio para ediÃ§Ã£o"""
-        try:
-            horario = self.db.execute_query('''
-                SELECT dia_semana, hora_inicio, hora_fim, 
-                       disciplina_id, turma_id, sala, ativo
-                FROM horarios 
-                WHERE id = ?
-            ''', (self.id_horario,), fetch=True)
-
-            if horario and len(horario) > 0:
-                dados = horario[0]
-
-                # Dia da semana
-                index = self.combo_dia.findText(dados[0])
-                if index >= 0:
-                    self.combo_dia.setCurrentIndex(index)
-
-                # HorÃ¡rios
-                if dados[1]:  # hora_inicio
-                    try:
-                        horas, minutos = map(int, dados[1].split(':'))
-                        self.time_inicio.setTime(QTime(horas, minutos))
-                    except:
-                        pass
-
-                if dados[2]:  # hora_fim
-                    try:
-                        horas, minutos = map(int, dados[2].split(':'))
-                        self.time_fim.setTime(QTime(horas, minutos))
-                    except:
-                        pass
-
-                # Disciplina
-                for i in range(self.combo_disciplina.count()):
-                    if self.combo_disciplina.itemData(i) == dados[3]:
-                        self.combo_disciplina.setCurrentIndex(i)
-                        break
-
-                # Turma
-                for i in range(self.combo_turma.count()):
-                    if self.combo_turma.itemData(i) == dados[4]:
-                        self.combo_turma.setCurrentIndex(i)
-                        break
-
-                # Sala
-                self.txt_sala.setText(dados[5] if dados[5] else "")
-
-                # Status
-                self.combo_status.setCurrentIndex(0 if dados[6] == 1 else 1)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar dados do horÃ¡rio:\n{str(e)}")
-
-    def validar_horario(self):
-        """Valida se o horÃ¡rio Ã© vÃ¡lido (inÃ­cio < fim)"""
-        inicio = self.time_inicio.time()
-        fim = self.time_fim.time()
-
-        if inicio >= fim:
-            self.lbl_validacao.setText("ERRO: HorÃ¡rio de inÃ­cio deve ser anterior ao horÃ¡rio de fim.")
-            self.lbl_validacao.setVisible(True)
-            self.btn_salvar.setEnabled(False)
-        else:
-            self.lbl_validacao.setVisible(False)
-            self.btn_salvar.setEnabled(True)
-
-    def validar_campos(self):
-        """Valida os campos do formulÃ¡rio"""
-        erros = []
-
-        # Verificar disciplina selecionada
-        if self.combo_disciplina.currentData() == -1:
-            erros.append("Nenhuma disciplina disponÃ­vel para este professor.")
-
-        # Verificar turma selecionada
-        if self.combo_turma.currentData() == -1:
-            erros.append("Nenhuma turma disponÃ­vel.")
-
-        # Verificar conflito de horÃ¡rio
-        if not self.verificar_conflito_horario():
-            erros.append("Conflito de horÃ¡rio: JÃ¡ existe um horÃ¡rio para esta turma/disciplina no mesmo perÃ­odo.")
-
-        return erros
-
-    def verificar_conflito_horario(self):
-        """Verifica se hÃ¡ conflito com outros horÃ¡rios"""
-        try:
-            dia = self.combo_dia.currentText()
-            inicio = self.time_inicio.time().toString("HH:mm")
-            fim = self.time_fim.time().toString("HH:mm")
-            turma_id = self.combo_turma.currentData()
-            disciplina_id = self.combo_disciplina.currentData()
-
-            # Query para verificar conflitos
-            query = '''
-                SELECT COUNT(*) 
-                FROM horarios 
-                WHERE dia_semana = ? 
-                  AND turma_id = ? 
-                  AND (
-                    (hora_inicio <= ? AND hora_fim > ?) OR
-                    (hora_inicio < ? AND hora_fim >= ?) OR
-                    (hora_inicio >= ? AND hora_fim <= ?)
-                  )
-                  AND ativo = 1
-            '''
-
-            # Para ediÃ§Ã£o, excluir o prÃ³prio horÃ¡rio
-            if self.modo_edicao:
-                query += " AND id != ?"
-                params = (dia, turma_id, inicio, inicio, fim, fim, inicio, fim, self.id_horario)
-            else:
-                params = (dia, turma_id, inicio, inicio, fim, fim, inicio, fim)
-
-            resultado = self.db.execute_query(query, params, fetch=True)
-
-            if resultado and resultado[0][0] > 0:
-                return False
-
-            # Verificar conflito para o professor
-            query_professor = '''
-                SELECT COUNT(*) 
-                FROM horarios 
-                WHERE dia_semana = ? 
-                  AND professor_id = ? 
-                  AND (
-                    (hora_inicio <= ? AND hora_fim > ?) OR
-                    (hora_inicio < ? AND hora_fim >= ?) OR
-                    (hora_inicio >= ? AND hora_fim <= ?)
-                  )
-                  AND ativo = 1
-            '''
-
-            if self.modo_edicao:
-                query_professor += " AND id != ?"
-                params_prof = (dia, self.id_professor, inicio, inicio, fim, fim, inicio, fim, self.id_horario)
-            else:
-                params_prof = (dia, self.id_professor, inicio, inicio, fim, fim, inicio, fim)
-
-            resultado_prof = self.db.execute_query(query_professor, params_prof, fetch=True)
-
-            if resultado_prof and resultado_prof[0][0] > 0:
-                return False
-
-            return True
-
-        except Exception as e:
-            print(f"Erro ao verificar conflito: {e}")
-            return True  # Em caso de erro, permite continuar
-
-    def salvar_horario(self):
-        """Salva ou atualiza o horÃ¡rio no banco de dados"""
-        # Validar campos
-        erros = self.validar_campos()
-        if erros:
-            QMessageBox.warning(self, "Erros no formulÃ¡rio", "\n".join(erros))
-            return
-
-        # Validar horÃ¡rio
-        if self.time_inicio.time() >= self.time_fim.time():
-            QMessageBox.warning(self, "HorÃ¡rio invÃ¡lido",
-                                "HorÃ¡rio de inÃ­cio deve ser anterior ao horÃ¡rio de fim.")
-            return
-
-        # Preparar dados
-        dados = {
-            'dia_semana': self.combo_dia.currentText(),
-            'hora_inicio': self.time_inicio.time().toString("HH:mm"),
-            'hora_fim': self.time_fim.time().toString("HH:mm"),
-            'disciplina_id': self.combo_disciplina.currentData(),
-            'turma_id': self.combo_turma.currentData(),
-            'professor_id': self.id_professor,
-            'sala': self.txt_sala.text().strip(),
-            'ativo': 1 if self.combo_status.currentText() == "Ativo" else 0
-        }
-
-        try:
-            if self.modo_edicao:
-                # Atualizar horÃ¡rio existente
-                query = '''
-                    UPDATE horarios SET
-                        dia_semana = ?, hora_inicio = ?, hora_fim = ?,
-                        disciplina_id = ?, turma_id = ?, professor_id = ?,
-                        sala = ?, ativo = ?
-                    WHERE id = ?
-                '''
-
-                params = (
-                    dados['dia_semana'], dados['hora_inicio'], dados['hora_fim'],
-                    dados['disciplina_id'], dados['turma_id'], dados['professor_id'],
-                    dados['sala'], dados['ativo'], self.id_horario
-                )
-
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "HorÃ¡rio atualizado com sucesso!")
-
-            else:
-                # Inserir novo horÃ¡rio
-                query = '''
-                    INSERT INTO horarios (
-                        dia_semana, hora_inicio, hora_fim,
-                        disciplina_id, turma_id, professor_id,
-                        sala, ativo
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                '''
-
-                params = (
-                    dados['dia_semana'], dados['hora_inicio'], dados['hora_fim'],
-                    dados['disciplina_id'], dados['turma_id'], dados['professor_id'],
-                    dados['sala'], dados['ativo']
-                )
-
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "HorÃ¡rio cadastrado com sucesso!")
-
-            self.accept()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao salvar horÃ¡rio:\n{str(e)}")
-
-    def excluir_horario(self):
-        """Exclui o horÃ¡rio atual"""
-        resposta = QMessageBox.question(
-            self, "Confirmar exclusÃ£o",
-            "Tem certeza que deseja excluir este horÃ¡rio?\n\n"
-            "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            try:
-                self.db.execute_query(
-                    "DELETE FROM horarios WHERE id = ?",
-                    (self.id_horario,)
-                )
-
-                QMessageBox.information(self, "Sucesso", "HorÃ¡rio excluÃ­do com sucesso!")
-                self.accept()
-
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao excluir horÃ¡rio:\n{str(e)}")
-
-    # ============================================
-    # PÃGINA DE DISCIPLINAS (COMPLETA)
-    # ============================================
-
-    def criar_pagina_disciplinas(self):
-        """Cria a pÃ¡gina de gerenciamento de disciplinas - COMPLETA"""
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # CabeÃ§alho
-        cabecalho_layout = QHBoxLayout()
-
-        lbl_titulo = QLabel("GESTÃƒO DE DISCIPLINAS")
-        lbl_titulo.setObjectName("title")
-
-        # Barra de busca
-        self.txt_busca_disciplina = QLineEdit()
-        self.txt_busca_disciplina.setPlaceholderText("Buscar disciplina por nome, cÃ³digo ou sÃ©rie...")
-        self.txt_busca_disciplina.setMinimumHeight(40)
-        self.txt_busca_disciplina.textChanged.connect(self.buscar_disciplinas)
-
-        # BotÃµes de aÃ§Ã£o
-        btn_novo = AnimacaoBotao("Nova Disciplina", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_novo.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
-        btn_novo.clicked.connect(self.cadastrar_disciplina)
-
-        btn_editar = AnimacaoBotao("Editar", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_editar.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        btn_editar.clicked.connect(self.editar_disciplina)
-
-        btn_excluir = AnimacaoBotao("Excluir", cor_normal="#e74c3c", cor_hover="#c0392b", cor_press="#a93226")
-        btn_excluir.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
-        btn_excluir.clicked.connect(self.excluir_disciplina)
-
-        btn_associar = AnimacaoBotao("Associar Professor", cor_normal="#9b59b6", cor_hover="#8e44ad",
-                                     cor_press="#7d3c98")
-        btn_associar.setIcon(self.style().standardIcon(QStyle.SP_FileDialogListView))
-        btn_associar.clicked.connect(self.associar_professor_disciplina)
-
-        cabecalho_layout.addWidget(lbl_titulo)
-        cabecalho_layout.addStretch()
-        cabecalho_layout.addWidget(self.txt_busca_disciplina, 2)
-        cabecalho_layout.addWidget(btn_novo)
-        cabecalho_layout.addWidget(btn_editar)
-        cabecalho_layout.addWidget(btn_excluir)
-        cabecalho_layout.addWidget(btn_associar)
-
-        # Tabela de disciplinas
-        self.tabela_disciplinas = QTableWidget()
-        self.tabela_disciplinas.setColumnCount(8)
-        self.tabela_disciplinas.setHorizontalHeaderLabels([
-            "ID", "Nome", "CÃ³digo", "SÃ©rie", "Carga HorÃ¡ria", "Professor", "Status", "DescriÃ§Ã£o"
-        ])
-
-        # Configurar tabela
-        self.tabela_disciplinas.setAlternatingRowColors(True)
-        self.tabela_disciplinas.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabela_disciplinas.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabela_disciplinas.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Ajustar largura das colunas
-        header = self.tabela_disciplinas.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Nome
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Professor
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # DescriÃ§Ã£o
-
-        # Conectar duplo clique
-        self.tabela_disciplinas.doubleClicked.connect(self.ver_detalhes_disciplina)
-
-        # Filtros
-        filtros_layout = QHBoxLayout()
-
-        lbl_serie = QLabel("Filtrar por sÃ©rie:")
-        self.combo_filtro_serie = QComboBox()
-        self.combo_filtro_serie.addItem("Todas as sÃ©ries")
-
-        # Carregar sÃ©ries do banco
-        series_config = self.db.get_config('series', '1Âº Ano,2Âº Ano,3Âº Ano,4Âº Ano,5Âº Ano')
-        if series_config:
-            series = series_config.split(',')
-            for serie in series:
-                self.combo_filtro_serie.addItem(serie.strip())
-
-        self.combo_filtro_serie.currentIndexChanged.connect(self.filtrar_disciplinas_por_serie)
-
-        lbl_status = QLabel("Filtrar por status:")
-        self.combo_filtro_status = QComboBox()
-        self.combo_filtro_status.addItems(["Todos", "Ativas", "Inativas"])
-        self.combo_filtro_status.currentIndexChanged.connect(self.filtrar_disciplinas_por_status)
-
-        filtros_layout.addWidget(lbl_serie)
-        filtros_layout.addWidget(self.combo_filtro_serie)
-        filtros_layout.addWidget(lbl_status)
-        filtros_layout.addWidget(self.combo_filtro_status)
-        filtros_layout.addStretch()
-
-        # EstatÃ­sticas
-        stats_layout = QHBoxLayout()
-
-        self.lbl_total_disc = QLabel("Total de disciplinas: 0")
-        self.lbl_total_disc.setObjectName("info-badge")
-
-        self.lbl_disc_ativas = QLabel("Ativas: 0")
-        self.lbl_disc_ativas.setObjectName("success-badge")
-
-        self.lbl_disc_inativas = QLabel("Inativas: 0")
-        self.lbl_disc_inativas.setObjectName("danger-badge")
-
-        stats_layout.addWidget(self.lbl_total_disc)
-        stats_layout.addWidget(self.lbl_disc_ativas)
-        stats_layout.addWidget(self.lbl_disc_inativas)
-        stats_layout.addStretch()
-
-        # Adicionar tudo ao layout
-        layout.addLayout(cabecalho_layout)
-        layout.addLayout(filtros_layout)
-        layout.addWidget(self.tabela_disciplinas)
-        layout.addLayout(stats_layout)
-
-        self.paginas['disciplinas'] = pagina
-        self.central_widget.addWidget(pagina)
-
-        # Carregar dados iniciais
-        self.carregar_tabela_disciplinas()
-
-    def carregar_tabela_disciplinas(self):
-        """Carrega dados na tabela de disciplinas"""
-        try:
-            query = """
-                SELECT d.id, d.nome, d.codigo, d.serie, d.carga_horaria, 
-                       p.nome as professor, d.ativa, d.descricao
-                FROM disciplinas d
-                LEFT JOIN professores p ON d.professor_id = p.id
-                ORDER BY d.serie, d.nome
-            """
-
-            disciplinas = self.db.execute_query(query, fetch=True)
-
-            self.tabela_disciplinas.setRowCount(0)
-            self.disciplinas_completas = disciplinas  # Salvar para filtragem
-
-            for row_num, disciplina in enumerate(disciplinas):
-                self.tabela_disciplinas.insertRow(row_num)
-
-                for col_num, valor in enumerate(disciplina):
-                    item = QTableWidgetItem(str(valor if valor else ""))
-
-                    # Colorir status
-                    if col_num == 6:  # Coluna ativa
-                        if valor == 1:
-                            item.setText("Ativa")
-                            item.setForeground(QColor('#27ae60'))
-                            item.setFont(QFont('', weight=QFont.Bold))
-                        else:
-                            item.setText("Inativa")
-                            item.setForeground(QColor('#e74c3c'))
-
-                    self.tabela_disciplinas.setItem(row_num, col_num, item)
-
-            # Atualizar estatÃ­sticas
-            self.atualizar_estatisticas_disciplinas(disciplinas)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar disciplinas:\n{str(e)}")
-
-    def atualizar_estatisticas_disciplinas(self, disciplinas):
-        """Atualiza as estatÃ­sticas de disciplinas"""
-        total = len(disciplinas)
-        ativas = sum(1 for d in disciplinas if d[6] == 1)
-        inativas = total - ativas
-
-        self.lbl_total_disc.setText(f"Total de disciplinas: {total}")
-        self.lbl_disc_ativas.setText(f"Ativas: {ativas}")
-        self.lbl_disc_inativas.setText(f"Inativas: {inativas}")
-
-    def buscar_disciplinas(self):
-        """Busca disciplinas baseado no texto da busca"""
-        texto = self.txt_busca_disciplina.text().strip().lower()
-
-        if not self.disciplinas_completas:
-            return
-
-        disciplinas_filtradas = []
-
-        for disciplina in self.disciplinas_completas:
-            # Verificar se o texto estÃ¡ em algum campo
-            match = False
-
-            for campo in disciplina:
-                if campo and texto in str(campo).lower():
-                    match = True
-                    break
-
-            if match:
-                disciplinas_filtradas.append(disciplina)
-
-        # Atualizar tabela com resultados filtrados
-        self.tabela_disciplinas.setRowCount(0)
-
-        for row_num, disciplina in enumerate(disciplinas_filtradas):
-            self.tabela_disciplinas.insertRow(row_num)
-
-            for col_num, valor in enumerate(disciplina):
-                item = QTableWidgetItem(str(valor if valor else ""))
-
-                if col_num == 6:  # Status
-                    if valor == 1:
-                        item.setText("Ativa")
-                        item.setForeground(QColor('#27ae60'))
-                        item.setFont(QFont('', weight=QFont.Bold))
-                    else:
-                        item.setText("Inativa")
-                        item.setForeground(QColor('#e74c3c'))
-
-                self.tabela_disciplinas.setItem(row_num, col_num, item)
-
-        self.atualizar_estatisticas_disciplinas(disciplinas_filtradas)
-
-    def filtrar_disciplinas_por_serie(self):
-        """Filtra disciplinas por sÃ©rie selecionada"""
-        serie_filtro = self.combo_filtro_serie.currentText()
-
-        if serie_filtro == "Todas as sÃ©ries" or not self.disciplinas_completas:
-            self.carregar_tabela_disciplinas()
-            return
-
-        disciplinas_filtradas = []
-
-        for disciplina in self.disciplinas_completas:
-            serie = disciplina[3]  # Ãndice da sÃ©rie
-
-            if serie and serie_filtro in str(serie):
-                disciplinas_filtradas.append(disciplina)
-
-        # Atualizar tabela
-        self.atualizar_tabela_com_disciplinas(disciplinas_filtradas)
-
-    def filtrar_disciplinas_por_status(self):
-        """Filtra disciplinas por status selecionado"""
-        status_filtro = self.combo_filtro_status.currentText()
-
-        if status_filtro == "Todos" or not self.disciplinas_completas:
-            self.carregar_tabela_disciplinas()
-            return
-
-        disciplinas_filtradas = []
-
-        for disciplina in self.disciplinas_completas:
-            ativa = disciplina[6]  # Ãndice do status
-
-            if status_filtro == "Ativas" and ativa == 1:
-                disciplinas_filtradas.append(disciplina)
-            elif status_filtro == "Inativas" and ativa == 0:
-                disciplinas_filtradas.append(disciplina)
-
-        # Atualizar tabela
-        self.atualizar_tabela_com_disciplinas(disciplinas_filtradas)
-
-    def atualizar_tabela_com_disciplinas(self, disciplinas):
-        """Atualiza a tabela com a lista de disciplinas fornecida"""
-        self.tabela_disciplinas.setRowCount(0)
-
-        for row_num, disciplina in enumerate(disciplinas):
-            self.tabela_disciplinas.insertRow(row_num)
-
-            for col_num, valor in enumerate(disciplina):
-                item = QTableWidgetItem(str(valor if valor else ""))
-
-                if col_num == 6:  # Status
-                    if valor == 1:
-                        item.setText("Ativa")
-                        item.setForeground(QColor('#27ae60'))
-                        item.setFont(QFont('', weight=QFont.Bold))
-                    else:
-                        item.setText("Inativa")
-                        item.setForeground(QColor('#e74c3c'))
-
-                self.tabela_disciplinas.setItem(row_num, col_num, item)
-
-        self.atualizar_estatisticas_disciplinas(disciplinas)
-
-    def cadastrar_disciplina(self):
-        """Abre diÃ¡logo para cadastrar nova disciplina"""
-        dialog = CadastroDisciplinaDialog(self)
-        if dialog.exec_():
-            self.carregar_tabela_disciplinas()
-
-    def editar_disciplina(self):
-        """Abre diÃ¡logo para editar disciplina selecionada"""
-        selecionados = self.tabela_disciplinas.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione uma disciplina para editar.")
-            return
-
-        id_disciplina = int(self.tabela_disciplinas.item(selecionados[0].row(), 0).text())
-
-        dialog = CadastroDisciplinaDialog(self, id_disciplina)
-        if dialog.exec_():
-            self.carregar_tabela_disciplinas()
-
-    def excluir_disciplina(self):
-        """Exclui disciplina selecionada"""
-        selecionados = self.tabela_disciplinas.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione uma disciplina para excluir.")
-            return
-
-        id_disciplina = int(self.tabela_disciplinas.item(selecionados[0].row(), 0).text())
-        nome_disciplina = self.tabela_disciplinas.item(selecionados[0].row(), 1).text()
-
-        resposta = QMessageBox.question(
-            self, "Confirmar exclusÃ£o",
-            f"Tem certeza que deseja excluir a disciplina '{nome_disciplina}'?\n\n"
-            "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            try:
-                # Verificar se a disciplina tem notas associadas
-                notas = self.db.execute_query(
-                    "SELECT COUNT(*) FROM notas WHERE disciplina_id = ?",
-                    (id_disciplina,),
-                    fetch=True
-                )
-
-                if notas and notas[0][0] > 0:
-                    QMessageBox.warning(self, "Disciplina possui notas",
-                                        "Esta disciplina possui notas lanÃ§adas.\n"
-                                        "NÃ£o Ã© possÃ­vel excluÃ­-la.")
-                    return
-
-                # Verificar se a disciplina tem horÃ¡rios associados
-                horarios = self.db.execute_query(
-                    "SELECT COUNT(*) FROM horarios WHERE disciplina_id = ?",
-                    (id_disciplina,),
-                    fetch=True
-                )
-
-                if horarios and horarios[0][0] > 0:
-                    QMessageBox.warning(self, "Disciplina possui horÃ¡rios",
-                                        "Esta disciplina possui horÃ¡rios cadastrados.\n"
-                                        "Remova os horÃ¡rios primeiro.")
-                    return
-
-                self.db.execute_query(
-                    "DELETE FROM disciplinas WHERE id = ?",
-                    (id_disciplina,)
-                )
-
-                QMessageBox.information(self, "Sucesso", "Disciplina excluÃ­da com sucesso!")
-                self.carregar_tabela_disciplinas()
-
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao excluir disciplina:\n{str(e)}")
-
-    def ver_detalhes_disciplina(self, index):
-        """Mostra detalhes da disciplina em duplo clique"""
-        row = index.row()
-        id_disciplina = int(self.tabela_disciplinas.item(row, 0).text())
-
-        dialog = DetalhesDisciplinaDialog(self, id_disciplina)
-        dialog.exec_()
-
-    def associar_professor_disciplina(self):
-        """Associa um professor Ã  disciplina selecionada"""
-        selecionados = self.tabela_disciplinas.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione uma disciplina para associar um professor.")
-            return
-
-        id_disciplina = int(self.tabela_disciplinas.item(selecionados[0].row(), 0).text())
-        nome_disciplina = self.tabela_disciplinas.item(selecionados[0].row(), 1).text()
-
-        dialog = AssociarProfessorDialog(self, id_disciplina, nome_disciplina)
-        if dialog.exec_():
-            self.carregar_tabela_disciplinas()
-
-
-# ============================================
-# DIÃLOGO DE CADASTRO DE DISCIPLINA
-# ============================================
-
-class CadastroDisciplinaDialog(QDialog):
-    """DiÃ¡logo para cadastro/ediÃ§Ã£o de disciplinas"""
-
-    def __init__(self, parent=None, id_disciplina=None):
-        super().__init__(parent)
-        self.id_disciplina = id_disciplina
-        self.db = DatabaseManager()
-        self.modo_edicao = id_disciplina is not None
-
-        self.setWindowTitle("Cadastrar Disciplina" if not self.modo_edicao else "Editar Disciplina")
-        self.setFixedSize(600, 500)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_series()
-        self.carregar_professores()
-        self.carregar_dados_disciplina() if self.modo_edicao else None
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        titulo = "CADASTRAR NOVA DISCIPLINA" if not self.modo_edicao else "EDITAR DISCIPLINA"
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setObjectName("title")
-
-        # FormulÃ¡rio
-        form_layout = QFormLayout()
-        form_layout.setContentsMargins(10, 10, 10, 10)
-        form_layout.setSpacing(15)
-        form_layout.setLabelAlignment(Qt.AlignRight)
-
-        # Nome da disciplina
-        self.txt_nome = QLineEdit()
-        self.txt_nome.setPlaceholderText("Ex: MatemÃ¡tica, PortuguÃªs, HistÃ³ria")
-
-        # CÃ³digo da disciplina
-        self.txt_codigo = QLineEdit()
-        self.txt_codigo.setPlaceholderText("Ex: MAT-101, POR-201")
-
-        # SÃ©rie
-        self.combo_serie = QComboBox()
-
-        # Carga horÃ¡ria
-        self.spin_carga_horaria = QSpinBox()
-        self.spin_carga_horaria.setRange(0, 200)
-        self.spin_carga_horaria.setSuffix(" horas")
-        self.spin_carga_horaria.setValue(40)
-
-        # Professor responsÃ¡vel
-        self.combo_professor = QComboBox()
-        self.combo_professor.addItem("Nenhum", -1)
-
-        # Status
-        self.combo_status = QComboBox()
-        self.combo_status.addItems(["Ativa", "Inativa"])
-
-        # DescriÃ§Ã£o
-        self.txt_descricao = QTextEdit()
-        self.txt_descricao.setMaximumHeight(100)
-        self.txt_descricao.setPlaceholderText("DescriÃ§Ã£o da disciplina...")
-
-        # Adicionar campos ao formulÃ¡rio
-        form_layout.addRow("Nome da disciplina:", self.txt_nome)
-        form_layout.addRow("CÃ³digo:", self.txt_codigo)
-        form_layout.addRow("SÃ©rie:", self.combo_serie)
-        form_layout.addRow("Carga horÃ¡ria:", self.spin_carga_horaria)
-        form_layout.addRow("Professor responsÃ¡vel:", self.combo_professor)
-        form_layout.addRow("Status:", self.combo_status)
-        form_layout.addRow("DescriÃ§Ã£o:", self.txt_descricao)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        self.btn_salvar = AnimacaoBotao(
-            "SALVAR" if not self.modo_edicao else "ATUALIZAR",
-            cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b"
-        )
-        self.btn_salvar.setMinimumHeight(45)
-        self.btn_salvar.clicked.connect(self.salvar_disciplina)
-
-        self.btn_cancelar = QPushButton("CANCELAR")
-        self.btn_cancelar.setObjectName("danger")
-        self.btn_cancelar.setMinimumHeight(45)
-        self.btn_cancelar.clicked.connect(self.reject)
-
-        if self.modo_edicao:
-            self.btn_excluir = QPushButton("EXCLUIR")
-            self.btn_excluir.setObjectName("warning")
-            self.btn_excluir.setMinimumHeight(45)
-            self.btn_excluir.clicked.connect(self.excluir_disciplina)
-            botoes_layout.addWidget(self.btn_excluir)
-
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(self.btn_salvar)
-        botoes_layout.addWidget(self.btn_cancelar)
-
-        # Adicionar tudo ao layout principal
-        layout.addWidget(lbl_titulo)
-        layout.addLayout(form_layout)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def carregar_series(self):
-        """Carrega sÃ©ries disponÃ­veis no combobox"""
-        series_config = self.db.get_config('series', '1Âº Ano,2Âº Ano,3Âº Ano,4Âº Ano,5Âº Ano')
-
-        if series_config:
-            series = series_config.split(',')
-            for serie in series:
-                self.combo_serie.addItem(serie.strip())
-
-        self.combo_serie.addItem("Geral")
-
-    def carregar_professores(self):
-        """Carrega professores ativos no combobox"""
-        try:
-            professores = self.db.execute_query('''
-                SELECT id, nome, materia 
-                FROM professores 
-                WHERE ativo = 1
-                ORDER BY nome
-            ''', fetch=True)
-
-            for id_professor, nome, materia in professores:
-                texto = f"{nome} ({materia})" if materia else nome
-                self.combo_professor.addItem(texto, id_professor)
-
-        except Exception as e:
-            print(f"Erro ao carregar professores: {e}")
-
-    def carregar_dados_disciplina(self):
-        """Carrega dados da disciplina para ediÃ§Ã£o"""
-        try:
-            disciplina = self.db.execute_query(
-                "SELECT * FROM disciplinas WHERE id = ?",
-                (self.id_disciplina,),
-                fetch=True
-            )
-
-            if disciplina and len(disciplina) > 0:
-                dados = disciplina[0]
-
-                self.txt_nome.setText(dados[1] if dados[1] else "")
-                self.txt_codigo.setText(dados[2] if dados[2] else "")
-
-                # SÃ©rie
-                if dados[3]:  # sÃ©rie
-                    index = self.combo_serie.findText(dados[3])
-                    if index >= 0:
-                        self.combo_serie.setCurrentIndex(index)
-
-                if dados[4]:  # carga_horaria
-                    self.spin_carga_horaria.setValue(int(dados[4]))
-
-                # Professor
-                if dados[5]:  # professor_id
-                    for i in range(self.combo_professor.count()):
-                        if self.combo_professor.itemData(i) == dados[5]:
-                            self.combo_professor.setCurrentIndex(i)
-                            break
-
-                self.txt_descricao.setText(dados[6] if dados[6] else "")
-
-                # Status
-                self.combo_status.setCurrentIndex(0 if dados[7] == 1 else 1)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar dados da disciplina:\n{str(e)}")
-
-    def validar_campos(self):
-        """Valida os campos do formulÃ¡rio"""
-        erros = []
-
-        # Nome obrigatÃ³rio
-        if not self.txt_nome.text().strip():
-            erros.append("Nome da disciplina Ã© obrigatÃ³rio.")
-
-        # CÃ³digo Ãºnico (se preenchido)
-        codigo = self.txt_codigo.text().strip()
-        if codigo:
-            query = "SELECT COUNT(*) FROM disciplinas WHERE codigo = ?"
-            params = [codigo]
-
-            if self.modo_edicao:
-                query += " AND id != ?"
-                params.append(self.id_disciplina)
-
-            resultado = self.db.execute_query(query, tuple(params), fetch=True)
-
-            if resultado and resultado[0][0] > 0:
-                erros.append("CÃ³digo da disciplina jÃ¡ estÃ¡ em uso.")
-
-        return erros
-
-    def salvar_disciplina(self):
-        """Salva ou atualiza a disciplina no banco de dados"""
-        # Validar campos
-        erros = self.validar_campos()
-        if erros:
-            QMessageBox.warning(self, "Erros no formulÃ¡rio", "\n".join(erros))
-            return
-
-        # Preparar dados
-        dados = {
-            'nome': self.txt_nome.text().strip(),
-            'codigo': self.txt_codigo.text().strip(),
-            'serie': self.combo_serie.currentText(),
-            'carga_horaria': self.spin_carga_horaria.value(),
-            'professor_id': self.combo_professor.currentData(),
-            'descricao': self.txt_descricao.toPlainText().strip(),
-            'ativa': 1 if self.combo_status.currentText() == "Ativa" else 0
-        }
-
-        # Se professor_id for -1 (Nenhum), definir como NULL
-        if dados['professor_id'] == -1:
-            dados['professor_id'] = None
-
-        try:
-            if self.modo_edicao:
-                # Atualizar disciplina existente
-                query = '''
-                    UPDATE disciplinas SET
-                        nome = ?, codigo = ?, serie = ?, carga_horaria = ?,
-                        professor_id = ?, descricao = ?, ativa = ?
-                    WHERE id = ?
-                '''
-
-                params = (
-                    dados['nome'], dados['codigo'], dados['serie'], dados['carga_horaria'],
-                    dados['professor_id'], dados['descricao'], dados['ativa'], self.id_disciplina
-                )
-
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "Disciplina atualizada com sucesso!")
-
-            else:
-                # Inserir nova disciplina
-                query = '''
-                    INSERT INTO disciplinas (
-                        nome, codigo, serie, carga_horaria,
-                        professor_id, descricao, ativa
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                '''
-
-                params = (
-                    dados['nome'], dados['codigo'], dados['serie'], dados['carga_horaria'],
-                    dados['professor_id'], dados['descricao'], dados['ativa']
-                )
-
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "Disciplina cadastrada com sucesso!")
-
-            self.accept()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao salvar disciplina:\n{str(e)}")
-
-    def excluir_disciplina(self):
-        """Exclui a disciplina atual"""
-        resposta = QMessageBox.question(
-            self, "Confirmar exclusÃ£o",
-            "Tem certeza que deseja excluir esta disciplina?\n\n"
-            "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            try:
-                self.db.execute_query(
-                    "DELETE FROM disciplinas WHERE id = ?",
-                    (self.id_disciplina,)
-                )
-
-                QMessageBox.information(self, "Sucesso", "Disciplina excluÃ­da com sucesso!")
-                self.accept()
-
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao excluir disciplina:\n{str(e)}")
-
-
-# ============================================
-# DIÃLOGO DE DETALHES DA DISCIPLINA
-# ============================================
-
-class DetalhesDisciplinaDialog(QDialog):
-    """DiÃ¡logo para exibir detalhes completos da disciplina"""
-
-    def __init__(self, parent=None, id_disciplina=None):
-        super().__init__(parent)
-        self.id_disciplina = id_disciplina
-        self.db = DatabaseManager()
-
-        self.setWindowTitle("Detalhes da Disciplina")
-        self.setFixedSize(900, 700)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_detalhes_disciplina()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # CabeÃ§alho com nome da disciplina
-        self.lbl_nome_disciplina = QLabel()
-        self.lbl_nome_disciplina.setObjectName("title")
-        self.lbl_nome_disciplina.setStyleSheet("""
-            QLabel#title {
-                font-size: 22px;
-                font-weight: 700;
-                color: #2c3e50;
-                text-align: center;
-                padding: 15px;
-                background-color: #fff3cd;
-                border-radius: 8px;
-                border: 2px solid #f39c12;
-            }
-        """)
-
-        # Abas para diferentes informaÃ§Ãµes
-        tab_widget = QTabWidget()
-
-        # Aba: InformaÃ§Ãµes Gerais
-        aba_info = QWidget()
-        self.layout_info = QFormLayout(aba_info)
-        self.layout_info.setContentsMargins(20, 20, 20, 20)
-        self.layout_info.setSpacing(10)
-
-        # Aba: Alunos Matriculados
-        aba_alunos = QWidget()
-        layout_alunos = QVBoxLayout(aba_alunos)
-
-        self.tabela_alunos = QTableWidget()
-        self.tabela_alunos.setColumnCount(5)
-        self.tabela_alunos.setHorizontalHeaderLabels([
-            "Nome", "Turma", "MÃ©dia", "Faltas", "Status"
-        ])
-
-        layout_alunos.addWidget(QLabel("Alunos Matriculados:"))
-        layout_alunos.addWidget(self.tabela_alunos)
-
-        # Aba: HorÃ¡rios
-        aba_horarios = QWidget()
-        layout_horarios = QVBoxLayout(aba_horarios)
-
-        self.tabela_horarios = QTableWidget()
-        self.tabela_horarios.setColumnCount(6)
-        self.tabela_horarios.setHorizontalHeaderLabels([
-            "Dia", "HorÃ¡rio", "Professor", "Turma", "Sala", "Status"
-        ])
-
-        layout_horarios.addWidget(QLabel("HorÃ¡rios da Disciplina:"))
-        layout_horarios.addWidget(self.tabela_horarios)
-
-        # Adicionar abas
-        tab_widget.addTab(aba_info, "InformaÃ§Ãµes")
-        tab_widget.addTab(aba_alunos, "Alunos")
-        tab_widget.addTab(aba_horarios, "HorÃ¡rios")
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_fechar = AnimacaoBotao("FECHAR", cor_normal="#7f8c8d", cor_hover="#95a5a6", cor_press="#5d6d7e")
-        btn_fechar.clicked.connect(self.close)
-
-        btn_editar = AnimacaoBotao("EDITAR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_editar.clicked.connect(self.editar_disciplina)
-
-        botoes_layout.addWidget(btn_editar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(self.lbl_nome_disciplina)
-        layout.addWidget(tab_widget)
-        layout.addLayout(botoes_layout)
-
-    def carregar_detalhes_disciplina(self):
-        """Carrega detalhes completos da disciplina"""
-        try:
-            # Carregar informaÃ§Ãµes bÃ¡sicas
-            disciplina = self.db.execute_query(
-                "SELECT * FROM disciplinas WHERE id = ?",
-                (self.id_disciplina,),
-                fetch=True
-            )
-
-            if disciplina and len(disciplina) > 0:
-                dados = disciplina[0]
-
-                # Atualizar tÃ­tulo
-                nome_completo = f"{dados[1]}"
-                if dados[2]:  # cÃ³digo
-                    nome_completo += f" ({dados[2]})"
-                self.lbl_nome_disciplina.setText(nome_completo)
-
-                # Adicionar informaÃ§Ãµes gerais
-                self.adicionar_info("CÃ³digo:", dados[2] if dados[2] else "NÃ£o informado")
-                self.adicionar_info("SÃ©rie:", dados[3] if dados[3] else "Geral")
-
-                if dados[4]:  # carga horÃ¡ria
-                    self.adicionar_info("Carga horÃ¡ria:", f"{dados[4]} horas")
-                else:
-                    self.adicionar_info("Carga horÃ¡ria:", "NÃ£o informada")
-
-                # Professor responsÃ¡vel
-                if dados[5]:  # professor_id
-                    professor = self.db.execute_query(
-                        "SELECT nome, materia FROM professores WHERE id = ?",
-                        (dados[5],),
-                        fetch=True
-                    )
-
-                    if professor and len(professor) > 0:
-                        prof_nome, prof_materia = professor[0]
-                        texto_professor = f"{prof_nome}"
-                        if prof_materia:
-                            texto_professor += f" ({prof_materia})"
-                        self.adicionar_info("Professor responsÃ¡vel:", texto_professor)
-                    else:
-                        self.adicionar_info("Professor responsÃ¡vel:", "NÃ£o atribuÃ­do")
-                else:
-                    self.adicionar_info("Professor responsÃ¡vel:", "NÃ£o atribuÃ­do")
-
-                self.adicionar_info("DescriÃ§Ã£o:", dados[6] if dados[6] else "Nenhuma descriÃ§Ã£o fornecida.")
-
-                status = "Ativa" if dados[7] == 1 else "Inativa"
-                status_cor = "#27ae60" if dados[7] == 1 else "#e74c3c"
-                self.adicionar_info_colorido("Status:", status, status_cor)
-
-                # Carregar alunos matriculados
-                self.carregar_alunos_disciplina()
-
-                # Carregar horÃ¡rios
-                self.carregar_horarios_disciplina()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar detalhes da disciplina:\n{str(e)}")
-
-    def adicionar_info(self, label, valor):
-        """Adiciona uma linha de informaÃ§Ã£o ao formulÃ¡rio"""
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet("color: #34495e;")
-
-        self.layout_info.addRow(lbl_label, lbl_valor)
-
-    def adicionar_info_colorido(self, label, valor, cor):
-        """Adiciona uma linha de informaÃ§Ã£o com cor especÃ­fica"""
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet(f"color: {cor}; font-weight: 600;")
-
-        self.layout_info.addRow(lbl_label, lbl_valor)
-
-    def carregar_alunos_disciplina(self):
-        """Carrega alunos matriculados na disciplina"""
-        try:
-            # Obter alunos que tÃªm notas nesta disciplina
-            alunos = self.db.execute_query('''
-                SELECT DISTINCT a.nome, a.turma, n.media, n.faltas, a.status
-                FROM notas n
-                JOIN alunos a ON n.aluno_id = a.id
-                WHERE n.disciplina_id = ?
-                ORDER BY a.nome
-            ''', (self.id_disciplina,), fetch=True)
-
-            self.tabela_alunos.setRowCount(len(alunos))
-
-            for row, (nome, turma, media, faltas, status) in enumerate(alunos):
-                self.tabela_alunos.setItem(row, 0, QTableWidgetItem(nome))
-                self.tabela_alunos.setItem(row, 1, QTableWidgetItem(turma if turma else "-"))
-
-                # MÃ©dia
-                item_media = QTableWidgetItem(f"{media:.1f}" if media else "-")
-                if media:
-                    if media < 5.0:
-                        item_media.setForeground(QColor('#e74c3c'))
-                    elif media < 7.0:
-                        item_media.setForeground(QColor('#f39c12'))
-                    else:
-                        item_media.setForeground(QColor('#27ae60'))
-                    item_media.setFont(QFont('', weight=QFont.Bold))
-
-                self.tabela_alunos.setItem(row, 2, item_media)
-
-                # Faltas
-                self.tabela_alunos.setItem(row, 3, QTableWidgetItem(str(faltas) if faltas else "-"))
-
-                # Status do aluno
-                item_status = QTableWidgetItem(status if status else "-")
-                if status == "Ativo":
-                    item_status.setForeground(QColor('#27ae60'))
-                else:
-                    item_status.setForeground(QColor('#e74c3c'))
-
-                self.tabela_alunos.setItem(row, 4, item_status)
-
-        except Exception as e:
-            print(f"Erro ao carregar alunos: {e}")
-
-    def carregar_horarios_disciplina(self):
-        """Carrega horÃ¡rios da disciplina"""
-        try:
-            horarios = self.db.execute_query('''
-                SELECT h.dia_semana, h.hora_inicio, h.hora_fim, 
-                       p.nome, t.nome, h.sala, h.ativo
-                FROM horarios h
-                JOIN professores p ON h.professor_id = p.id
-                JOIN turmas t ON h.turma_id = t.id
-                WHERE h.disciplina_id = ?
-                ORDER BY 
-                    CASE h.dia_semana
-                        WHEN 'Segunda' THEN 1
-                        WHEN 'TerÃ§a' THEN 2
-                        WHEN 'Quarta' THEN 3
-                        WHEN 'Quinta' THEN 4
-                        WHEN 'Sexta' THEN 5
-                        WHEN 'SÃ¡bado' THEN 6
-                        ELSE 7
-                    END,
-                    h.hora_inicio
-            ''', (self.id_disciplina,), fetch=True)
-
-            self.tabela_horarios.setRowCount(len(horarios))
-
-            for row, (dia, inicio, fim, professor, turma, sala, ativo) in enumerate(horarios):
-                self.tabela_horarios.setItem(row, 0, QTableWidgetItem(dia))
-
-                # HorÃ¡rio
-                horario_formatado = f"{inicio} - {fim}" if inicio and fim else "NÃ£o definido"
-                self.tabela_horarios.setItem(row, 1, QTableWidgetItem(horario_formatado))
-
-                self.tabela_horarios.setItem(row, 2, QTableWidgetItem(professor))
-                self.tabela_horarios.setItem(row, 3, QTableWidgetItem(turma))
-                self.tabela_horarios.setItem(row, 4, QTableWidgetItem(sala if sala else "-"))
-
-                status = "Ativo" if ativo == 1 else "Inativo"
-                item_status = QTableWidgetItem(status)
-
-                if ativo == 1:
-                    item_status.setForeground(QColor('#27ae60'))
-                else:
-                    item_status.setForeground(QColor('#e74c3c'))
-
-                self.tabela_horarios.setItem(row, 5, item_status)
-
-        except Exception as e:
-            print(f"Erro ao carregar horÃ¡rios: {e}")
-
-    def editar_disciplina(self):
-        """Abre diÃ¡logo para editar a disciplina"""
-        self.close()
-        # Em uma implementaÃ§Ã£o real, aqui abriria o diÃ¡logo de ediÃ§Ã£o
-
-
-"""
-PROJETO ESCOLA - SISTEMA DE GESTÃƒO ESCOLAR
-Parte 4/10 - ContinuaÃ§Ã£o: Associar Professor, Turmas, Notas e FrequÃªncia
-"""
-
-
-# ============================================
-# DIÃLOGO DE ASSOCIAR PROFESSOR Ã€ DISCIPLINA
-# ============================================
-
-class AssociarProfessorDialog(QDialog):
-    """DiÃ¡logo para associar um professor a uma disciplina"""
-
-    def __init__(self, parent=None, id_disciplina=None, nome_disciplina=""):
-        super().__init__(parent)
-        self.id_disciplina = id_disciplina
-        self.nome_disciplina = nome_disciplina
-        self.db = DatabaseManager()
-
-        self.setWindowTitle(f"Associar Professor - {nome_disciplina}")
-        self.setFixedSize(600, 400)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_professores_disponiveis()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel(f"ASSOCIAR PROFESSOR Ã€ DISCIPLINA")
-        lbl_titulo.setObjectName("title")
-
-        # Nome da disciplina
-        lbl_disciplina = QLabel(f"Disciplina: {self.nome_disciplina}")
-        lbl_disciplina.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                font-weight: 600;
-                color: #2c3e50;
-                padding: 10px;
-                background-color: #f8f9fa;
-                border-radius: 6px;
-                border: 1px solid #dce1e6;
-            }
-        """)
-
-        # Lista de professores disponÃ­veis
-        lbl_selecionar = QLabel("Selecione um professor:")
-        lbl_selecionar.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        self.list_professores = QListWidget()
-        self.list_professores.setStyleSheet("""
-            QListWidget {
-                border: 2px solid #dce1e6;
-                border-radius: 6px;
-                padding: 5px;
-                background-color: white;
-            }
-            QListWidget::item {
-                padding: 12px;
-                border-bottom: 1px solid #ecf0f1;
-            }
-            QListWidget::item:selected {
-                background-color: #e3f2fd;
-                color: #2c3e50;
-                border-radius: 4px;
-            }
-        """)
-
-        # InformaÃ§Ãµes do professor selecionado
-        self.lbl_info_professor = QLabel()
-        self.lbl_info_professor.setStyleSheet("""
-            QLabel {
-                padding: 15px;
-                background-color: #e8f6f3;
-                border-radius: 6px;
-                border: 1px solid #a3e4c0;
-                color: #27ae60;
-                font-size: 13px;
-            }
-        """)
-        self.lbl_info_professor.setVisible(False)
-        self.lbl_info_professor.setWordWrap(True)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        self.btn_associar = AnimacaoBotao("ASSOCIAR PROFESSOR", cor_normal="#27ae60", cor_hover="#219653",
-                                          cor_press="#1e874b")
-        self.btn_associar.setMinimumHeight(45)
-        self.btn_associar.clicked.connect(self.associar_professor)
-        self.btn_associar.setEnabled(False)
-
-        btn_remover = AnimacaoBotao("REMOVER ASSOCIAÃ‡ÃƒO", cor_normal="#e74c3c", cor_hover="#c0392b",
-                                    cor_press="#a93226")
-        btn_remover.setMinimumHeight(45)
-        btn_remover.clicked.connect(self.remover_associacao)
-
-        btn_cancelar = QPushButton("CANCELAR")
-        btn_cancelar.setObjectName("danger")
-        btn_cancelar.setMinimumHeight(45)
-        btn_cancelar.clicked.connect(self.reject)
-
-        botoes_layout.addWidget(self.btn_associar)
-        botoes_layout.addWidget(btn_remover)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_cancelar)
-
-        # Conectar seleÃ§Ã£o de item
-        self.list_professores.itemSelectionChanged.connect(self.professor_selecionado)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(lbl_disciplina)
-        layout.addWidget(lbl_selecionar)
-        layout.addWidget(self.list_professores)
-        layout.addWidget(self.lbl_info_professor)
-        layout.addLayout(botoes_layout)
-
-    def carregar_professores_disponiveis(self):
-        """Carrega professores disponÃ­veis para associaÃ§Ã£o"""
-        try:
-            # Obter professor atual da disciplina
-            professor_atual = self.db.execute_query(
-                "SELECT professor_id FROM disciplinas WHERE id = ?",
-                (self.id_disciplina,),
-                fetch=True
-            )
-
-            professor_atual_id = professor_atual[0][0] if professor_atual and professor_atual[0][0] else None
-
-            # Obter todos os professores ativos
-            professores = self.db.execute_query('''
-                SELECT id, nome, materia, telefone, email
-                FROM professores 
-                WHERE ativo = 1
-                ORDER BY nome
-            ''', fetch=True)
-
-            self.list_professores.clear()
-            self.professores_data = []  # Armazenar dados dos professores
-
-            for id_prof, nome, materia, telefone, email in professores:
-                item_text = f"{nome}"
-                if materia:
-                    item_text += f" - {materia}"
-
-                item = QListWidgetItem(item_text)
-                item.setData(Qt.UserRole, id_prof)
-
-                # Marcar professor atual se existir
-                if professor_atual_id and id_prof == professor_atual_id:
-                    item.setSelected(True)
-                    item.setBackground(QColor('#e3f2fd'))
-                    item.setForeground(QColor('#2c3e50'))
-                    item.setText(f"âœ“ {item_text} (Atual)")
-
-                    # Mostrar informaÃ§Ãµes do professor atual
-                    info = f"Professor atual: {nome}"
-                    if materia:
-                        info += f" | MatÃ©ria: {materia}"
-                    if telefone:
-                        info += f" | Telefone: {ValidadorCampos.formatar_telefone(telefone)}"
-                    if email:
-                        info += f" | Email: {email}"
-
-                    self.lbl_info_professor.setText(info)
-                    self.lbl_info_professor.setVisible(True)
-
-                self.list_professores.addItem(item)
-                self.professores_data.append((id_prof, nome, materia, telefone, email))
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar professores:\n{str(e)}")
-
-    def professor_selecionado(self):
-        """Quando um professor Ã© selecionado na lista"""
-        selecionados = self.list_professores.selectedItems()
-
-        if selecionados:
-            item = selecionados[0]
-            professor_id = item.data(Qt.UserRole)
-
-            # Encontrar dados do professor selecionado
-            for id_prof, nome, materia, telefone, email in self.professores_data:
-                if id_prof == professor_id:
-                    info = f"Professor selecionado: {nome}"
-                    if materia:
-                        info += f" | MatÃ©ria: {materia}"
-                    if telefone:
-                        info += f" | Telefone: {ValidadorCampos.formatar_telefone(telefone)}"
-                    if email:
-                        info += f" | Email: {email}"
-
-                    self.lbl_info_professor.setText(info)
-                    self.lbl_info_professor.setVisible(True)
-                    self.btn_associar.setEnabled(True)
-                    break
-
-    def associar_professor(self):
-        """Associa o professor selecionado Ã  disciplina"""
-        selecionados = self.list_professores.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione um professor.")
-            return
-
-        item = selecionados[0]
-        professor_id = item.data(Qt.UserRole)
-
-        try:
-            # Atualizar disciplina com o novo professor
-            self.db.execute_query(
-                "UPDATE disciplinas SET professor_id = ? WHERE id = ?",
-                (professor_id, self.id_disciplina)
-            )
-
-            QMessageBox.information(self, "Sucesso",
-                                    "Professor associado Ã  disciplina com sucesso!")
-            self.accept()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao associar professor:\n{str(e)}")
-
-    def remover_associacao(self):
-        """Remove a associaÃ§Ã£o atual do professor com a disciplina"""
-        resposta = QMessageBox.question(
-            self, "Confirmar remoÃ§Ã£o",
-            "Tem certeza que deseja remover o professor associado a esta disciplina?\n\n"
-            "A disciplina ficarÃ¡ sem professor responsÃ¡vel.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            try:
-                self.db.execute_query(
-                    "UPDATE disciplinas SET professor_id = NULL WHERE id = ?",
-                    (self.id_disciplina,)
-                )
-
-                QMessageBox.information(self, "Sucesso",
-                                        "AssociaÃ§Ã£o de professor removida com sucesso!")
-                self.accept()
-
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao remover associaÃ§Ã£o:\n{str(e)}")
-
-    # ============================================
-    # PÃGINA DE TURMAS (COMPLETA)
-    # ============================================
-
-    def criar_pagina_turmas(self):
-        """Cria a pÃ¡gina de gerenciamento de turmas - COMPLETA"""
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # CabeÃ§alho
-        cabecalho_layout = QHBoxLayout()
-
-        lbl_titulo = QLabel("GESTÃƒO DE TURMAS")
-        lbl_titulo.setObjectName("title")
-
-        # Barra de busca
-        self.txt_busca_turma = QLineEdit()
-        self.txt_busca_turma.setPlaceholderText("Buscar turma por nome, sÃ©rie ou professor...")
-        self.txt_busca_turma.setMinimumHeight(40)
-        self.txt_busca_turma.textChanged.connect(self.buscar_turmas)
-
-        # BotÃµes de aÃ§Ã£o
-        btn_novo = AnimacaoBotao("Nova Turma", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_novo.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
-        btn_novo.clicked.connect(self.cadastrar_turma)
-
-        btn_editar = AnimacaoBotao("Editar", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_editar.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        btn_editar.clicked.connect(self.editar_turma)
-
-        btn_excluir = AnimacaoBotao("Excluir", cor_normal="#e74c3c", cor_hover="#c0392b", cor_press="#a93226")
-        btn_excluir.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
-        btn_excluir.clicked.connect(self.excluir_turma)
-
-        btn_alunos = AnimacaoBotao("Ver Alunos", cor_normal="#9b59b6", cor_hover="#8e44ad", cor_press="#7d3c98")
-        btn_alunos.setIcon(self.style().standardIcon(QStyle.SP_FileDialogListView))
-        btn_alunos.clicked.connect(self.ver_alunos_turma)
-
-        cabecalho_layout.addWidget(lbl_titulo)
-        cabecalho_layout.addStretch()
-        cabecalho_layout.addWidget(self.txt_busca_turma, 2)
-        cabecalho_layout.addWidget(btn_novo)
-        cabecalho_layout.addWidget(btn_editar)
-        cabecalho_layout.addWidget(btn_excluir)
-        cabecalho_layout.addWidget(btn_alunos)
-
-        # Tabela de turmas
-        self.tabela_turmas = QTableWidget()
-        self.tabela_turmas.setColumnCount(9)
-        self.tabela_turmas.setHorizontalHeaderLabels([
-            "ID", "Nome", "SÃ©rie", "Turno", "Sala", "Capacidade",
-            "Alunos", "Professor ResponsÃ¡vel", "Status"
-        ])
-
-        # Configurar tabela
-        self.tabela_turmas.setAlternatingRowColors(True)
-        self.tabela_turmas.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabela_turmas.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabela_turmas.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Ajustar largura das colunas
-        header = self.tabela_turmas.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Nome
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # Professor
-        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # Status
-
-        # Conectar duplo clique
-        self.tabela_turmas.doubleClicked.connect(self.ver_detalhes_turma)
-
-        # Filtros
-        filtros_layout = QHBoxLayout()
-
-        lbl_serie = QLabel("Filtrar por sÃ©rie:")
-        self.combo_filtro_serie_turma = QComboBox()
-        self.combo_filtro_serie_turma.addItem("Todas as sÃ©ries")
-
-        # Carregar sÃ©ries do banco
-        series_config = self.db.get_config('series', '1Âº Ano,2Âº Ano,3Âº Ano,4Âº Ano,5Âº Ano')
-        if series_config:
-            series = series_config.split(',')
-            for serie in series:
-                self.combo_filtro_serie_turma.addItem(serie.strip())
-
-        self.combo_filtro_serie_turma.currentIndexChanged.connect(self.filtrar_turmas_por_serie)
-
-        lbl_turno = QLabel("Filtrar por turno:")
-        self.combo_filtro_turno_turma = QComboBox()
-        self.combo_filtro_turno_turma.addItem("Todos os turnos")
-
-        # Carregar turnos do banco
-        turnos_config = self.db.get_config('turnos', 'Matutino,Vespertino,Noturno')
-        if turnos_config:
-            turnos = turnos_config.split(',')
-            for turno in turnos:
-                self.combo_filtro_turno_turma.addItem(turno.strip())
-
-        self.combo_filtro_turno_turma.currentIndexChanged.connect(self.filtrar_turmas_por_turno)
-
-        filtros_layout.addWidget(lbl_serie)
-        filtros_layout.addWidget(self.combo_filtro_serie_turma)
-        filtros_layout.addWidget(lbl_turno)
-        filtros_layout.addWidget(self.combo_filtro_turno_turma)
-        filtros_layout.addStretch()
-
-        # EstatÃ­sticas
-        stats_layout = QHBoxLayout()
-
-        self.lbl_total_turmas = QLabel("Total de turmas: 0")
-        self.lbl_total_turmas.setObjectName("info-badge")
-
-        self.lbl_turmas_ativas = QLabel("Ativas: 0")
-        self.lbl_turmas_ativas.setObjectName("success-badge")
-
-        self.lbl_turmas_inativas = QLabel("Inativas: 0")
-        self.lbl_turmas_inativas.setObjectName("danger-badge")
-
-        stats_layout.addWidget(self.lbl_total_turmas)
-        stats_layout.addWidget(self.lbl_turmas_ativas)
-        stats_layout.addWidget(self.lbl_turmas_inativas)
-        stats_layout.addStretch()
-
-        # Adicionar tudo ao layout
-        layout.addLayout(cabecalho_layout)
-        layout.addLayout(filtros_layout)
-        layout.addWidget(self.tabela_turmas)
-        layout.addLayout(stats_layout)
-
-        self.paginas['turmas'] = pagina
-        self.central_widget.addWidget(pagina)
-
-        # Carregar dados iniciais
-        self.carregar_tabela_turmas()
-
-    def carregar_tabela_turmas(self):
-        """Carrega dados na tabela de turmas"""
-        try:
-            query = """
-                SELECT t.id, t.nome, t.serie, t.turno, t.sala, t.capacidade,
-                       (SELECT COUNT(*) FROM alunos WHERE turma = t.nome AND status = 'Ativo') as total_alunos,
-                       p.nome as professor_responsavel, t.ativa
-                FROM turmas t
-                LEFT JOIN professores p ON t.professor_responsavel_id = p.id
-                ORDER BY t.serie, t.nome
-            """
-
-            turmas = self.db.execute_query(query, fetch=True)
-
-            self.tabela_turmas.setRowCount(0)
-            self.turmas_completas = turmas  # Salvar para filtragem
-
-            for row_num, turma in enumerate(turmas):
-                self.tabela_turmas.insertRow(row_num)
-
-                for col_num, valor in enumerate(turma):
-                    item = QTableWidgetItem(str(valor if valor else ""))
-
-                    # Colorir status
-                    if col_num == 8:  # Coluna ativa
-                        if valor == 1:
-                            item.setText("Ativa")
-                            item.setForeground(QColor('#27ae60'))
-                            item.setFont(QFont('', weight=QFont.Bold))
-                        else:
-                            item.setText("Inativa")
-                            item.setForeground(QColor('#e74c3c'))
-
-                    # Destacar lotaÃ§Ã£o
-                    if col_num == 5 and col_num == 6:  # Capacidade e Alunos
-                        capacidade = turma[5]
-                        alunos = turma[6]
-                        if capacidade and alunos:
-                            if alunos >= capacidade:
-                                item.setForeground(QColor('#e74c3c'))
-                                item.setFont(QFont('', weight=QFont.Bold))
-                            elif alunos >= capacidade * 0.8:
-                                item.setForeground(QColor('#f39c12'))
-
-                    self.tabela_turmas.setItem(row_num, col_num, item)
-
-            # Atualizar estatÃ­sticas
-            self.atualizar_estatisticas_turmas(turmas)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar turmas:\n{str(e)}")
-
-    def atualizar_estatisticas_turmas(self, turmas):
-        """Atualiza as estatÃ­sticas de turmas"""
-        total = len(turmas)
-        ativas = sum(1 for t in turmas if t[8] == 1)
-        inativas = total - ativas
-
-        self.lbl_total_turmas.setText(f"Total de turmas: {total}")
-        self.lbl_turmas_ativas.setText(f"Ativas: {ativas}")
-        self.lbl_turmas_inativas.setText(f"Inativas: {inativas}")
-
-    def buscar_turmas(self):
-        """Busca turmas baseado no texto da busca"""
-        texto = self.txt_busca_turma.text().strip().lower()
-
-        if not self.turmas_completas:
-            return
-
-        turmas_filtradas = []
-
-        for turma in self.turmas_completas:
-            # Verificar se o texto estÃ¡ em algum campo
-            match = False
-
-            for campo in turma:
-                if campo and texto in str(campo).lower():
-                    match = True
-                    break
-
-            if match:
-                turmas_filtradas.append(turma)
-
-        # Atualizar tabela com resultados filtrados
-        self.tabela_turmas.setRowCount(0)
-
-        for row_num, turma in enumerate(turmas_filtradas):
-            self.tabela_turmas.insertRow(row_num)
-
-            for col_num, valor in enumerate(turma):
-                item = QTableWidgetItem(str(valor if valor else ""))
-
-                if col_num == 8:  # Status
-                    if valor == 1:
-                        item.setText("Ativa")
-                        item.setForeground(QColor('#27ae60'))
-                        item.setFont(QFont('', weight=QFont.Bold))
-                    else:
-                        item.setText("Inativa")
-                        item.setForeground(QColor('#e74c3c'))
-
-                self.tabela_turmas.setItem(row_num, col_num, item)
-
-        self.atualizar_estatisticas_turmas(turmas_filtradas)
-
-    def filtrar_turmas_por_serie(self):
-        """Filtra turmas por sÃ©rie selecionada"""
-        serie_filtro = self.combo_filtro_serie_turma.currentText()
-
-        if serie_filtro == "Todas as sÃ©ries" or not self.turmas_completas:
-            self.carregar_tabela_turmas()
-            return
-
-        turmas_filtradas = []
-
-        for turma in self.turmas_completas:
-            serie = turma[2]  # Ãndice da sÃ©rie
-
-            if serie and serie_filtro in str(serie):
-                turmas_filtradas.append(turma)
-
-        # Atualizar tabela
-        self.atualizar_tabela_com_turmas(turmas_filtradas)
-
-    def filtrar_turmas_por_turno(self):
-        """Filtra turmas por turno selecionado"""
-        turno_filtro = self.combo_filtro_turno_turma.currentText()
-
-        if turno_filtro == "Todos os turnos" or not self.turmas_completas:
-            self.carregar_tabela_turmas()
-            return
-
-        turmas_filtradas = []
-
-        for turma in self.turmas_completas:
-            turno = turma[3]  # Ãndice do turno
-
-            if turno and turno_filtro in str(turno):
-                turmas_filtradas.append(turma)
-
-        # Atualizar tabela
-        self.atualizar_tabela_com_turmas(turmas_filtradas)
-
-    def atualizar_tabela_com_turmas(self, turmas):
-        """Atualiza a tabela com a lista de turmas fornecida"""
-        self.tabela_turmas.setRowCount(0)
-
-        for row_num, turma in enumerate(turmas):
-            self.tabela_turmas.insertRow(row_num)
-
-            for col_num, valor in enumerate(turma):
-                item = QTableWidgetItem(str(valor if valor else ""))
-
-                if col_num == 8:  # Status
-                    if valor == 1:
-                        item.setText("Ativa")
-                        item.setForeground(QColor('#27ae60'))
-                        item.setFont(QFont('', weight=QFont.Bold))
-                    else:
-                        item.setText("Inativa")
-                        item.setForeground(QColor('#e74c3c'))
-
-                self.tabela_turmas.setItem(row_num, col_num, item)
-
-        self.atualizar_estatisticas_turmas(turmas)
-
-    def cadastrar_turma(self):
-        """Abre diÃ¡logo para cadastrar nova turma"""
-        dialog = CadastroTurmaDialog(self)
-        if dialog.exec_():
-            self.carregar_tabela_turmas()
-
-    def editar_turma(self):
-        """Abre diÃ¡logo para editar turma selecionada"""
-        selecionados = self.tabela_turmas.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione uma turma para editar.")
-            return
-
-        id_turma = int(self.tabela_turmas.item(selecionados[0].row(), 0).text())
-
-        dialog = CadastroTurmaDialog(self, id_turma)
-        if dialog.exec_():
-            self.carregar_tabela_turmas()
-
-    def excluir_turma(self):
-        """Exclui turma selecionada"""
-        selecionados = self.tabela_turmas.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione uma turma para excluir.")
-            return
-
-        id_turma = int(self.tabela_turmas.item(selecionados[0].row(), 0).text())
-        nome_turma = self.tabela_turmas.item(selecionados[0].row(), 1).text()
-
-        resposta = QMessageBox.question(
-            self, "Confirmar exclusÃ£o",
-            f"Tem certeza que deseja excluir a turma '{nome_turma}'?\n\n"
-            "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            try:
-                # Verificar se a turma tem alunos associados
-                alunos = self.db.execute_query(
-                    "SELECT COUNT(*) FROM alunos WHERE turma = ?",
-                    (nome_turma,),
-                    fetch=True
-                )
-
-                if alunos and alunos[0][0] > 0:
-                    QMessageBox.warning(self, "Turma possui alunos",
-                                        "Esta turma possui alunos matriculados.\n"
-                                        "NÃ£o Ã© possÃ­vel excluÃ­-la.")
-                    return
-
-                # Verificar se a turma tem horÃ¡rios associados
-                horarios = self.db.execute_query(
-                    "SELECT COUNT(*) FROM horarios WHERE turma_id = ?",
-                    (id_turma,),
-                    fetch=True
-                )
-
-                if horarios and horarios[0][0] > 0:
-                    QMessageBox.warning(self, "Turma possui horÃ¡rios",
-                                        "Esta turma possui horÃ¡rios cadastrados.\n"
-                                        "Remova os horÃ¡rios primeiro.")
-                    return
-
-                self.db.execute_query(
-                    "DELETE FROM turmas WHERE id = ?",
-                    (id_turma,)
-                )
-
-                QMessageBox.information(self, "Sucesso", "Turma excluÃ­da com sucesso!")
-                self.carregar_tabela_turmas()
-
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao excluir turma:\n{str(e)}")
-
-    def ver_detalhes_turma(self, index):
-        """Mostra detalhes da turma em duplo clique"""
-        row = index.row()
-        id_turma = int(self.tabela_turmas.item(row, 0).text())
-
-        dialog = DetalhesTurmaDialog(self, id_turma)
-        dialog.exec_()
-
-    def ver_alunos_turma(self):
-        """Mostra alunos da turma selecionada"""
-        selecionados = self.tabela_turmas.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione uma turma para ver os alunos.")
-            return
-
-        nome_turma = self.tabela_turmas.item(selecionados[0].row(), 1).text()
-
-        dialog = AlunosTurmaDialog(self, nome_turma)
-        dialog.exec_()
-
-
-# ============================================
-# DIÃLOGO DE CADASTRO DE TURMA
-# ============================================
-
-class CadastroTurmaDialog(QDialog):
-    """DiÃ¡logo para cadastro/ediÃ§Ã£o de turmas"""
-
-    def __init__(self, parent=None, id_turma=None):
-        super().__init__(parent)
-        self.id_turma = id_turma
-        self.db = DatabaseManager()
-        self.modo_edicao = id_turma is not None
-
-        self.setWindowTitle("Cadastrar Turma" if not self.modo_edicao else "Editar Turma")
-        self.setFixedSize(600, 500)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_series()
-        self.carregar_turnos()
-        self.carregar_professores()
-        self.carregar_dados_turma() if self.modo_edicao else None
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        titulo = "CADASTRAR NOVA TURMA" if not self.modo_edicao else "EDITAR TURMA"
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setObjectName("title")
-
-        # FormulÃ¡rio
-        form_layout = QFormLayout()
-        form_layout.setContentsMargins(10, 10, 10, 10)
-        form_layout.setSpacing(15)
-        form_layout.setLabelAlignment(Qt.AlignRight)
-
-        # Nome da turma
-        self.txt_nome = QLineEdit()
-        self.txt_nome.setPlaceholderText("Ex: Turma A, 1Âº Ano A")
-
-        # SÃ©rie
-        self.combo_serie = QComboBox()
-
-        # Turno
-        self.combo_turno = QComboBox()
-
-        # Sala
-        self.txt_sala = QLineEdit()
-        self.txt_sala.setPlaceholderText("Ex: Sala 101, LaboratÃ³rio 2")
-
-        # Capacidade
-        self.spin_capacidade = QSpinBox()
-        self.spin_capacidade.setRange(1, 100)
-        self.spin_capacidade.setValue(30)
-
-        # Ano letivo
-        self.spin_ano_letivo = QSpinBox()
-        self.spin_ano_letivo.setRange(2000, 2100)
-        self.spin_ano_letivo.setValue(date.today().year)
-
-        # Professor responsÃ¡vel
-        self.combo_professor = QComboBox()
-        self.combo_professor.addItem("Nenhum", -1)
-
-        # Status
-        self.combo_status = QComboBox()
-        self.combo_status.addItems(["Ativa", "Inativa"])
-
-        # Adicionar campos ao formulÃ¡rio
-        form_layout.addRow("Nome da turma:", self.txt_nome)
-        form_layout.addRow("SÃ©rie:", self.combo_serie)
-        form_layout.addRow("Turno:", self.combo_turno)
-        form_layout.addRow("Sala:", self.txt_sala)
-        form_layout.addRow("Capacidade:", self.spin_capacidade)
-        form_layout.addRow("Ano letivo:", self.spin_ano_letivo)
-        form_layout.addRow("Professor responsÃ¡vel:", self.combo_professor)
-        form_layout.addRow("Status:", self.combo_status)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        self.btn_salvar = AnimacaoBotao(
-            "SALVAR" if not self.modo_edicao else "ATUALIZAR",
-            cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b"
-        )
-        self.btn_salvar.setMinimumHeight(45)
-        self.btn_salvar.clicked.connect(self.salvar_turma)
-
-        self.btn_cancelar = QPushButton("CANCELAR")
-        self.btn_cancelar.setObjectName("danger")
-        self.btn_cancelar.setMinimumHeight(45)
-        self.btn_cancelar.clicked.connect(self.reject)
-
-        if self.modo_edicao:
-            self.btn_excluir = QPushButton("EXCLUIR")
-            self.btn_excluir.setObjectName("warning")
-            self.btn_excluir.setMinimumHeight(45)
-            self.btn_excluir.clicked.connect(self.excluir_turma)
-            botoes_layout.addWidget(self.btn_excluir)
-
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(self.btn_salvar)
-        botoes_layout.addWidget(self.btn_cancelar)
-
-        # Adicionar tudo ao layout principal
-        layout.addWidget(lbl_titulo)
-        layout.addLayout(form_layout)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def carregar_series(self):
-        """Carrega sÃ©ries disponÃ­veis no combobox"""
-        series_config = self.db.get_config('series', '1Âº Ano,2Âº Ano,3Âº Ano,4Âº Ano,5Âº Ano')
-
-        if series_config:
-            series = series_config.split(',')
-            for serie in series:
-                self.combo_serie.addItem(serie.strip())
-
-    def carregar_turnos(self):
-        """Carrega turnos disponÃ­veis no combobox"""
-        turnos_config = self.db.get_config('turnos', 'Matutino,Vespertino,Noturno')
-
-        if turnos_config:
-            turnos = turnos_config.split(',')
-            for turno in turnos:
-                self.combo_turno.addItem(turno.strip())
-
-    def carregar_professores(self):
-        """Carrega professores ativos no combobox"""
-        try:
-            professores = self.db.execute_query('''
-                SELECT id, nome, materia 
-                FROM professores 
-                WHERE ativo = 1
-                ORDER BY nome
-            ''', fetch=True)
-
-            for id_professor, nome, materia in professores:
-                texto = f"{nome} ({materia})" if materia else nome
-                self.combo_professor.addItem(texto, id_professor)
-
-        except Exception as e:
-            print(f"Erro ao carregar professores: {e}")
-
-    def carregar_dados_turma(self):
-        """Carrega dados da turma para ediÃ§Ã£o"""
-        try:
-            turma = self.db.execute_query(
-                "SELECT * FROM turmas WHERE id = ?",
-                (self.id_turma,),
-                fetch=True
-            )
-
-            if turma and len(turma) > 0:
-                dados = turma[0]
-
-                self.txt_nome.setText(dados[1] if dados[1] else "")
-
-                # SÃ©rie
-                if dados[2]:  # sÃ©rie
-                    index = self.combo_serie.findText(dados[2])
-                    if index >= 0:
-                        self.combo_serie.setCurrentIndex(index)
-
-                # Turno
-                if dados[3]:  # turno
-                    index = self.combo_turno.findText(dados[3])
-                    if index >= 0:
-                        self.combo_turno.setCurrentIndex(index)
-
-                self.txt_sala.setText(dados[4] if dados[4] else "")
-
-                if dados[5]:  # capacidade
-                    self.spin_capacidade.setValue(int(dados[5]))
-
-                # Professor responsÃ¡vel
-                if dados[6]:  # professor_responsavel_id
-                    for i in range(self.combo_professor.count()):
-                        if self.combo_professor.itemData(i) == dados[6]:
-                            self.combo_professor.setCurrentIndex(i)
-                            break
-
-                if dados[7]:  # ano_letivo
-                    self.spin_ano_letivo.setValue(int(dados[7]))
-
-                # Status
-                self.combo_status.setCurrentIndex(0 if dados[8] == 1 else 1)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar dados da turma:\n{str(e)}")
-
-    def validar_campos(self):
-        """Valida os campos do formulÃ¡rio"""
-        erros = []
-
-        # Nome obrigatÃ³rio
-        if not self.txt_nome.text().strip():
-            erros.append("Nome da turma Ã© obrigatÃ³rio.")
-
-        # Verificar se jÃ¡ existe turma com mesmo nome, sÃ©rie e turno
-        nome = self.txt_nome.text().strip()
-        serie = self.combo_serie.currentText()
-        turno = self.combo_turno.currentText()
-
-        query = "SELECT COUNT(*) FROM turmas WHERE nome = ? AND serie = ? AND turno = ?"
-        params = [nome, serie, turno]
-
-        if self.modo_edicao:
-            query += " AND id != ?"
-            params.append(self.id_turma)
-
-        resultado = self.db.execute_query(query, tuple(params), fetch=True)
-
-        if resultado and resultado[0][0] > 0:
-            erros.append("JÃ¡ existe uma turma com este nome, sÃ©rie e turno.")
-
-        return erros
-
-    def salvar_turma(self):
-        """Salva ou atualiza a turma no banco de dados"""
-        # Validar campos
-        erros = self.validar_campos()
-        if erros:
-            QMessageBox.warning(self, "Erros no formulÃ¡rio", "\n".join(erros))
-            return
-
-        # Preparar dados
-        dados = {
-            'nome': self.txt_nome.text().strip(),
-            'serie': self.combo_serie.currentText(),
-            'turno': self.combo_turno.currentText(),
-            'sala': self.txt_sala.text().strip(),
-            'capacidade': self.spin_capacidade.value(),
-            'professor_responsavel_id': self.combo_professor.currentData(),
-            'ano_letivo': self.spin_ano_letivo.value(),
-            'ativa': 1 if self.combo_status.currentText() == "Ativa" else 0
-        }
-
-        # Se professor_id for -1 (Nenhum), definir como NULL
-        if dados['professor_responsavel_id'] == -1:
-            dados['professor_responsavel_id'] = None
-
-        try:
-            if self.modo_edicao:
-                # Atualizar turma existente
-                query = '''
-                    UPDATE turmas SET
-                        nome = ?, serie = ?, turno = ?, sala = ?, capacidade = ?,
-                        professor_responsavel_id = ?, ano_letivo = ?, ativa = ?
-                    WHERE id = ?
-                '''
-
-                params = (
-                    dados['nome'], dados['serie'], dados['turno'], dados['sala'], dados['capacidade'],
-                    dados['professor_responsavel_id'], dados['ano_letivo'], dados['ativa'], self.id_turma
-                )
-
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "Turma atualizada com sucesso!")
-
-            else:
-                # Inserir nova turma
-                query = '''
-                    INSERT INTO turmas (
-                        nome, serie, turno, sala, capacidade,
-                        professor_responsavel_id, ano_letivo, ativa
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                '''
-
-                params = (
-                    dados['nome'], dados['serie'], dados['turno'], dados['sala'], dados['capacidade'],
-                    dados['professor_responsavel_id'], dados['ano_letivo'], dados['ativa']
-                )
-
-                self.db.execute_query(query, params)
-                QMessageBox.information(self, "Sucesso", "Turma cadastrada com sucesso!")
-
-            self.accept()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao salvar turma:\n{str(e)}")
-
-    def excluir_turma(self):
-        """Exclui a turma atual"""
-        resposta = QMessageBox.question(
-            self, "Confirmar exclusÃ£o",
-            "Tem certeza que deseja excluir esta turma?\n\n"
-            "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            try:
-                self.db.execute_query(
-                    "DELETE FROM turmas WHERE id = ?",
-                    (self.id_turma,)
-                )
-
-                QMessageBox.information(self, "Sucesso", "Turma excluÃ­da com sucesso!")
-                self.accept()
-
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao excluir turma:\n{str(e)}")
-
-
-# ============================================
-# DIÃLOGO DE DETALHES DA TURMA
-# ============================================
-
-class DetalhesTurmaDialog(QDialog):
-    """DiÃ¡logo para exibir detalhes completos da turma"""
-
-    def __init__(self, parent=None, id_turma=None):
-        super().__init__(parent)
-        self.id_turma = id_turma
-        self.db = DatabaseManager()
-
-        self.setWindowTitle("Detalhes da Turma")
-        self.setFixedSize(900, 700)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_detalhes_turma()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # CabeÃ§alho com nome da turma
-        self.lbl_nome_turma = QLabel()
-        self.lbl_nome_turma.setObjectName("title")
-        self.lbl_nome_turma.setStyleSheet("""
-            QLabel#title {
-                font-size: 22px;
-                font-weight: 700;
-                color: #2c3e50;
-                text-align: center;
-                padding: 15px;
-                background-color: #d6eaf8;
-                border-radius: 8px;
-                border: 2px solid #3498db;
-            }
-        """)
-
-        # Abas para diferentes informaÃ§Ãµes
-        tab_widget = QTabWidget()
-
-        # Aba: InformaÃ§Ãµes Gerais
-        aba_info = QWidget()
-        self.layout_info = QFormLayout(aba_info)
-        self.layout_info.setContentsMargins(20, 20, 20, 20)
-        self.layout_info.setSpacing(10)
-
-        # Aba: Alunos
-        aba_alunos = QWidget()
-        layout_alunos = QVBoxLayout(aba_alunos)
-
-        self.tabela_alunos = QTableWidget()
-        self.tabela_alunos.setColumnCount(6)
-        self.tabela_alunos.setHorizontalHeaderLabels([
-            "Nome", "Data Nasc.", "ResponsÃ¡vel", "Telefone", "Status", "Data MatrÃ­cula"
-        ])
-
-        layout_alunos.addWidget(QLabel("Alunos da Turma:"))
-        layout_alunos.addWidget(self.tabela_alunos)
-
-        # Aba: Disciplinas
-        aba_disciplinas = QWidget()
-        layout_disciplinas = QVBoxLayout(aba_disciplinas)
-
-        self.tabela_disciplinas = QTableWidget()
-        self.tabela_disciplinas.setColumnCount(5)
-        self.tabela_disciplinas.setHorizontalHeaderLabels([
-            "Disciplina", "Professor", "Carga HorÃ¡ria", "Dias", "Status"
-        ])
-
-        layout_disciplinas.addWidget(QLabel("Disciplinas da Turma:"))
-        layout_disciplinas.addWidget(self.tabela_disciplinas)
-
-        # Adicionar abas
-        tab_widget.addTab(aba_info, "InformaÃ§Ãµes")
-        tab_widget.addTab(aba_alunos, "Alunos")
-        tab_widget.addTab(aba_disciplinas, "Disciplinas")
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_fechar = AnimacaoBotao("FECHAR", cor_normal="#7f8c8d", cor_hover="#95a5a6", cor_press="#5d6d7e")
-        btn_fechar.clicked.connect(self.close)
-
-        btn_editar = AnimacaoBotao("EDITAR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_editar.clicked.connect(self.editar_turma)
-
-        botoes_layout.addWidget(btn_editar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(self.lbl_nome_turma)
-        layout.addWidget(tab_widget)
-        layout.addLayout(botoes_layout)
-
-    def carregar_detalhes_turma(self):
-        """Carrega detalhes completos da turma"""
-        try:
-            # Carregar informaÃ§Ãµes bÃ¡sicas
-            turma = self.db.execute_query(
-                "SELECT * FROM turmas WHERE id = ?",
-                (self.id_turma,),
-                fetch=True
-            )
-
-            if turma and len(turma) > 0:
-                dados = turma[0]
-
-                # Atualizar tÃ­tulo
-                nome_completo = f"{dados[1]} - {dados[2]} ({dados[3]})"
-                self.lbl_nome_turma.setText(nome_completo)
-
-                # Adicionar informaÃ§Ãµes gerais
-                self.adicionar_info("SÃ©rie:", dados[2] if dados[2] else "NÃ£o informada")
-                self.adicionar_info("Turno:", dados[3] if dados[3] else "NÃ£o informado")
-                self.adicionar_info("Sala:", dados[4] if dados[4] else "NÃ£o informada")
-                self.adicionar_info("Capacidade:", str(dados[5]) if dados[5] else "NÃ£o informada")
-
-                # Professor responsÃ¡vel
-                if dados[6]:  # professor_responsavel_id
-                    professor = self.db.execute_query(
-                        "SELECT nome, materia FROM professores WHERE id = ?",
-                        (dados[6],),
-                        fetch=True
-                    )
-
-                    if professor and len(professor) > 0:
-                        prof_nome, prof_materia = professor[0]
-                        texto_professor = f"{prof_nome}"
-                        if prof_materia:
-                            texto_professor += f" ({prof_materia})"
-                        self.adicionar_info("Professor responsÃ¡vel:", texto_professor)
-                    else:
-                        self.adicionar_info("Professor responsÃ¡vel:", "NÃ£o atribuÃ­do")
-                else:
-                    self.adicionar_info("Professor responsÃ¡vel:", "NÃ£o atribuÃ­do")
-
-                self.adicionar_info("Ano letivo:", str(dados[7]) if dados[7] else "NÃ£o informado")
-
-                # Contar alunos na turma
-                nome_turma = dados[1]
-                total_alunos = self.db.execute_query(
-                    "SELECT COUNT(*) FROM alunos WHERE turma = ? AND status = 'Ativo'",
-                    (nome_turma,),
-                    fetch=True
-                )
-
-                if total_alunos:
-                    self.adicionar_info("Total de alunos:", str(total_alunos[0][0]))
-
-                    # Calcular porcentagem de ocupaÃ§Ã£o
-                    if dados[5]:  # capacidade
-                        capacidade = dados[5]
-                        ocupacao = (total_alunos[0][0] / capacidade) * 100
-                        self.adicionar_info_colorido(
-                            "OcupaÃ§Ã£o:",
-                            f"{ocupacao:.1f}%",
-                            "#e74c3c" if ocupacao >= 100 else "#f39c12" if ocupacao >= 80 else "#27ae60"
-                        )
-
-                status = "Ativa" if dados[8] == 1 else "Inativa"
-                status_cor = "#27ae60" if dados[8] == 1 else "#e74c3c"
-                self.adicionar_info_colorido("Status:", status, status_cor)
-
-                # Carregar alunos da turma
-                self.carregar_alunos_turma(nome_turma)
-
-                # Carregar disciplinas da turma
-                self.carregar_disciplinas_turma()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar detalhes da turma:\n{str(e)}")
-
-    def adicionar_info(self, label, valor):
-        """Adiciona uma linha de informaÃ§Ã£o ao formulÃ¡rio"""
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet("color: #34495e;")
-
-        self.layout_info.addRow(lbl_label, lbl_valor)
-
-    def adicionar_info_colorido(self, label, valor, cor):
-        """Adiciona uma linha de informaÃ§Ã£o com cor especÃ­fica"""
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet(f"color: {cor}; font-weight: 600;")
-
-        self.layout_info.addRow(lbl_label, lbl_valor)
-
-    def carregar_alunos_turma(self, nome_turma):
-        """Carrega alunos da turma"""
-        try:
-            alunos = self.db.execute_query('''
-                SELECT nome, data_nascimento, nome_mae, telefone_responsavel, status, data_matricula
-                FROM alunos
-                WHERE turma = ? AND status = 'Ativo'
-                ORDER BY nome
-            ''', (nome_turma,), fetch=True)
-
-            self.tabela_alunos.setRowCount(len(alunos))
-
-            for row, (nome, data_nasc, responsavel, telefone, status, data_mat) in enumerate(alunos):
-                self.tabela_alunos.setItem(row, 0, QTableWidgetItem(nome))
-
-                # Data de nascimento formatada
-                if data_nasc:
-                    try:
-                        data_obj = datetime.strptime(data_nasc, '%Y-%m-%d')
-                        data_formatada = data_obj.strftime('%d/%m/%Y')
-                    except:
-                        data_formatada = data_nasc
-                else:
-                    data_formatada = "-"
-
-                self.tabela_alunos.setItem(row, 1, QTableWidgetItem(data_formatada))
-                self.tabela_alunos.setItem(row, 2, QTableWidgetItem(responsavel if responsavel else "-"))
-
-                # Telefone formatado
-                telefone_formatado = ValidadorCampos.formatar_telefone(telefone) if telefone else "-"
-                self.tabela_alunos.setItem(row, 3, QTableWidgetItem(telefone_formatado))
-
-                # Status
-                item_status = QTableWidgetItem(status if status else "-")
-                if status == "Ativo":
-                    item_status.setForeground(QColor('#27ae60'))
-                else:
-                    item_status.setForeground(QColor('#e74c3c'))
-
-                self.tabela_alunos.setItem(row, 4, item_status)
-
-                # Data de matrÃ­cula formatada
-                if data_mat:
-                    try:
-                        data_obj = datetime.strptime(data_mat, '%Y-%m-%d')
-                        data_formatada = data_obj.strftime('%d/%m/%Y')
-                    except:
-                        data_formatada = data_mat
-                else:
-                    data_formatada = "-"
-
-                self.tabela_alunos.setItem(row, 5, QTableWidgetItem(data_formatada))
-
-        except Exception as e:
-            print(f"Erro ao carregar alunos: {e}")
-
-    def carregar_disciplinas_turma(self):
-        """Carrega disciplinas ministradas para a turma"""
-        try:
-            # Obter disciplinas atravÃ©s dos horÃ¡rios
-            disciplinas = self.db.execute_query('''
-                SELECT DISTINCT d.nome, p.nome, d.carga_horaria, 
-                       GROUP_CONCAT(DISTINCT h.dia_semana) as dias,
-                       d.ativa
-                FROM horarios h
-                JOIN disciplinas d ON h.disciplina_id = d.id
-                LEFT JOIN professores p ON d.professor_id = p.id
-                WHERE h.turma_id = ? AND h.ativo = 1
-                GROUP BY d.id
-                ORDER BY d.nome
-            ''', (self.id_turma,), fetch=True)
-
-            self.tabela_disciplinas.setRowCount(len(disciplinas))
-
-            for row, (disciplina, professor, carga_horaria, dias, ativa) in enumerate(disciplinas):
-                self.tabela_disciplinas.setItem(row, 0, QTableWidgetItem(disciplina))
-                self.tabela_disciplinas.setItem(row, 1, QTableWidgetItem(professor if professor else "-"))
-                self.tabela_disciplinas.setItem(row, 2, QTableWidgetItem(str(carga_horaria) if carga_horaria else "-"))
-                self.tabela_disciplinas.setItem(row, 3, QTableWidgetItem(dias if dias else "-"))
-
-                status = "Ativa" if ativa == 1 else "Inativa"
-                item_status = QTableWidgetItem(status)
-
-                if ativa == 1:
-                    item_status.setForeground(QColor('#27ae60'))
-                else:
-                    item_status.setForeground(QColor('#e74c3c'))
-
-                self.tabela_disciplinas.setItem(row, 4, item_status)
-
-        except Exception as e:
-            print(f"Erro ao carregar disciplinas: {e}")
-
-    def editar_turma(self):
-        """Abre diÃ¡logo para editar a turma"""
-        self.close()
-        # Em uma implementaÃ§Ã£o real, aqui abriria o diÃ¡logo de ediÃ§Ã£o
-
-
-# ============================================
-# DIÃLOGO DE ALUNOS DA TURMA
-# ============================================
-
-class AlunosTurmaDialog(QDialog):
-    """DiÃ¡logo para visualizaÃ§Ã£o e gerenciamento de alunos de uma turma"""
-
-    def __init__(self, parent=None, nome_turma=""):
-        super().__init__(parent)
-        self.nome_turma = nome_turma
-        self.db = DatabaseManager()
-
-        self.setWindowTitle(f"Alunos - {nome_turma}")
-        self.setFixedSize(1000, 700)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_alunos_turma()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # CabeÃ§alho
-        cabecalho_layout = QHBoxLayout()
-
-        lbl_titulo = QLabel(f"ALUNOS DA TURMA - {self.nome_turma.upper()}")
-        lbl_titulo.setObjectName("title")
-
-        # Filtros
-        filtros_layout = QHBoxLayout()
-
-        lbl_status = QLabel("Filtrar por status:")
-        self.combo_filtro_status = QComboBox()
-        self.combo_filtro_status.addItems(["Todos", "Ativos", "Inativos"])
-        self.combo_filtro_status.currentIndexChanged.connect(self.filtrar_alunos)
-
-        lbl_serie = QLabel("Filtrar por sÃ©rie:")
-        self.combo_filtro_serie = QComboBox()
-        self.combo_filtro_serie.addItem("Todas as sÃ©ries")
-
-        # Carregar sÃ©ries Ãºnicas dos alunos da turma
-        self.carregar_series_turma()
-        self.combo_filtro_serie.currentIndexChanged.connect(self.filtrar_alunos)
-
-        filtros_layout.addWidget(lbl_status)
-        filtros_layout.addWidget(self.combo_filtro_status)
-        filtros_layout.addWidget(lbl_serie)
-        filtros_layout.addWidget(self.combo_filtro_serie)
-        filtros_layout.addStretch()
-
-        # BotÃµes de aÃ§Ã£o
-        btn_adicionar = AnimacaoBotao("Adicionar Aluno", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_adicionar.clicked.connect(self.adicionar_aluno)
-
-        btn_remover = AnimacaoBotao("Remover da Turma", cor_normal="#e74c3c", cor_hover="#c0392b", cor_press="#a93226")
-        btn_remover.clicked.connect(self.remover_aluno_turma)
-
-        btn_transferir = AnimacaoBotao("Transferir", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_transferir.clicked.connect(self.transferir_aluno)
-
-        # Tabela de alunos
-        self.tabela_alunos = QTableWidget()
-        self.tabela_alunos.setColumnCount(9)
-        self.tabela_alunos.setHorizontalHeaderLabels([
-            "ID", "Nome", "CPF", "Data Nasc.", "SÃ©rie", "ResponsÃ¡vel",
-            "Telefone", "Status", "Data MatrÃ­cula"
-        ])
-
-        # Configurar tabela
-        self.tabela_alunos.setAlternatingRowColors(True)
-        self.tabela_alunos.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabela_alunos.setSelectionMode(QTableWidget.ExtendedSelection)
-        self.tabela_alunos.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Ocultar coluna ID
-        self.tabela_alunos.setColumnHidden(0, True)
-
-        # Ajustar largura das colunas
-        header = self.tabela_alunos.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Nome
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # ResponsÃ¡vel
-
-        # Resumo
-        self.lbl_resumo = QLabel()
-        self.lbl_resumo.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #2c3e50;
-                font-weight: 600;
-                padding: 10px;
-                background-color: #f8f9fa;
-                border-radius: 6px;
-                border: 1px solid #dce1e6;
-            }
-        """)
-
-        # BotÃµes inferiores
-        botoes_layout = QHBoxLayout()
-
-        btn_imprimir = AnimacaoBotao("Imprimir Lista", cor_normal="#f39c12", cor_hover="#d68910", cor_press="#b9770e")
-        btn_imprimir.clicked.connect(self.imprimir_lista)
-
-        btn_fechar = QPushButton("FECHAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.clicked.connect(self.close)
-
-        botoes_layout.addWidget(btn_adicionar)
-        botoes_layout.addWidget(btn_remover)
-        botoes_layout.addWidget(btn_transferir)
-        botoes_layout.addWidget(btn_imprimir)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Montar layout
-        cabecalho_layout.addWidget(lbl_titulo)
-        cabecalho_layout.addStretch()
-
-        layout.addLayout(cabecalho_layout)
-        layout.addLayout(filtros_layout)
-        layout.addWidget(self.tabela_alunos)
-        layout.addWidget(self.lbl_resumo)
-        layout.addLayout(botoes_layout)
-
-
-"""
-PROJETO ESCOLA - SISTEMA DE GESTÃƒO ESCOLAR
-Parte 5/10 - ContinuaÃ§Ã£o: Alunos da Turma, Notas e FrequÃªncia
-"""
-
-
-def carregar_series_turma(self):
-    """Carrega sÃ©ries Ãºnicas dos alunos da turma"""
-    try:
-        series = self.db.execute_query('''
-                SELECT DISTINCT serie 
-                FROM alunos 
-                WHERE turma = ? AND serie IS NOT NULL
-                ORDER BY serie
-            ''', (self.nome_turma,), fetch=True)
-
-        for serie in series:
-            if serie[0]:
-                self.combo_filtro_serie.addItem(serie[0])
-
-    except Exception as e:
-        print(f"Erro ao carregar sÃ©ries: {e}")
-
-
-def carregar_alunos_turma(self):
-    """Carrega todos os alunos da turma"""
-    try:
-        self.alunos_completos = self.db.execute_query('''
-                SELECT id, nome, cpf, data_nascimento, serie, 
-                       nome_mae, telefone_responsavel, status, data_matricula
-                FROM alunos
-                WHERE turma = ?
-                ORDER BY nome
-            ''', (self.nome_turma,), fetch=True)
-
-        self.aplicar_filtros_alunos()
-
-    except Exception as e:
-        QMessageBox.critical(self, "Erro", f"Falha ao carregar alunos:\n{str(e)}")
-
-
-def aplicar_filtros_alunos(self):
-    """Aplica filtros aos alunos"""
-    if not self.alunos_completos:
-        self.tabela_alunos.setRowCount(0)
-        self.lbl_resumo.setText(f"Turma {self.nome_turma} - Nenhum aluno encontrado.")
-        return
-
-    # Filtrar por status
-    status_filtro = self.combo_filtro_status.currentText()
-    serie_filtro = self.combo_filtro_serie.currentText()
-
-    alunos_filtrados = []
-
-    for aluno in self.alunos_completos:
-        id_aluno, nome, cpf, data_nasc, serie, responsavel, telefone, status, data_mat = aluno
-
-        # Aplicar filtro de status
-        if status_filtro == "Ativos" and status != "Ativo":
-            continue
-        elif status_filtro == "Inativos" and status == "Ativo":
-            continue
-
-        # Aplicar filtro de sÃ©rie
-        if serie_filtro != "Todas as sÃ©ries" and serie != serie_filtro:
-            continue
-
-        alunos_filtrados.append(aluno)
-
-    # Atualizar tabela
-    self.tabela_alunos.setRowCount(len(alunos_filtrados))
-
-    for row, (id_aluno, nome, cpf, data_nasc, serie, responsavel, telefone, status, data_mat) in enumerate(
-            alunos_filtrados):
-        # ID (oculto)
-        self.tabela_alunos.setItem(row, 0, QTableWidgetItem(str(id_aluno)))
-
-        # Nome
-        self.tabela_alunos.setItem(row, 1, QTableWidgetItem(nome))
-
-        # CPF formatado
-        cpf_formatado = ValidadorCampos.formatar_cpf(cpf) if cpf else "-"
-        self.tabela_alunos.setItem(row, 2, QTableWidgetItem(cpf_formatado))
-
-        # Data de nascimento formatada
-        if data_nasc:
-            try:
-                data_obj = datetime.strptime(data_nasc, '%Y-%m-%d')
-                data_formatada = data_obj.strftime('%d/%m/%Y')
-            except:
-                data_formatada = data_nasc
-        else:
-            data_formatada = "-"
-
-        self.tabela_alunos.setItem(row, 3, QTableWidgetItem(data_formatada))
-
-        # SÃ©rie
-        self.tabela_alunos.setItem(row, 4, QTableWidgetItem(serie if serie else "-"))
-
-        # ResponsÃ¡vel
-        self.tabela_alunos.setItem(row, 5, QTableWidgetItem(responsavel if responsavel else "-"))
-
-        # Telefone formatado
-        telefone_formatado = ValidadorCampos.formatar_telefone(telefone) if telefone else "-"
-        self.tabela_alunos.setItem(row, 6, QTableWidgetItem(telefone_formatado))
-
-        # Status
-        item_status = QTableWidgetItem(status if status else "-")
-
-        if status == "Ativo":
-            item_status.setForeground(QColor('#27ae60'))
-            item_status.setFont(QFont('', weight=QFont.Bold))
-        else:
-            item_status.setForeground(QColor('#e74c3c'))
-
-        self.tabela_alunos.setItem(row, 7, item_status)
-
-        # Data de matrÃ­cula formatada
-        if data_mat:
-            try:
-                data_obj = datetime.strptime(data_mat, '%Y-%m-%d')
-                data_formatada = data_obj.strftime('%d/%m/%Y')
-            except:
-                data_formatada = data_mat
-        else:
-            data_formatada = "-"
-
-        self.tabela_alunos.setItem(row, 8, QTableWidgetItem(data_formatada))
-
-    # Atualizar resumo
-    total = len(alunos_filtrados)
-    ativos = sum(1 for a in alunos_filtrados if a[7] == "Ativo")
-    inativos = total - ativos
-
-    self.lbl_resumo.setText(
-        f"Turma {self.nome_turma} | "
-        f"Total de alunos: {total} | "
-        f"Ativos: {ativos} | "
-        f"Inativos: {inativos}"
-    )
-
-
-def filtrar_alunos(self):
-    """Aplica filtros quando selecionados"""
-    self.aplicar_filtros_alunos()
-
-
-def adicionar_aluno(self):
-    """Abre diÃ¡logo para adicionar aluno Ã  turma"""
-    dialog = AdicionarAlunoTurmaDialog(self, self.nome_turma)
-    if dialog.exec_():
-        self.carregar_alunos_turma()
-
-
-def remover_aluno_turma(self):
-    """Remove aluno selecionado da turma"""
-    selecionados = self.tabela_alunos.selectedItems()
-
-    if not selecionados:
-        QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                            "Por favor, selecione um ou mais alunos para remover da turma.")
-        return
-
-    # Obter IDs Ãºnicos dos alunos selecionados
-    ids_alunos = set()
-    rows_selecionadas = set()
-
-    for item in selecionados:
-        row = item.row()
-        rows_selecionadas.add(row)
-
-    for row in rows_selecionadas:
-        id_aluno = int(self.tabela_alunos.item(row, 0).text())
-        ids_alunos.add(id_aluno)
-
-    nomes_alunos = []
-    for row in rows_selecionadas:
-        nome = self.tabela_alunos.item(row, 1).text()
-        nomes_alunos.append(nome)
-
-    resposta = QMessageBox.question(
-        self, "Confirmar remoÃ§Ã£o",
-        f"Tem certeza que deseja remover {len(ids_alunos)} aluno(s) da turma?\n\n"
-        f"Alunos: {', '.join(nomes_alunos[:3])}{'...' if len(nomes_alunos) > 3 else ''}",
-        QMessageBox.Yes | QMessageBox.No,
-        QMessageBox.No
-    )
-
-    if resposta == QMessageBox.Yes:
-        try:
-            for id_aluno in ids_alunos:
-                self.db.execute_query(
-                    "UPDATE alunos SET turma = NULL WHERE id = ?",
-                    (id_aluno,)
-                )
-
-            QMessageBox.information(self, "Sucesso",
-                                    f"{len(ids_alunos)} aluno(s) removido(s) da turma com sucesso!")
-            self.carregar_alunos_turma()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao remover alunos da turma:\n{str(e)}")
-
-
-def transferir_aluno(self):
-    """Transfere aluno selecionado para outra turma"""
-    selecionados = self.tabela_alunos.selectedItems()
-
-    if not selecionados:
-        QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                            "Por favor, selecione um aluno para transferir.")
-        return
-
-    row = selecionados[0].row()
-    id_aluno = int(self.tabela_alunos.item(row, 0).text())
-    nome_aluno = self.tabela_alunos.item(row, 1).text()
-
-    dialog = TransferirAlunoDialog(self, id_aluno, nome_aluno, self.nome_turma)
-    if dialog.exec_():
-        self.carregar_alunos_turma()
-
-
-def imprimir_lista(self):
-    """Imprime lista de alunos da turma"""
-    QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                            "A impressÃ£o de listas serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-
-# ============================================
-# DIÃLOGO DE ADICIONAR ALUNO Ã€ TURMA
-# ============================================
-
-class AdicionarAlunoTurmaDialog(QDialog):
-    """DiÃ¡logo para adicionar aluno Ã  turma"""
-
-    def __init__(self, parent=None, nome_turma=""):
-        super().__init__(parent)
-        self.nome_turma = nome_turma
-        self.db = DatabaseManager()
-
-        self.setWindowTitle(f"Adicionar Aluno Ã  Turma {nome_turma}")
-        self.setFixedSize(800, 600)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_alunos_sem_turma()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel(f"ADICIONAR ALUNO Ã€ TURMA")
-        lbl_titulo.setObjectName("title")
-
-        # InformaÃ§Ã£o da turma
-        lbl_info_turma = QLabel(f"Turma: {self.nome_turma}")
-        lbl_info_turma.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                font-weight: 600;
-                color: #2c3e50;
-                padding: 10px;
-                background-color: #e3f2fd;
-                border-radius: 6px;
-                border: 1px solid #3498db;
-            }
-        """)
-
-        # Barra de busca
-        self.txt_busca_aluno = QLineEdit()
-        self.txt_busca_aluno.setPlaceholderText("Buscar aluno por nome ou CPF...")
-        self.txt_busca_aluno.setMinimumHeight(40)
-        self.txt_busca_aluno.textChanged.connect(self.buscar_alunos_sem_turma)
-
-        # Tabela de alunos sem turma
-        lbl_selecionar = QLabel("Alunos sem turma (selecione para adicionar):")
-        lbl_selecionar.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        self.tabela_alunos = QTableWidget()
-        self.tabela_alunos.setColumnCount(6)
-        self.tabela_alunos.setHorizontalHeaderLabels([
-            "ID", "Nome", "CPF", "Data Nasc.", "SÃ©rie", "Status"
-        ])
-
-        # Configurar tabela
-        self.tabela_alunos.setAlternatingRowColors(True)
-        self.tabela_alunos.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabela_alunos.setSelectionMode(QTableWidget.ExtendedSelection)
-        self.tabela_alunos.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Ocultar coluna ID
-        self.tabela_alunos.setColumnHidden(0, True)
-
-        # Ajustar largura das colunas
-        header = self.tabela_alunos.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Nome
-
-        # InformaÃ§Ãµes do aluno selecionado
-        self.lbl_info_selecionado = QLabel("Nenhum aluno selecionado.")
-        self.lbl_info_selecionado.setStyleSheet("""
-            QLabel {
-                padding: 15px;
-                background-color: #f8f9fa;
-                border-radius: 6px;
-                border: 1px solid #dce1e6;
-                color: #7f8c8d;
-                font-size: 13px;
-            }
-        """)
-        self.lbl_info_selecionado.setWordWrap(True)
-
-        # Conectar seleÃ§Ã£o
-        self.tabela_alunos.itemSelectionChanged.connect(self.aluno_selecionado)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        self.btn_adicionar = AnimacaoBotao("ADICIONAR Ã€ TURMA", cor_normal="#27ae60", cor_hover="#219653",
-                                           cor_press="#1e874b")
-        self.btn_adicionar.setMinimumHeight(45)
-        self.btn_adicionar.clicked.connect(self.adicionar_alunos_selecionados)
-        self.btn_adicionar.setEnabled(False)
-
-        btn_cancelar = QPushButton("CANCELAR")
-        btn_cancelar.setObjectName("danger")
-        btn_cancelar.setMinimumHeight(45)
-        btn_cancelar.clicked.connect(self.reject)
-
-        botoes_layout.addWidget(self.btn_adicionar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_cancelar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(lbl_info_turma)
-        layout.addWidget(self.txt_busca_aluno)
-        layout.addWidget(lbl_selecionar)
-        layout.addWidget(self.tabela_alunos)
-        layout.addWidget(self.lbl_info_selecionado)
-        layout.addLayout(botoes_layout)
-
-    def carregar_alunos_sem_turma(self):
-        """Carrega alunos sem turma atribuÃ­da"""
-        try:
-            self.alunos_sem_turma = self.db.execute_query('''
-                SELECT id, nome, cpf, data_nascimento, serie, status
-                FROM alunos
-                WHERE (turma IS NULL OR turma = '') AND status = 'Ativo'
-                ORDER BY nome
-            ''', fetch=True)
-
-            self.atualizar_tabela_alunos(self.alunos_sem_turma)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar alunos sem turma:\n{str(e)}")
-
-    def atualizar_tabela_alunos(self, alunos):
-        """Atualiza a tabela com a lista de alunos fornecida"""
-        self.tabela_alunos.setRowCount(0)
-
-        for row, (id_aluno, nome, cpf, data_nasc, serie, status) in enumerate(alunos):
-            self.tabela_alunos.insertRow(row)
-
-            # ID (oculto)
-            self.tabela_alunos.setItem(row, 0, QTableWidgetItem(str(id_aluno)))
-
-            # Nome
-            self.tabela_alunos.setItem(row, 1, QTableWidgetItem(nome))
-
-            # CPF formatado
-            cpf_formatado = ValidadorCampos.formatar_cpf(cpf) if cpf else "-"
-            self.tabela_alunos.setItem(row, 2, QTableWidgetItem(cpf_formatado))
-
-            # Data de nascimento formatada
-            if data_nasc:
-                try:
-                    data_obj = datetime.strptime(data_nasc, '%Y-%m-%d')
-                    data_formatada = data_obj.strftime('%d/%m/%Y')
-                except:
-                    data_formatada = data_nasc
-            else:
-                data_formatada = "-"
-
-            self.tabela_alunos.setItem(row, 3, QTableWidgetItem(data_formatada))
-
-            # SÃ©rie
-            self.tabela_alunos.setItem(row, 4, QTableWidgetItem(serie if serie else "-"))
-
-            # Status
-            item_status = QTableWidgetItem(status if status else "-")
-
-            if status == "Ativo":
-                item_status.setForeground(QColor('#27ae60'))
-            else:
-                item_status.setForeground(QColor('#e74c3c'))
-
-            self.tabela_alunos.setItem(row, 5, item_status)
-
-    def buscar_alunos_sem_turma(self):
-        """Busca alunos sem turma baseado no texto da busca"""
-        texto = self.txt_busca_aluno.text().strip().lower()
-
-        if not texto:
-            self.atualizar_tabela_alunos(self.alunos_sem_turma)
-            return
-
-        alunos_filtrados = []
-
-        for aluno in self.alunos_sem_turma:
-            # Verificar se o texto estÃ¡ em nome ou CPF
-            id_aluno, nome, cpf, data_nasc, serie, status = aluno
-
-            if texto in nome.lower() or (cpf and texto in cpf.lower()):
-                alunos_filtrados.append(aluno)
-
-        self.atualizar_tabela_alunos(alunos_filtrados)
-
-    def aluno_selecionado(self):
-        """Quando um aluno Ã© selecionado na tabela"""
-        selecionados = self.tabela_alunos.selectedItems()
-
-        if not selecionados:
-            self.lbl_info_selecionado.setText("Nenhum aluno selecionado.")
-            self.btn_adicionar.setEnabled(False)
-            return
-
-        # Obter IDs Ãºnicos dos alunos selecionados
-        rows_selecionadas = set()
-
-        for item in selecionados:
-            rows_selecionadas.add(item.row())
-
-        if len(rows_selecionadas) == 1:
-            row = list(rows_selecionadas)[0]
-            nome = self.tabela_alunos.item(row, 1).text()
-            cpf = self.tabela_alunos.item(row, 2).text()
-            serie = self.tabela_alunos.item(row, 4).text()
-
-            self.lbl_info_selecionado.setText(
-                f"Aluno selecionado: {nome}\n"
-                f"CPF: {cpf} | SÃ©rie: {serie}"
-            )
-        else:
-            self.lbl_info_selecionado.setText(f"{len(rows_selecionadas)} alunos selecionados.")
-
-        self.btn_adicionar.setEnabled(True)
-
-    def adicionar_alunos_selecionados(self):
-        """Adiciona alunos selecionados Ã  turma"""
-        selecionados = self.tabela_alunos.selectedItems()
-
-        if not selecionados:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione um ou mais alunos.")
-            return
-
-        # Obter IDs Ãºnicos dos alunos selecionados
-        ids_alunos = set()
-        rows_selecionadas = set()
-
-        for item in selecionados:
-            row = item.row()
-            rows_selecionadas.add(row)
-
-        for row in rows_selecionadas:
-            id_aluno = int(self.tabela_alunos.item(row, 0).text())
-            ids_alunos.add(id_aluno)
-
-        try:
-            for id_aluno in ids_alunos:
-                self.db.execute_query(
-                    "UPDATE alunos SET turma = ? WHERE id = ?",
-                    (self.nome_turma, id_aluno)
-                )
-
-            QMessageBox.information(self, "Sucesso",
-                                    f"{len(ids_alunos)} aluno(s) adicionado(s) Ã  turma {self.nome_turma} com sucesso!")
-            self.accept()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao adicionar alunos Ã  turma:\n{str(e)}")
-
-
-# ============================================
-# DIÃLOGO DE TRANSFERIR ALUNO
-# ============================================
-
-class TransferirAlunoDialog(QDialog):
-    """DiÃ¡logo para transferir aluno para outra turma"""
-
-    def __init__(self, parent=None, id_aluno=None, nome_aluno="", turma_atual=""):
-        super().__init__(parent)
-        self.id_aluno = id_aluno
-        self.nome_aluno = nome_aluno
-        self.turma_atual = turma_atual
-        self.db = DatabaseManager()
-
-        self.setWindowTitle(f"Transferir Aluno - {nome_aluno}")
-        self.setFixedSize(500, 400)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_turmas_disponiveis()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel("TRANSFERIR ALUNO")
-        lbl_titulo.setObjectName("title")
-
-        # InformaÃ§Ãµes do aluno
-        lbl_info_aluno = QLabel(f"Aluno: {self.nome_aluno}")
-        lbl_info_aluno.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                font-weight: 600;
-                color: #2c3e50;
-                padding: 10px;
-                background-color: #fef5e7;
-                border-radius: 6px;
-                border: 1px solid #f39c12;
-            }
-        """)
-
-        lbl_turma_atual = QLabel(f"Turma atual: {self.turma_atual if self.turma_atual else 'Nenhuma'}")
-        lbl_turma_atual.setStyleSheet("font-weight: 600; color: #f39c12;")
-
-        # Selecionar nova turma
-        lbl_selecionar = QLabel("Selecione a nova turma:")
-        lbl_selecionar.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        self.combo_turmas = QComboBox()
-
-        # ObservaÃ§Ã£o
-        self.txt_observacao = QTextEdit()
-        self.txt_observacao.setMaximumHeight(80)
-        self.txt_observacao.setPlaceholderText("ObservaÃ§Ã£o sobre a transferÃªncia (opcional)...")
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_transferir = AnimacaoBotao("TRANSFERIR", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_transferir.setMinimumHeight(45)
-        btn_transferir.clicked.connect(self.transferir_aluno)
-
-        btn_cancelar = QPushButton("CANCELAR")
-        btn_cancelar.setObjectName("danger")
-        btn_cancelar.setMinimumHeight(45)
-        btn_cancelar.clicked.connect(self.reject)
-
-        botoes_layout.addWidget(btn_transferir)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_cancelar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(lbl_info_aluno)
-        layout.addWidget(lbl_turma_atual)
-        layout.addWidget(lbl_selecionar)
-        layout.addWidget(self.combo_turmas)
-        layout.addWidget(QLabel("ObservaÃ§Ã£o:"))
-        layout.addWidget(self.txt_observacao)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def carregar_turmas_disponiveis(self):
-        """Carrega turmas disponÃ­veis para transferÃªncia"""
-        try:
-            turmas = self.db.execute_query('''
-                SELECT id, nome, serie, turno, capacidade,
-                       (SELECT COUNT(*) FROM alunos WHERE turma = turmas.nome AND status = 'Ativo') as alunos
-                FROM turmas
-                WHERE ativa = 1
-                ORDER BY serie, nome
-            ''', fetch=True)
-
-            self.combo_turmas.clear()
-
-            for id_turma, nome, serie, turno, capacidade, alunos in turmas:
-                # NÃ£o incluir a turma atual
-                if nome == self.turma_atual:
-                    continue
-
-                # Verificar se hÃ¡ vagas
-                vagas = capacidade - alunos if capacidade else "?"
-                texto = f"{nome} - {serie} ({turno}) | Vagas: {vagas}"
-
-                self.combo_turmas.addItem(texto, id_turma)
-
-            if self.combo_turmas.count() == 0:
-                self.combo_turmas.addItem("Nenhuma turma disponÃ­vel", -1)
-
-        except Exception as e:
-            print(f"Erro ao carregar turmas: {e}")
-
-    def transferir_aluno(self):
-        """Realiza a transferÃªncia do aluno"""
-        if self.combo_turmas.currentData() == -1:
-            QMessageBox.warning(self, "Nenhuma turma disponÃ­vel",
-                                "NÃ£o hÃ¡ turmas disponÃ­veis para transferÃªncia.")
-            return
-
-        nova_turma_id = self.combo_turmas.currentData()
-        nova_turma_nome = self.combo_turmas.currentText().split(" - ")[0]
-        observacao = self.txt_observacao.toPlainText().strip()
-
-        resposta = QMessageBox.question(
-            self, "Confirmar transferÃªncia",
-            f"Transferir aluno {self.nome_aluno} para a turma {nova_turma_nome}?\n\n"
-            f"Turma atual: {self.turma_atual}\n"
-            f"Nova turma: {nova_turma_nome}",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if resposta == QMessageBox.Yes:
-            try:
-                # Atualizar turma do aluno
-                self.db.execute_query(
-                    "UPDATE alunos SET turma = ? WHERE id = ?",
-                    (nova_turma_nome, self.id_aluno)
-                )
-
-                # Registrar histÃ³rico de transferÃªncia (se houver tabela de histÃ³rico)
-                try:
-                    self.db.execute_query('''
-                        INSERT INTO historico_transferencias 
-                        (aluno_id, turma_antiga, turma_nova, data_transferencia, observacao)
-                        VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
-                    ''', (self.id_aluno, self.turma_atual, nova_turma_nome, observacao))
-                except:
-                    pass  # Tabela de histÃ³rico pode nÃ£o existir
-
-                QMessageBox.information(self, "Sucesso",
-                                        f"Aluno transferido com sucesso para {nova_turma_nome}!")
-                self.accept()
-
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao transferir aluno:\n{str(e)}")
-
-    # ============================================
-    # PÃGINA DE NOTAS (COMPLETA)
-    # ============================================
-
-    def criar_pagina_notas(self):
-        """Cria a pÃ¡gina de lanÃ§amento de notas - COMPLETA"""
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # CabeÃ§alho
-        cabecalho_layout = QHBoxLayout()
-
-        lbl_titulo = QLabel("LANÃ‡AMENTO DE NOTAS")
-        lbl_titulo.setObjectName("title")
-
-        # Filtros
-        filtros_layout = QGridLayout()
-        filtros_layout.setSpacing(15)
-
-        # Filtro por turma
-        lbl_turma = QLabel("Turma:")
-        self.combo_turma_notas = QComboBox()
-        self.combo_turma_notas.addItem("Selecione uma turma")
-        self.combo_turma_notas.currentIndexChanged.connect(self.filtrar_por_turma_notas)
-
-        # Filtro por disciplina
-        lbl_disciplina = QLabel("Disciplina:")
-        self.combo_disciplina_notas = QComboBox()
-        self.combo_disciplina_notas.addItem("Selecione uma disciplina")
-        self.combo_disciplina_notas.currentIndexChanged.connect(self.filtrar_por_disciplina_notas)
-
-        # Filtro por bimestre
-        lbl_bimestre = QLabel("Bimestre:")
-        self.combo_bimestre_notas = QComboBox()
-        self.combo_bimestre_notas.addItems(["1Âº Bimestre", "2Âº Bimestre", "3Âº Bimestre", "4Âº Bimestre"])
-        self.combo_bimestre_notas.currentIndexChanged.connect(self.carregar_notas_turma)
-
-        # BotÃ£o para carregar
-        btn_carregar = AnimacaoBotao("Carregar", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_carregar.clicked.connect(self.carregar_notas_turma)
-
-        filtros_layout.addWidget(lbl_turma, 0, 0)
-        filtros_layout.addWidget(self.combo_turma_notas, 0, 1)
-        filtros_layout.addWidget(lbl_disciplina, 0, 2)
-        filtros_layout.addWidget(self.combo_disciplina_notas, 0, 3)
-        filtros_layout.addWidget(lbl_bimestre, 1, 0)
-        filtros_layout.addWidget(self.combo_bimestre_notas, 1, 1)
-        filtros_layout.addWidget(btn_carregar, 1, 3)
-
-        # Tabela de notas
-        self.tabela_notas = QTableWidget()
-        self.tabela_notas.setColumnCount(10)
-        self.tabela_notas.setHorizontalHeaderLabels([
-            "ID Aluno", "Nome", "Nota 1", "Nota 2", "Nota 3", "Nota 4",
-            "MÃ©dia", "Faltas", "SituaÃ§Ã£o", "ObservaÃ§Ãµes"
-        ])
-
-        # Configurar tabela
-        self.tabela_notas.setAlternatingRowColors(True)
-        self.tabela_notas.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
-
-        # Ocultar coluna ID
-        self.tabela_notas.setColumnHidden(0, True)
-
-        # Ajustar largura das colunas
-        header = self.tabela_notas.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Nome
-        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # ObservaÃ§Ãµes
-
-        # Configurar validadores para campos numÃ©ricos
-        for col in [2, 3, 4, 5, 6, 7]:  # Colunas de notas e faltas
-            self.tabela_notas.horizontalHeaderItem(col).setToolTip("Clique duas vezes para editar")
-
-        # BotÃµes de aÃ§Ã£o
-        botoes_layout = QHBoxLayout()
-
-        btn_salvar = AnimacaoBotao("Salvar Notas", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_salvar.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        btn_salvar.clicked.connect(self.salvar_notas)
-
-        btn_calcular = AnimacaoBotao("Calcular MÃ©dias", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_calcular.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        btn_calcular.clicked.connect(self.calcular_medias)
-
-        btn_limpar = AnimacaoBotao("Limpar", cor_normal="#f39c12", cor_hover="#d68910", cor_press="#b9770e")
-        btn_limpar.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
-        btn_limpar.clicked.connect(self.limpar_notas)
-
-        btn_exportar = AnimacaoBotao("Exportar", cor_normal="#9b59b6", cor_hover="#8e44ad", cor_press="#7d3c98")
-        btn_exportar.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        btn_exportar.clicked.connect(self.exportar_notas)
-
-        botoes_layout.addWidget(btn_salvar)
-        botoes_layout.addWidget(btn_calcular)
-        botoes_layout.addWidget(btn_limpar)
-        botoes_layout.addWidget(btn_exportar)
-        botoes_layout.addStretch()
-
-        # EstatÃ­sticas
-        self.lbl_estatisticas = QLabel("Selecione uma turma e disciplina para comeÃ§ar")
-        self.lbl_estatisticas.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #2c3e50;
-                font-weight: 600;
-                padding: 10px;
-                background-color: #f8f9fa;
-                border-radius: 6px;
-                border: 1px solid #dce1e6;
-            }
-        """)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addLayout(filtros_layout)
-        layout.addWidget(self.tabela_notas)
-        layout.addWidget(self.lbl_estatisticas)
-        layout.addLayout(botoes_layout)
-
-        self.paginas['notas'] = pagina
-        self.central_widget.addWidget(pagina)
-
-        # Carregar turmas disponÃ­veis
-        self.carregar_turmas_notas()
-
-    def carregar_turmas_notas(self):
-        """Carrega turmas disponÃ­veis para lanÃ§amento de notas"""
-        try:
-            turmas = self.db.execute_query('''
-                SELECT id, nome, serie 
-                FROM turmas 
-                WHERE ativa = 1
-                ORDER BY serie, nome
-            ''', fetch=True)
-
-            self.combo_turma_notas.clear()
-            self.combo_turma_notas.addItem("Selecione uma turma")
-
-            for id_turma, nome, serie in turmas:
-                texto = f"{nome} - {serie}" if serie else nome
-                self.combo_turma_notas.addItem(texto, id_turma)
-
-        except Exception as e:
-            print(f"Erro ao carregar turmas: {e}")
-
-    def filtrar_por_turma_notas(self):
-        """Filtra disciplinas quando uma turma Ã© selecionada"""
-        turma_id = self.combo_turma_notas.currentData()
-
-        if not turma_id or self.combo_turma_notas.currentIndex() == 0:
-            self.combo_disciplina_notas.clear()
-            self.combo_disciplina_notas.addItem("Selecione uma disciplina")
-            return
-
-        try:
-            # Obter disciplinas ministradas para a turma selecionada
-            disciplinas = self.db.execute_query('''
-                SELECT DISTINCT d.id, d.nome, d.serie
-                FROM horarios h
-                JOIN disciplinas d ON h.disciplina_id = d.id
-                WHERE h.turma_id = ? AND h.ativo = 1 AND d.ativa = 1
-                ORDER BY d.nome
-            ''', (turma_id,), fetch=True)
-
-            self.combo_disciplina_notas.clear()
-            self.combo_disciplina_notas.addItem("Selecione uma disciplina")
-
-            for id_disciplina, nome, serie in disciplinas:
-                texto = f"{nome} ({serie})" if serie else nome
-                self.combo_disciplina_notas.addItem(texto, id_disciplina)
-
-        except Exception as e:
-            print(f"Erro ao carregar disciplinas: {e}")
-
-    def filtrar_por_disciplina_notas(self):
-        """Filtra alunos quando uma disciplina Ã© selecionada"""
-        if (self.combo_turma_notas.currentIndex() > 0 and
-                self.combo_disciplina_notas.currentIndex() > 0):
-            self.carregar_notas_turma()
-
-    def carregar_notas_turma(self):
-        """Carrega notas dos alunos da turma selecionada"""
-        turma_id = self.combo_turma_notas.currentData()
-        disciplina_id = self.combo_disciplina_notas.currentData()
-        bimestre = self.combo_bimestre_notas.currentIndex() + 1
-
-        if not turma_id or self.combo_turma_notas.currentIndex() == 0:
-            return
-
-        if not disciplina_id or self.combo_disciplina_notas.currentIndex() == 0:
-            return
-
-        try:
-            # Obter nome da turma
-            turma_nome_result = self.db.execute_query(
-                "SELECT nome FROM turmas WHERE id = ?",
-                (turma_id,),
-                fetch=True
-            )
-
-            if not turma_nome_result:
-                return
-
-            turma_nome = turma_nome_result[0][0]
-
-            # Obter alunos da turma
-            alunos = self.db.execute_query('''
-                SELECT id, nome 
-                FROM alunos 
-                WHERE turma = ? AND status = 'Ativo'
-                ORDER BY nome
-            ''', (turma_nome,), fetch=True)
-
-            self.tabela_notas.setRowCount(len(alunos))
-
-            for row, (id_aluno, nome_aluno) in enumerate(alunos):
-                # ID Aluno (oculto)
-                self.tabela_notas.setItem(row, 0, QTableWidgetItem(str(id_aluno)))
-
-                # Nome
-                self.tabela_notas.setItem(row, 1, QTableWidgetItem(nome_aluno))
-
-                # Obter notas existentes
-                notas_existentes = self.db.execute_query('''
-                    SELECT nota1, nota2, nota3, nota4, media, faltas, situacao, observacoes
-                    FROM notas
-                    WHERE aluno_id = ? AND disciplina_id = ? AND bimestre = ?
-                ''', (id_aluno, disciplina_id, bimestre), fetch=True)
-
-                # Campos de notas (2-5)
-                for col in range(2, 6):
-                    nota_item = QTableWidgetItem()
-                    nota_item.setTextAlignment(Qt.AlignCenter)
-
-                    if notas_existentes and len(notas_existentes) > 0:
-                        nota_valor = notas_existentes[0][col - 2]
-                        if nota_valor is not None:
-                            nota_item.setText(f"{nota_valor:.1f}")
-
-                    self.tabela_notas.setItem(row, col, nota_item)
-
-                # MÃ©dia (6)
-                media_item = QTableWidgetItem()
-                media_item.setTextAlignment(Qt.AlignCenter)
-
-                if notas_existentes and len(notas_existentes) > 0:
-                    media_valor = notas_existentes[0][4]
-                    if media_valor is not None:
-                        media_item.setText(f"{media_valor:.1f}")
-
-                        # Colorir mÃ©dia
-                        if media_valor < 5.0:
-                            media_item.setForeground(QColor('#e74c3c'))
-                            media_item.setFont(QFont('', weight=QFont.Bold))
-                        elif media_valor < 7.0:
-                            media_item.setForeground(QColor('#f39c12'))
-                        else:
-                            media_item.setForeground(QColor('#27ae60'))
-
-                self.tabela_notas.setItem(row, 6, media_item)
-
-                # Faltas (7)
-                faltas_item = QTableWidgetItem()
-                faltas_item.setTextAlignment(Qt.AlignCenter)
-
-                if notas_existentes and len(notas_existentes) > 0:
-                    faltas_valor = notas_existentes[0][5]
-                    if faltas_valor is not None:
-                        faltas_item.setText(str(faltas_valor))
-
-                self.tabela_notas.setItem(row, 7, faltas_item)
-
-                # SituaÃ§Ã£o (8)
-                situacao_item = QTableWidgetItem()
-                situacao_item.setTextAlignment(Qt.AlignCenter)
-
-                if notas_existentes and len(notas_existentes) > 0:
-                    situacao_valor = notas_existentes[0][6]
-                    if situacao_valor:
-                        situacao_item.setText(situacao_valor)
-
-                        # Colorir situaÃ§Ã£o
-                        if situacao_valor == "Aprovado":
-                            situacao_item.setForeground(QColor('#27ae60'))
-                            situacao_item.setFont(QFont('', weight=QFont.Bold))
-                        elif situacao_valor == "Reprovado":
-                            situacao_item.setForeground(QColor('#e74c3c'))
-                        else:
-                            situacao_item.setForeground(QColor('#f39c12'))
-
-                self.tabela_notas.setItem(row, 8, situacao_item)
-
-                # ObservaÃ§Ãµes (9)
-                observacoes_item = QTableWidgetItem()
-
-                if notas_existentes and len(notas_existentes) > 0:
-                    obs_valor = notas_existentes[0][7]
-                    if obs_valor:
-                        observacoes_item.setText(obs_valor)
-
-                self.tabela_notas.setItem(row, 9, observacoes_item)
-
-            # Atualizar estatÃ­sticas
-            self.atualizar_estatisticas_notas()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar notas:\n{str(e)}")
-
-    def atualizar_estatisticas_notas(self):
-        """Atualiza as estatÃ­sticas das notas carregadas"""
-        total_alunos = self.tabela_notas.rowCount()
-
-        if total_alunos == 0:
-            self.lbl_estatisticas.setText("Nenhum aluno encontrado para esta turma/disciplina.")
-            return
-
-        # Contadores
-        notas_preenchidas = 0
-        soma_medias = 0
-        aprovados = 0
-        reprovados = 0
-        recuperacao = 0
-
-        for row in range(total_alunos):
-            # Verificar mÃ©dia
-            media_item = self.tabela_notas.item(row, 6)
-            if media_item and media_item.text():
-                try:
-                    media = float(media_item.text())
-                    soma_medias += media
-                    notas_preenchidas += 1
-
-                    # Contar por situaÃ§Ã£o
-                    situacao_item = self.tabela_notas.item(row, 8)
-                    if situacao_item:
-                        situacao = situacao_item.text()
-                        if situacao == "Aprovado":
-                            aprovados += 1
-                        elif situacao == "Reprovado":
-                            reprovados += 1
-                        elif situacao == "RecuperaÃ§Ã£o":
-                            recuperacao += 1
-                except:
-                    pass
-
-        # Calcular mÃ©dia geral
-        media_geral = soma_medias / notas_preenchidas if notas_preenchidas > 0 else 0
-
-        # Obter informaÃ§Ãµes da turma e disciplina
-        turma_texto = self.combo_turma_notas.currentText()
-        disciplina_texto = self.combo_disciplina_notas.currentText()
-        bimestre_texto = self.combo_bimestre_notas.currentText()
-
-        self.lbl_estatisticas.setText(
-            f"{turma_texto} | {disciplina_texto} | {bimestre_texto} | "
-            f"Total de alunos: {total_alunos} | "
-            f"MÃ©dia geral: {media_geral:.1f} | "
-            f"Aprovados: {aprovados} | RecuperaÃ§Ã£o: {recuperacao} | Reprovados: {reprovados}"
-        )
+            messagebox.showerror("Erro", f"Erro ao salvar notas: {str(e)}")
 
     def calcular_medias(self):
-        """Calcula mÃ©dias para todos os alunos na tabela"""
-        try:
-            for row in range(self.tabela_notas.rowCount()):
-                # Obter notas
-                notas = []
-                for col in range(2, 6):  # Colunas 2-5: Nota1 a Nota4
-                    item = self.tabela_notas.item(row, col)
-                    if item and item.text().strip():
-                        try:
-                            nota = float(item.text())
-                            notas.append(nota)
-                        except:
-                            pass
+        """Calcula médias para todos os alunos"""
+        for aluno_id, dados in self.entries_notas.items():
+            notas = [dados['nota1'], dados['nota2'], dados['nota3'], dados['nota4']]
+            media = sum(notas) / len(notas)
 
-                # Calcular mÃ©dia se houver pelo menos uma nota
-                if notas:
-                    media = sum(notas) / len(notas)
+            # Atualizar situação
+            situacao = 'Aprovado' if media >= 6.0 else 'Recuperação' if media >= 4.0 else 'Reprovado'
 
-                    # Atualizar cÃ©lula de mÃ©dia
-                    media_item = self.tabela_notas.item(row, 6)
-                    if not media_item:
-                        media_item = QTableWidgetItem()
-                        self.tabela_notas.setItem(row, 6, media_item)
+            dados['media'] = media
+            dados['situacao'] = situacao
 
-                    media_item.setText(f"{media:.1f}")
-                    media_item.setTextAlignment(Qt.AlignCenter)
+            # Atualizar tabela
+            item = dados['item']
+            valores = list(self.tree_notas.item(item, 'values'))
+            valores[6] = f"{media:.1f}"  # Média
+            valores[7] = situacao  # Situação
+            self.tree_notas.item(item, values=valores)
 
-                    # Colorir mÃ©dia
-                    if media < 5.0:
-                        media_item.setForeground(QColor('#e74c3c'))
-                        media_item.setFont(QFont('', weight=QFont.Bold))
+        messagebox.showinfo("Sucesso", "Médias calculadas para todos os alunos!")
 
-                        # Atualizar situaÃ§Ã£o
-                        situacao_item = self.tabela_notas.item(row, 8)
-                        if not situacao_item:
-                            situacao_item = QTableWidgetItem()
-                            self.tabela_notas.setItem(row, 8, situacao_item)
+    def gerar_relatorio_notas(self):
+        """Gera relatório de notas"""
+        turma_nome = self.turma_notas.get()
+        disciplina_nome = self.disciplina_notas.get()
+        bimestre = self.bimestre_notas.get()
 
-                        situacao_item.setText("Reprovado")
-                        situacao_item.setForeground(QColor('#e74c3c'))
-
-                    elif media < 7.0:
-                        media_item.setForeground(QColor('#f39c12'))
-
-                        # Atualizar situaÃ§Ã£o
-                        situacao_item = self.tabela_notas.item(row, 8)
-                        if not situacao_item:
-                            situacao_item = QTableWidgetItem()
-                            self.tabela_notas.setItem(row, 8, situacao_item)
-
-                        situacao_item.setText("RecuperaÃ§Ã£o")
-                        situacao_item.setForeground(QColor('#f39c12'))
-
-                    else:
-                        media_item.setForeground(QColor('#27ae60'))
-
-                        # Atualizar situaÃ§Ã£o
-                        situacao_item = self.tabela_notas.item(row, 8)
-                        if not situacao_item:
-                            situacao_item = QTableWidgetItem()
-                            self.tabela_notas.setItem(row, 8, situacao_item)
-
-                        situacao_item.setText("Aprovado")
-                        situacao_item.setForeground(QColor('#27ae60'))
-
-            # Atualizar estatÃ­sticas
-            self.atualizar_estatisticas_notas()
-
-            QMessageBox.information(self, "MÃ©dias calculadas",
-                                    "MÃ©dias calculadas com sucesso para todos os alunos!")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao calcular mÃ©dias:\n{str(e)}")
-
-    def salvar_notas(self):
-        """Salva todas as notas da tabela no banco de dados"""
-        turma_id = self.combo_turma_notas.currentData()
-        disciplina_id = self.combo_disciplina_notas.currentData()
-        bimestre = self.combo_bimestre_notas.currentIndex() + 1
-
-        if not turma_id or self.combo_turma_notas.currentIndex() == 0:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione uma turma.")
-            return
-
-        if not disciplina_id or self.combo_disciplina_notas.currentIndex() == 0:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione uma disciplina.")
+        if not all([turma_nome, disciplina_nome, bimestre]):
+            messagebox.showwarning("Aviso", "Selecione turma, disciplina e bimestre!")
             return
 
         try:
-            total_salvos = 0
-            total_atualizados = 0
+            relatorio = f"RELATÓRIO DE NOTAS - {disciplina_nome}\n"
+            relatorio += "=" * 50 + "\n\n"
+            relatorio += f"Turma: {turma_nome}\n"
+            relatorio += f"Bimestre: {bimestre}\n"
+            relatorio += f"Data: {date.today().strftime('%d/%m/%Y')}\n\n"
 
-            for row in range(self.tabela_notas.rowCount()):
-                aluno_id = int(self.tabela_notas.item(row, 0).text())
+            relatorio += "ALUNOS E NOTAS:\n"
+            relatorio += "-" * 50 + "\n"
 
-                # Obter valores das cÃ©lulas
-                notas = []
-                for col in range(2, 6):  # Nota1 a Nota4
-                    item = self.tabela_notas.item(row, col)
-                    notas.append(float(item.text()) if item and item.text().strip() else None)
+            aprovados = 0
+            recuperacao = 0
+            reprovados = 0
 
-                media_item = self.tabela_notas.item(row, 6)
-                media = float(media_item.text()) if media_item and media_item.text().strip() else None
+            for aluno_id, dados in self.entries_notas.items():
+                # Buscar nome do aluno
+                item = self.tree_notas.item(dados['item'])
+                aluno_nome = item['values'][1]
 
-                faltas_item = self.tabela_notas.item(row, 7)
-                faltas = int(faltas_item.text()) if faltas_item and faltas_item.text().strip() else None
+                relatorio += f"{aluno_nome}:\n"
+                relatorio += f"  N1: {dados['nota1']:.1f} | N2: {dados['nota2']:.1f} | "
+                relatorio += f"N3: {dados['nota3']:.1f} | N4: {dados['nota4']:.1f}\n"
+                relatorio += f"  Média: {dados['media']:.1f} | Situação: {dados['situacao']}\n\n"
 
-                situacao_item = self.tabela_notas.item(row, 8)
-                situacao = situacao_item.text() if situacao_item and situacao_item.text().strip() else None
-
-                observacoes_item = self.tabela_notas.item(row, 9)
-                observacoes = observacoes_item.text() if observacoes_item and observacoes_item.text().strip() else None
-
-                # Verificar se jÃ¡ existe registro
-                existente = self.db.execute_query('''
-                    SELECT id FROM notas 
-                    WHERE aluno_id = ? AND disciplina_id = ? AND bimestre = ?
-                ''', (aluno_id, disciplina_id, bimestre), fetch=True)
-
-                if existente and len(existente) > 0:
-                    # Atualizar registro existente
-                    query = '''
-                        UPDATE notas SET
-                            nota1 = ?, nota2 = ?, nota3 = ?, nota4 = ?,
-                            media = ?, faltas = ?, situacao = ?, observacoes = ?
-                        WHERE id = ?
-                    '''
-
-                    self.db.execute_query(query, (
-                        notas[0], notas[1], notas[2], notas[3],
-                        media, faltas, situacao, observacoes,
-                        existente[0][0]
-                    ))
-
-                    total_atualizados += 1
+                # Contar situações
+                if dados['situacao'] == 'Aprovado':
+                    aprovados += 1
+                elif dados['situacao'] == 'Recuperação':
+                    recuperacao += 1
                 else:
-                    # Inserir novo registro
-                    query = '''
-                        INSERT INTO notas (
-                            aluno_id, disciplina_id, bimestre,
-                            nota1, nota2, nota3, nota4,
-                            media, faltas, situacao, observacoes,
-                            data_lancamento
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    '''
+                    reprovados += 1
 
-                    self.db.execute_query(query, (
-                        aluno_id, disciplina_id, bimestre,
-                        notas[0], notas[1], notas[2], notas[3],
-                        media, faltas, situacao, observacoes
-                    ))
+            relatorio += f"\nRESUMO:\n"
+            relatorio += f"Aprovados: {aprovados}\n"
+            relatorio += f"Recuperação: {recuperacao}\n"
+            relatorio += f"Reprovados: {reprovados}\n"
+            relatorio += f"Total: {len(self.entries_notas)}\n"
+            relatorio += f"Taxa de Aprovação: {(aprovados / len(self.entries_notas)) * 100:.1f}%"
 
-                    total_salvos += 1
-
-            # Atualizar estatÃ­sticas
-            self.atualizar_estatisticas_notas()
-
-            QMessageBox.information(self, "Notas salvas",
-                                    f"Notas salvas com sucesso!\n\n"
-                                    f"Novos registros: {total_salvos}\n"
-                                    f"Registros atualizados: {total_atualizados}")
+            self.mostrar_relatorio(f"Notas - {disciplina_nome}", relatorio)
 
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao salvar notas:\n{str(e)}")
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
 
-    def limpar_notas(self):
-        """Limpa todas as notas da tabela"""
-        resposta = QMessageBox.question(
-            self, "Confirmar limpeza",
-            "Tem certeza que deseja limpar todas as notas da tabela?\n\n"
-            "Esta aÃ§Ã£o nÃ£o afeta os dados salvos no banco.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+    # ========== MÓDULO DIÁRIO DE CLASSE (COMPLETO) ==========
+
+    def carregar_diario_classe(self):
+        """Carrega o módulo completo de diário de classe"""
+        self.limpar_conteudo()
+        self.ativar_botao("📓 Diário de Classe")
+        self.registrar_log('ACESSO', 'Diário de Classe', 'Acessou módulo de diário de classe')
+
+        # Título
+        title_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        title_frame.pack(fill=tk.X, pady=(0, 20))
+
+        tk.Label(title_frame, text="Diário de Classe", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Registro de aulas e conteúdo ministrado",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook com abas
+        notebook = ttk.Notebook(self.content_frame, style='Custom.TNotebook')
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Aba 1: Registrar Aula
+        aba_registro = ttk.Frame(notebook)
+        notebook.add(aba_registro, text="➕ Registrar Aula")
+
+        self.carregar_aba_registro_aula(aba_registro)
+
+        # Aba 2: Consultar Aulas
+        aba_consulta = ttk.Frame(notebook)
+        notebook.add(aba_consulta, text="📋 Consultar Aulas")
+
+        self.carregar_aba_consulta_aulas(aba_consulta)
+
+    def carregar_aba_registro_aula(self, parent):
+        """Carrega aba de registro de aula"""
+        form_frame = tk.Frame(parent, bg='white')
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # Container com scroll
+        canvas = tk.Canvas(form_frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(form_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
 
-        if resposta == QMessageBox.Yes:
-            for row in range(self.tabela_notas.rowCount()):
-                for col in range(2, 10):  # Colunas 2-9
-                    item = self.tabela_notas.item(row, col)
-                    if item:
-                        item.setText("")
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-            self.atualizar_estatisticas_notas()
+        # Formulário de registro
+        self.criar_formulario_diario(scrollable_frame)
 
-    def exportar_notas(self):
-        """Exporta as notas para um arquivo"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A exportaÃ§Ã£o de notas serÃ¡ implementada na prÃ³xima versÃ£o.")
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
+    def criar_formulario_diario(self, parent):
+        """Cria formulário de registro no diário"""
+        # Dados da Aula
+        dados_frame = tk.LabelFrame(parent, text="Dados da Aula", font=('Arial', 12, 'bold'),
+                                    bg='white', fg='#0046AD', padx=15, pady=15)
+        dados_frame.pack(fill=tk.X, pady=10)
 
-"""
-PROJETO ESCOLA - SISTEMA DE GESTÃƒO ESCOLAR
-Parte 6/10 - ContinuaÃ§Ã£o: PÃ¡gina de FrequÃªncia
-"""
+        campos_dados = [
+            ("Turma*", "combo", self.obter_turmas_combo()),
+            ("Disciplina*", "combo", []),
+            ("Data da Aula*", "entry", None),
+            ("Conteúdo Ministrado*", "entry", None),
+        ]
 
+        self.entries_diario = {}
+        linha = 0
 
-# ============================================
-# PÃGINA DE FREQUÃŠNCIA (COMPLETA)
-# ============================================
+        for label, tipo, valores in campos_dados:
+            tk.Label(dados_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=0, sticky='w', pady=5, padx=5)
 
-def criar_pagina_frequencia(self):
-    """Cria a pÃ¡gina de registro de frequÃªncia - COMPLETA"""
-    pagina = QWidget()
-    layout = QVBoxLayout(pagina)
-    layout.setContentsMargins(20, 20, 20, 20)
-    layout.setSpacing(20)
+            if tipo == "entry":
+                entry = tk.Entry(dados_frame, width=50, font=('Arial', 10), relief='solid', bd=1)
+                entry.grid(row=linha, column=1, pady=5, padx=5, sticky='ew', columnspan=3)
+                self.entries_diario[label] = entry
 
-    # CabeÃ§alho
-    cabecalho_layout = QHBoxLayout()
+                # Preencher data atual se for o campo de data
+                if label == "Data da Aula*":
+                    entry.insert(0, date.today().strftime('%d/%m/%Y'))
 
-    lbl_titulo = QLabel("REGISTRO DE FREQUÃŠNCIA")
-    lbl_titulo.setObjectName("title")
+            elif tipo == "combo":
+                combo = ttk.Combobox(dados_frame, values=valores, state='readonly', width=47)
+                combo.grid(row=linha, column=1, pady=5, padx=5, sticky='ew', columnspan=3)
+                self.entries_diario[label] = combo
 
-    # Filtros
-    filtros_layout = QGridLayout()
-    filtros_layout.setSpacing(15)
+                # Configurar evento para carregar disciplinas quando turma for selecionada
+                if label == "Turma*":
+                    combo.bind('<<ComboboxSelected>>', self.carregar_disciplinas_diario)
 
-    # Filtro por data
-    lbl_data = QLabel("Data:")
-    self.date_frequencia = QDateEdit()
-    self.date_frequencia.setCalendarPopup(True)
-    self.date_frequencia.setDate(QDate.currentDate())
-    self.date_frequencia.setDisplayFormat("dd/MM/yyyy")
-    self.date_frequencia.dateChanged.connect(self.carregar_frequencia_data)
+            linha += 1
 
-    # Filtro por turma
-    lbl_turma = QLabel("Turma:")
-    self.combo_turma_frequencia = QComboBox()
-    self.combo_turma_frequencia.addItem("Selecione uma turma")
-    self.combo_turma_frequencia.currentIndexChanged.connect(self.filtrar_por_turma_frequencia)
+        # Detalhes da Aula
+        detalhes_frame = tk.LabelFrame(parent, text="Detalhes da Aula", font=('Arial', 12, 'bold'),
+                                       bg='white', fg='#0046AD', padx=15, pady=15)
+        detalhes_frame.pack(fill=tk.X, pady=10)
 
-    # Filtro por disciplina
-    lbl_disciplina = QLabel("Disciplina:")
-    self.combo_disciplina_frequencia = QComboBox()
-    self.combo_disciplina_frequencia.addItem("Selecione uma disciplina")
+        campos_detalhes = [
+            ("Objetivos da Aula", "text", None),
+            ("Metodologia Utilizada", "text", None),
+            ("Recursos Didáticos", "text", None),
+            ("Tarefa de Casa", "text", None),
+            ("Observações", "text", None),
+        ]
 
-    # BotÃ£o para carregar
-    btn_carregar = AnimacaoBotao("Carregar", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-    btn_carregar.clicked.connect(self.carregar_frequencia_turma)
+        linha = 0
+        for label, tipo, valores in campos_detalhes:
+            tk.Label(detalhes_frame, text=label, font=('Arial', 10, 'bold'),
+                     bg='white', fg='#0046AD').grid(row=linha, column=0, sticky='nw', pady=5, padx=5)
 
-    # BotÃ£o para marcar todos
-    btn_marcar_todos = AnimacaoBotao("Marcar Todos", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-    btn_marcar_todos.clicked.connect(self.marcar_todos_presentes)
+            if tipo == "text":
+                text = tk.Text(detalhes_frame, width=50, height=3, font=('Arial', 10), relief='solid', bd=1)
+                text.grid(row=linha, column=1, pady=5, padx=5, sticky='ew', columnspan=3)
+                self.entries_diario[label] = text
 
-    # BotÃ£o para desmarcar todos
-    btn_desmarcar_todos = AnimacaoBotao("Desmarcar Todos", cor_normal="#e74c3c", cor_hover="#c0392b",
-                                        cor_press="#a93226")
-    btn_desmarcar_todos.clicked.connect(self.desmarcar_todos_presentes)
+            linha += 1
 
-    filtros_layout.addWidget(lbl_data, 0, 0)
-    filtros_layout.addWidget(self.date_frequencia, 0, 1)
-    filtros_layout.addWidget(lbl_turma, 0, 2)
-    filtros_layout.addWidget(self.combo_turma_frequencia, 0, 3)
-    filtros_layout.addWidget(lbl_disciplina, 1, 0)
-    filtros_layout.addWidget(self.combo_disciplina_frequencia, 1, 1)
-    filtros_layout.addWidget(btn_carregar, 1, 2)
-    filtros_layout.addWidget(btn_marcar_todos, 1, 3)
-    filtros_layout.addWidget(btn_desmarcar_todos, 1, 4)
+        # Botões
+        botoes_frame = tk.Frame(parent, bg='white')
+        botoes_frame.pack(pady=20)
 
-    # Tabela de frequÃªncia
-    self.tabela_frequencia = QTableWidget()
-    self.tabela_frequencia.setColumnCount(7)
-    self.tabela_frequencia.setHorizontalHeaderLabels([
-        "ID Aluno", "Nome", "Presente", "Chegada", "SaÃ­da", "Justificativa", "ObservaÃ§Ãµes"
-    ])
+        ModernButton(botoes_frame, text="🗑️ Limpar",
+                     command=self.limpar_formulario_diario,
+                     color='#666666').pack(side=tk.LEFT, padx=10)
 
-    # Configurar tabela
-    self.tabela_frequencia.setAlternatingRowColors(True)
+        ModernButton(botoes_frame, text="💾 Registrar Aula",
+                     command=self.registrar_aula_diario,
+                     color='#0046AD').pack(side=tk.LEFT, padx=10)
 
-    # Ocultar coluna ID
-    self.tabela_frequencia.setColumnHidden(0, True)
+        # Configurar pesos das colunas
+        dados_frame.columnconfigure(1, weight=1)
+        detalhes_frame.columnconfigure(1, weight=1)
 
-    # Ajustar largura das colunas
-    header = self.tabela_frequencia.horizontalHeader()
-    header.setSectionResizeMode(1, QHeaderView.Stretch)  # Nome
-    header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Presente
-    header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # ObservaÃ§Ãµes
-
-    # Configurar coluna "Presente" com checkbox
-    self.tabela_frequencia.setItemDelegateForColumn(2, CheckBoxDelegate(self.tabela_frequencia))
-
-    # BotÃµes de aÃ§Ã£o
-    botoes_layout = QHBoxLayout()
-
-    btn_salvar = AnimacaoBotao("Salvar FrequÃªncia", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-    btn_salvar.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-    btn_salvar.clicked.connect(self.salvar_frequencia)
-
-    btn_justificar = AnimacaoBotao("Justificar Faltas", cor_normal="#f39c12", cor_hover="#d68910", cor_press="#b9770e")
-    btn_justificar.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxInformation))
-    btn_justificar.clicked.connect(self.justificar_faltas)
-
-    btn_relatorio = AnimacaoBotao("RelatÃ³rio", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-    btn_relatorio.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-    btn_relatorio.clicked.connect(self.gerar_relatorio_frequencia)
-
-    btn_exportar = AnimacaoBotao("Exportar", cor_normal="#9b59b6", cor_hover="#8e44ad", cor_press="#7d3c98")
-    btn_exportar.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-    btn_exportar.clicked.connect(self.exportar_frequencia)
-
-    botoes_layout.addWidget(btn_salvar)
-    botoes_layout.addWidget(btn_justificar)
-    botoes_layout.addWidget(btn_relatorio)
-    botoes_layout.addWidget(btn_exportar)
-    botoes_layout.addStretch()
-
-    # EstatÃ­sticas
-    self.lbl_estatisticas_freq = QLabel("Selecione uma turma e data para comeÃ§ar")
-    self.lbl_estatisticas_freq.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #2c3e50;
-                font-weight: 600;
-                padding: 10px;
-                background-color: #f8f9fa;
-                border-radius: 6px;
-                border: 1px solid #dce1e6;
-            }
-        """)
-
-    # Adicionar tudo ao layout
-    layout.addWidget(lbl_titulo)
-    layout.addLayout(filtros_layout)
-    layout.addWidget(self.tabela_frequencia)
-    layout.addWidget(self.lbl_estatisticas_freq)
-    layout.addLayout(botoes_layout)
-
-    self.paginas['frequencia'] = pagina
-    self.central_widget.addWidget(pagina)
-
-    # Carregar turmas disponÃ­veis
-    self.carregar_turmas_frequencia()
-
-
-def carregar_turmas_frequencia(self):
-    """Carrega turmas disponÃ­veis para registro de frequÃªncia"""
-    try:
-        turmas = self.db.execute_query('''
-                SELECT id, nome, serie 
-                FROM turmas 
-                WHERE ativa = 1
-                ORDER BY serie, nome
-            ''', fetch=True)
-
-        self.combo_turma_frequencia.clear()
-        self.combo_turma_frequencia.addItem("Selecione uma turma")
-
-        for id_turma, nome, serie in turmas:
-            texto = f"{nome} - {serie}" if serie else nome
-            self.combo_turma_frequencia.addItem(texto, id_turma)
-
-    except Exception as e:
-        print(f"Erro ao carregar turmas: {e}")
-
-
-def filtrar_por_turma_frequencia(self):
-    """Filtra disciplinas quando uma turma Ã© selecionada"""
-    turma_id = self.combo_turma_frequencia.currentData()
-
-    if not turma_id or self.combo_turma_frequencia.currentIndex() == 0:
-        self.combo_disciplina_frequencia.clear()
-        self.combo_disciplina_frequencia.addItem("Selecione uma disciplina")
-        return
-
-    try:
-        # Obter disciplinas ministradas para a turma selecionada
-        disciplinas = self.db.execute_query('''
-                SELECT DISTINCT d.id, d.nome, d.serie
-                FROM horarios h
-                JOIN disciplinas d ON h.disciplina_id = d.id
-                WHERE h.turma_id = ? AND h.ativo = 1 AND d.ativa = 1
-                ORDER BY d.nome
-            ''', (turma_id,), fetch=True)
-
-        self.combo_disciplina_frequencia.clear()
-        self.combo_disciplina_frequencia.addItem("Selecione uma disciplina")
-        self.combo_disciplina_frequencia.addItem("Todas as disciplinas", -1)
-
-        for id_disciplina, nome, serie in disciplinas:
-            texto = f"{nome} ({serie})" if serie else nome
-            self.combo_disciplina_frequencia.addItem(texto, id_disciplina)
-
-    except Exception as e:
-        print(f"Erro ao carregar disciplinas: {e}")
-
-
-def carregar_frequencia_data(self):
-    """Carrega frequÃªncia quando a data Ã© alterada"""
-    if (self.combo_turma_frequencia.currentIndex() > 0 and
-            self.combo_disciplina_frequencia.currentIndex() > 0):
-        self.carregar_frequencia_turma()
-
-
-def carregar_frequencia_turma(self):
-    """Carrega frequÃªncia dos alunos da turma selecionada"""
-    turma_id = self.combo_turma_frequencia.currentData()
-    disciplina_id = self.combo_disciplina_frequencia.currentData()
-    data = self.date_frequencia.date().toString("yyyy-MM-dd")
-
-    if not turma_id or self.combo_turma_frequencia.currentIndex() == 0:
-        return
-
-    try:
-        # Obter nome da turma
-        turma_nome_result = self.db.execute_query(
-            "SELECT nome FROM turmas WHERE id = ?",
-            (turma_id,),
-            fetch=True
-        )
-
-        if not turma_nome_result:
+    def carregar_disciplinas_diario(self, event=None):
+        """Carrega disciplinas da turma selecionada no diário"""
+        turma_nome = self.entries_diario["Turma*"].get()
+        if not turma_nome:
             return
 
-        turma_nome = turma_nome_result[0][0]
-
-        # Obter alunos da turma
-        alunos = self.db.execute_query('''
-                SELECT id, nome 
-                FROM alunos 
-                WHERE turma = ? AND status = 'Ativo'
-                ORDER BY nome
-            ''', (turma_nome,), fetch=True)
-
-        self.tabela_frequencia.setRowCount(len(alunos))
-
-        for row, (id_aluno, nome_aluno) in enumerate(alunos):
-            # ID Aluno (oculto)
-            self.tabela_frequencia.setItem(row, 0, QTableWidgetItem(str(id_aluno)))
-
-            # Nome
-            nome_item = QTableWidgetItem(nome_aluno)
-            self.tabela_frequencia.setItem(row, 1, nome_item)
-
-            # Obter frequÃªncia existente
-            frequencia_existente = None
-
-            if disciplina_id != -1:  # Disciplina especÃ­fica
-                frequencia_existente = self.db.execute_query('''
-                        SELECT presente, hora_chegada, hora_saida, justificativa, observacoes
-                        FROM frequencia
-                        WHERE aluno_id = ? AND data = ? AND disciplina_id = ?
-                    ''', (id_aluno, data, disciplina_id), fetch=True)
-            else:  # Todas as disciplinas (buscar qualquer registro do dia)
-                frequencia_existente = self.db.execute_query('''
-                        SELECT presente, hora_chegada, hora_saida, justificativa, observacoes
-                        FROM frequencia
-                        WHERE aluno_id = ? AND data = ? 
-                        LIMIT 1
-                    ''', (id_aluno, data), fetch=True)
-
-            # Presente (Checkbox)
-            presente_item = QTableWidgetItem()
-            presente_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-
-            if frequencia_existente and len(frequencia_existente) > 0:
-                presente_valor = frequencia_existente[0][0]
-                presente_item.setCheckState(Qt.Checked if presente_valor == 1 else Qt.Unchecked)
-            else:
-                presente_item.setCheckState(Qt.Checked)  # PadrÃ£o: presente
-
-            self.tabela_frequencia.setItem(row, 2, presente_item)
-
-            # Chegada
-            chegada_item = QTableWidgetItem()
-            chegada_item.setTextAlignment(Qt.AlignCenter)
-
-            if frequencia_existente and len(frequencia_existente) > 0:
-                chegada_valor = frequencia_existente[0][1]
-                if chegada_valor:
-                    chegada_item.setText(chegada_valor)
-
-            self.tabela_frequencia.setItem(row, 3, chegada_item)
-
-            # SaÃ­da
-            saida_item = QTableWidgetItem()
-            saida_item.setTextAlignment(Qt.AlignCenter)
-
-            if frequencia_existente and len(frequencia_existente) > 0:
-                saida_valor = frequencia_existente[0][2]
-                if saida_valor:
-                    saida_item.setText(saida_valor)
-
-            self.tabela_frequencia.setItem(row, 4, saida_item)
-
-            # Justificativa
-            justificativa_item = QTableWidgetItem()
-
-            if frequencia_existente and len(frequencia_existente) > 0:
-                justificativa_valor = frequencia_existente[0][3]
-                if justificativa_valor:
-                    justificativa_item.setText(justificativa_valor)
-                    justificativa_item.setForeground(QColor('#f39c12'))
-
-            self.tabela_frequencia.setItem(row, 5, justificativa_item)
-
-            # ObservaÃ§Ãµes
-            observacoes_item = QTableWidgetItem()
-
-            if frequencia_existente and len(frequencia_existente) > 0:
-                observacoes_valor = frequencia_existente[0][4]
-                if observacoes_valor:
-                    observacoes_item.setText(observacoes_valor)
-
-            self.tabela_frequencia.setItem(row, 6, observacoes_item)
-
-        # Atualizar estatÃ­sticas
-        self.atualizar_estatisticas_frequencia()
-
-    except Exception as e:
-        QMessageBox.critical(self, "Erro", f"Falha ao carregar frequÃªncia:\n{str(e)}")
-
-
-def atualizar_estatisticas_frequencia(self):
-    """Atualiza as estatÃ­sticas da frequÃªncia carregada"""
-    total_alunos = self.tabela_frequencia.rowCount()
-
-    if total_alunos == 0:
-        self.lbl_estatisticas_freq.setText("Nenhum aluno encontrado para esta turma.")
-        return
-
-    # Contadores
-    presentes = 0
-    faltas = 0
-    justificadas = 0
-
-    for row in range(total_alunos):
-        presente_item = self.tabela_frequencia.item(row, 2)
-        justificativa_item = self.tabela_frequencia.item(row, 5)
-
-        if presente_item and presente_item.checkState() == Qt.Checked:
-            presentes += 1
-        else:
-            faltas += 1
-
-            if justificativa_item and justificativa_item.text().strip():
-                justificadas += 1
-
-    # Calcular porcentagens
-    percent_presentes = (presentes / total_alunos) * 100 if total_alunos > 0 else 0
-    percent_faltas = (faltas / total_alunos) * 100 if total_alunos > 0 else 0
-
-    # Obter informaÃ§Ãµes da turma e data
-    turma_texto = self.combo_turma_frequencia.currentText()
-    data_texto = self.date_frequencia.date().toString("dd/MM/yyyy")
-    disciplina_texto = self.combo_disciplina_frequencia.currentText()
-
-    self.lbl_estatisticas_freq.setText(
-        f"{turma_texto} | {data_texto} | {disciplina_texto} | "
-        f"Total: {total_alunos} | "
-        f"Presentes: {presentes} ({percent_presentes:.1f}%) | "
-        f"Faltas: {faltas} ({percent_faltas:.1f}%) | "
-        f"Justificadas: {justificadas}"
-    )
-
-
-def marcar_todos_presentes(self):
-    """Marca todos os alunos como presentes"""
-    for row in range(self.tabela_frequencia.rowCount()):
-        item = self.tabela_frequencia.item(row, 2)
-        if item:
-            item.setCheckState(Qt.Checked)
-
-    self.atualizar_estatisticas_frequencia()
-
-
-def desmarcar_todos_presentes(self):
-    """Desmarca todos os alunos (marca como faltantes)"""
-    for row in range(self.tabela_frequencia.rowCount()):
-        item = self.tabela_frequencia.item(row, 2)
-        if item:
-            item.setCheckState(Qt.Unchecked)
-
-    self.atualizar_estatisticas_frequencia()
-
-
-def justificar_faltas(self):
-    """Abre diÃ¡logo para justificar faltas dos alunos selecionados"""
-    selecionados = self.tabela_frequencia.selectedItems()
-
-    if not selecionados:
-        QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                            "Por favor, selecione um ou mais alunos para justificar faltas.")
-        return
-
-    # Obter linhas Ãºnicas dos alunos selecionados
-    rows_selecionadas = set()
-
-    for item in selecionados:
-        rows_selecionadas.add(item.row())
-
-    dialog = JustificarFaltasDialog(self, rows_selecionadas)
-    if dialog.exec_():
-        justificativa = dialog.obter_justificativa()
-
-        for row in rows_selecionadas:
-            justificativa_item = self.tabela_frequencia.item(row, 5)
-            if not justificativa_item:
-                justificativa_item = QTableWidgetItem()
-                self.tabela_frequencia.setItem(row, 5, justificativa_item)
-
-            justificativa_item.setText(justificativa)
-            justificativa_item.setForeground(QColor('#f39c12'))
-
-            # Marcar como faltante se estiver presente
-            presente_item = self.tabela_frequencia.item(row, 2)
-            if presente_item and presente_item.checkState() == Qt.Checked:
-                presente_item.setCheckState(Qt.Unchecked)
-
-        self.atualizar_estatisticas_frequencia()
-
-
-def salvar_frequencia(self):
-    """Salva todas as frequÃªncias da tabela no banco de dados"""
-    turma_id = self.combo_turma_frequencia.currentData()
-    disciplina_id = self.combo_disciplina_frequencia.currentData()
-    data = self.date_frequencia.date().toString("yyyy-MM-dd")
-
-    if not turma_id or self.combo_turma_frequencia.currentIndex() == 0:
-        QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                            "Por favor, selecione uma turma.")
-        return
-
-    if disciplina_id == -1:  # "Todas as disciplinas"
-        QMessageBox.warning(self, "Disciplina necessÃ¡ria",
-                            "Por favor, selecione uma disciplina especÃ­fica para salvar a frequÃªncia.")
-        return
-
-    try:
-        total_salvos = 0
-        total_atualizados = 0
-
-        for row in range(self.tabela_frequencia.rowCount()):
-            aluno_id = int(self.tabela_frequencia.item(row, 0).text())
-
-            # Obter valores das cÃ©lulas
-            presente_item = self.tabela_frequencia.item(row, 2)
-            presente = 1 if presente_item and presente_item.checkState() == Qt.Checked else 0
-
-            chegada_item = self.tabela_frequencia.item(row, 3)
-            chegada = chegada_item.text() if chegada_item and chegada_item.text().strip() else None
-
-            saida_item = self.tabela_frequencia.item(row, 4)
-            saida = saida_item.text() if saida_item and saida_item.text().strip() else None
-
-            justificativa_item = self.tabela_frequencia.item(row, 5)
-            justificativa = justificativa_item.text() if justificativa_item and justificativa_item.text().strip() else None
-
-            observacoes_item = self.tabela_frequencia.item(row, 6)
-            observacoes = observacoes_item.text() if observacoes_item and observacoes_item.text().strip() else None
-
-            # Verificar se jÃ¡ existe registro
-            existente = self.db.execute_query('''
-                    SELECT id FROM frequencia 
-                    WHERE aluno_id = ? AND data = ? AND disciplina_id = ?
-                ''', (aluno_id, data, disciplina_id), fetch=True)
-
-            if existente and len(existente) > 0:
-                # Atualizar registro existente
-                query = '''
-                        UPDATE frequencia SET
-                            presente = ?, hora_chegada = ?, hora_saida = ?,
-                            justificativa = ?, observacoes = ?
-                        WHERE id = ?
-                    '''
-
-                self.db.execute_query(query, (
-                    presente, chegada, saida,
-                    justificativa, observacoes,
-                    existente[0][0]
-                ))
-
-                total_atualizados += 1
-            else:
-                # Inserir novo registro
-                query = '''
-                        INSERT INTO frequencia (
-                            aluno_id, data, presente, hora_chegada, hora_saida,
-                            justificativa, observacoes, disciplina_id
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    '''
-
-                self.db.execute_query(query, (
-                    aluno_id, data, presente, chegada, saida,
-                    justificativa, observacoes, disciplina_id
-                ))
-
-                total_salvos += 1
-
-        # Atualizar estatÃ­sticas
-        self.atualizar_estatisticas_frequencia()
-
-        QMessageBox.information(self, "FrequÃªncia salva",
-                                f"FrequÃªncia salva com sucesso!\n\n"
-                                f"Novos registros: {total_salvos}\n"
-                                f"Registros atualizados: {total_atualizados}")
-
-    except Exception as e:
-        QMessageBox.critical(self, "Erro", f"Falha ao salvar frequÃªncia:\n{str(e)}")
-
-
-def gerar_relatorio_frequencia(self):
-    """Gera relatÃ³rio de frequÃªncia"""
-    QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                            "A geraÃ§Ã£o de relatÃ³rios de frequÃªncia serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-
-def exportar_frequencia(self):
-    """Exporta a frequÃªncia para um arquivo"""
-    QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                            "A exportaÃ§Ã£o de frequÃªncia serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-
-# ============================================
-# DELEGATE PARA CHECKBOX NA TABELA
-# ============================================
-
-class CheckBoxDelegate(QStyledItemDelegate):
-    """Delegate para exibir checkbox em cÃ©lulas de tabela"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def createEditor(self, parent, option, index):
-        """Cria editor para a cÃ©lula"""
-        return None  # NÃ£o cria editor, usamos apenas o checkbox
-
-    def paint(self, painter, option, index):
-        """Pinta o checkbox na cÃ©lula"""
-        # Obter o estado do checkbox
-        checked = index.data(Qt.CheckStateRole) == Qt.Checked
-
-        # Configurar opÃ§Ãµes do checkbox
-        checkbox_option = QStyleOptionButton()
-        checkbox_option.state |= QStyle.State_Enabled
-
-        if checked:
-            checkbox_option.state |= QStyle.State_On
-        else:
-            checkbox_option.state |= QStyle.State_Off
-
-        # Calcular posiÃ§Ã£o centralizada
-        checkbox_rect = QRect(option.rect)
-        checkbox_size = QApplication.style().pixelMetric(QStyle.PM_IndicatorWidth)
-
-        checkbox_rect.setLeft(option.rect.left() + (option.rect.width() - checkbox_size) // 2)
-        checkbox_rect.setTop(option.rect.top() + (option.rect.height() - checkbox_size) // 2)
-        checkbox_rect.setWidth(checkbox_size)
-        checkbox_rect.setHeight(checkbox_size)
-
-        checkbox_option.rect = checkbox_rect
-
-        # Desenhar o checkbox
-        QApplication.style().drawControl(QStyle.CE_CheckBox, checkbox_option, painter)
-
-    def editorEvent(self, event, model, option, index):
-        """Lida com eventos do editor (cliques no checkbox)"""
-        if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton:
-            # Alternar estado do checkbox
-            current_state = index.data(Qt.CheckStateRole)
-            new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
-
-            model.setData(index, new_state, Qt.CheckStateRole)
-            return True
-
-        return False
-
-
-# ============================================
-# DIÃLOGO DE JUSTIFICAR FALTAS
-# ============================================
-
-class JustificarFaltasDialog(QDialog):
-    """DiÃ¡logo para justificar faltas de alunos"""
-
-    def __init__(self, parent=None, rows_selecionadas=None):
-        super().__init__(parent)
-        self.rows_selecionadas = rows_selecionadas or set()
-
-        self.setWindowTitle("Justificar Faltas")
-        self.setFixedSize(500, 300)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel("JUSTIFICAR FALTAS")
-        lbl_titulo.setObjectName("title")
-
-        # InformaÃ§Ã£o
-        lbl_info = QLabel(f"{len(self.rows_selecionadas)} aluno(s) selecionado(s)")
-        lbl_info.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #f39c12;
-                font-weight: 600;
-                padding: 10px;
-                background-color: #fef5e7;
-                border-radius: 6px;
-                border: 1px solid #f39c12;
-            }
-        """)
-
-        # Justificativa
-        lbl_justificativa = QLabel("Justificativa para a(s) falta(s):")
-        lbl_justificativa.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        self.txt_justificativa = QTextEdit()
-        self.txt_justificativa.setPlaceholderText("Digite a justificativa para a(s) falta(s)...")
-        self.txt_justificativa.setMaximumHeight(100)
-
-        # Tipos de justificativa comum
-        lbl_tipos = QLabel("Tipos comuns de justificativa:")
-        lbl_tipos.setStyleSheet("font-weight: 600; color: #2c3e50;")
-
-        tipos_layout = QHBoxLayout()
-
-        btn_doenca = QPushButton("DoenÃ§a")
-        btn_doenca.setObjectName("warning")
-        btn_doenca.clicked.connect(lambda: self.adicionar_justificativa("DoenÃ§a"))
-
-        btn_familiar = QPushButton("Problema familiar")
-        btn_familiar.setObjectName("warning")
-        btn_familiar.clicked.connect(lambda: self.adicionar_justificativa("Problema familiar"))
-
-        btn_consulta = QPushButton("Consulta mÃ©dica")
-        btn_consulta.setObjectName("warning")
-        btn_consulta.clicked.connect(lambda: self.adicionar_justificativa("Consulta mÃ©dica"))
-
-        btn_outros = QPushButton("Outros")
-        btn_outros.setObjectName("warning")
-        btn_outros.clicked.connect(lambda: self.adicionar_justificativa(""))
-
-        tipos_layout.addWidget(btn_doenca)
-        tipos_layout.addWidget(btn_familiar)
-        tipos_layout.addWidget(btn_consulta)
-        tipos_layout.addWidget(btn_outros)
-        tipos_layout.addStretch()
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_aplicar = AnimacaoBotao("APLICAR JUSTIFICATIVA", cor_normal="#27ae60", cor_hover="#219653",
-                                    cor_press="#1e874b")
-        btn_aplicar.setMinimumHeight(45)
-        btn_aplicar.clicked.connect(self.accept)
-
-        btn_cancelar = QPushButton("CANCELAR")
-        btn_cancelar.setObjectName("danger")
-        btn_cancelar.setMinimumHeight(45)
-        btn_cancelar.clicked.connect(self.reject)
-
-        botoes_layout.addWidget(btn_aplicar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_cancelar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(lbl_info)
-        layout.addWidget(lbl_justificativa)
-        layout.addWidget(self.txt_justificativa)
-        layout.addWidget(lbl_tipos)
-        layout.addLayout(tipos_layout)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def adicionar_justificativa(self, texto):
-        """Adiciona texto prÃ©-definido Ã  justificativa"""
-        if texto:
-            self.txt_justificativa.setPlainText(texto)
-        else:
-            self.txt_justificativa.clear()
-
-    def obter_justificativa(self):
-        """Retorna a justificativa digitada"""
-        return self.txt_justificativa.toPlainText().strip()
-
-    # ============================================
-    # PÃGINA DE RELATÃ“RIOS (COMPLETA)
-    # ============================================
-
-    def criar_pagina_relatorios(self):
-        """Cria a pÃ¡gina de relatÃ³rios - COMPLETA"""
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel("RELATÃ“RIOS E ESTATÃSTICAS")
-        lbl_titulo.setObjectName("title")
-
-        # Cards de relatÃ³rios
-        grid_cards = QGridLayout()
-        grid_cards.setSpacing(20)
-
-        # Card: RelatÃ³rio de Alunos
-        card_alunos = CardWidget("RELATÃ“RIO DE ALUNOS")
-        layout_alunos = QVBoxLayout(card_alunos.conteudo_widget)
-        layout_alunos.setSpacing(15)
-
-        lbl_desc_alunos = QLabel("Gere relatÃ³rios detalhados sobre os alunos")
-        lbl_desc_alunos.setStyleSheet("color: #7f8c8d; font-size: 13px;")
-        lbl_desc_alunos.setWordWrap(True)
-
-        btn_rel_alunos = AnimacaoBotao("Gerar RelatÃ³rio", cor_normal="#3498db", cor_hover="#2980b9",
-                                       cor_press="#1c6ea4")
-        btn_rel_alunos.clicked.connect(self.gerar_relatorio_alunos_detalhado)
-
-        layout_alunos.addWidget(lbl_desc_alunos)
-        layout_alunos.addWidget(btn_rel_alunos)
-
-        # Card: RelatÃ³rio de Notas
-        card_notas = CardWidget("RELATÃ“RIO DE NOTAS")
-        layout_notas = QVBoxLayout(card_notas.conteudo_widget)
-
-        lbl_desc_notas = QLabel("Analise o desempenho acadÃªmico por turma/disciplina")
-        lbl_desc_notas.setStyleSheet("color: #7f8c8d; font-size: 13px;")
-        lbl_desc_notas.setWordWrap(True)
-
-        btn_rel_notas = AnimacaoBotao("Gerar RelatÃ³rio", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_rel_notas.clicked.connect(self.gerar_relatorio_notas_detalhado)
-
-        layout_notas.addWidget(lbl_desc_notas)
-        layout_notas.addWidget(btn_rel_notas)
-
-        # Card: RelatÃ³rio de FrequÃªncia
-        card_frequencia = CardWidget("RELATÃ“RIO DE FREQUÃŠNCIA")
-        layout_frequencia = QVBoxLayout(card_frequencia.conteudo_widget)
-
-        lbl_desc_freq = QLabel("Acompanhe a frequÃªncia e faltas dos alunos")
-        lbl_desc_freq.setStyleSheet("color: #7f8c8d; font-size: 13px;")
-        lbl_desc_freq.setWordWrap(True)
-
-        btn_rel_freq = AnimacaoBotao("Gerar RelatÃ³rio", cor_normal="#f39c12", cor_hover="#d68910", cor_press="#b9770e")
-        btn_rel_freq.clicked.connect(self.gerar_relatorio_frequencia_detalhado)
-
-        layout_frequencia.addWidget(lbl_desc_freq)
-        layout_frequencia.addWidget(btn_rel_freq)
-
-        # Card: Boletim Individual
-        card_boletim = CardWidget("BOLETIM INDIVIDUAL")
-        layout_boletim = QVBoxLayout(card_boletim.conteudo_widget)
-
-        lbl_desc_boletim = QLabel("Gere boletins individuais dos alunos")
-        lbl_desc_boletim.setStyleSheet("color: #7f8c8d; font-size: 13px;")
-        lbl_desc_boletim.setWordWrap(True)
-
-        btn_boletim = AnimacaoBotao("Gerar Boletim", cor_normal="#9b59b6", cor_hover="#8e44ad", cor_press="#7d3c98")
-        btn_boletim.clicked.connect(self.gerar_boletim_individual)
-
-        layout_boletim.addWidget(lbl_desc_boletim)
-        layout_boletim.addWidget(btn_boletim)
-
-        # Card: EstatÃ­sticas Gerais
-        card_stats = CardWidget("ESTATÃSTICAS GERAIS")
-        layout_stats = QVBoxLayout(card_stats.conteudo_widget)
-
-        lbl_desc_stats = QLabel("Visualize estatÃ­sticas e indicadores do sistema")
-        lbl_desc_stats.setStyleSheet("color: #7f8c8d; font-size: 13px;")
-        lbl_desc_stats.setWordWrap(True)
-
-        btn_stats = AnimacaoBotao("Ver EstatÃ­sticas", cor_normal="#e74c3c", cor_hover="#c0392b", cor_press="#a93226")
-        btn_stats.clicked.connect(self.ver_estatisticas_gerais)
-
-        layout_stats.addWidget(lbl_desc_stats)
-        layout_stats.addWidget(btn_stats)
-
-        # Card: RelatÃ³rio Personalizado
-        card_personalizado = CardWidget("RELATÃ“RIO PERSONALIZADO")
-        layout_personalizado = QVBoxLayout(card_personalizado.conteudo_widget)
-
-        lbl_desc_personal = QLabel("Crie relatÃ³rios personalizados com filtros avanÃ§ados")
-        lbl_desc_personal.setStyleSheet("color: #7f8c8d; font-size: 13px;")
-        lbl_desc_personal.setWordWrap(True)
-
-        btn_personal = AnimacaoBotao("Criar RelatÃ³rio", cor_normal="#34495e", cor_hover="#2c3e50", cor_press="#1a252f")
-        btn_personal.clicked.connect(self.relatorio_personalizado_detalhado)
-
-        layout_personalizado.addWidget(lbl_desc_personal)
-        layout_personalizado.addWidget(btn_personal)
-
-        # Adicionar cards ao grid
-        grid_cards.addWidget(card_alunos, 0, 0)
-        grid_cards.addWidget(card_notas, 0, 1)
-        grid_cards.addWidget(card_frequencia, 0, 2)
-        grid_cards.addWidget(card_boletim, 1, 0)
-        grid_cards.addWidget(card_stats, 1, 1)
-        grid_cards.addWidget(card_personalizado, 1, 2)
-
-        # SeÃ§Ã£o de exportaÃ§Ã£o
-        group_exportacao = QGroupBox("EXPORTAÃ‡ÃƒO DE DADOS")
-        group_exportacao.setStyleSheet("""
-            QGroupBox {
-                font-size: 16px;
-                font-weight: 700;
-                color: #2c3e50;
-                border: 2px solid #dce1e6;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 15px;
-                padding: 0 10px;
-                background-color: #f5f7fa;
-            }
-        """)
-
-        layout_exportacao = QHBoxLayout()
-        layout_exportacao.setSpacing(15)
-
-        btn_export_excel = AnimacaoBotao("Exportar para Excel", cor_normal="#27ae60", cor_hover="#219653",
-                                         cor_press="#1e874b")
-        btn_export_excel.setIcon(self.style().standardIcon(QStyle.SP_DriveHDIcon))
-        btn_export_excel.clicked.connect(self.exportar_para_excel)
-
-        btn_export_pdf = AnimacaoBotao("Exportar para PDF", cor_normal="#e74c3c", cor_hover="#c0392b",
-                                       cor_press="#a93226")
-        btn_export_pdf.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        btn_export_pdf.clicked.connect(self.exportar_para_pdf)
-
-        btn_export_csv = AnimacaoBotao("Exportar para CSV", cor_normal="#3498db", cor_hover="#2980b9",
-                                       cor_press="#1c6ea4")
-        btn_export_csv.setIcon(self.style().standardIcon(QStyle.SP_FileDialogListView))
-        btn_export_csv.clicked.connect(self.exportar_para_csv)
-
-        layout_exportacao.addWidget(btn_export_excel)
-        layout_exportacao.addWidget(btn_export_pdf)
-        layout_exportacao.addWidget(btn_export_csv)
-        layout_exportacao.addStretch()
-
-        group_exportacao.setLayout(layout_exportacao)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addLayout(grid_cards)
-        layout.addWidget(group_exportacao)
-        layout.addStretch()
-
-        self.paginas['relatorios'] = pagina
-        self.central_widget.addWidget(pagina)
-
-    def gerar_relatorio_alunos_detalhado(self):
-        """Abre diÃ¡logo para gerar relatÃ³rio detalhado de alunos"""
-        dialog = RelatorioAlunosDialog(self)
-        dialog.exec_()
-
-    def gerar_relatorio_notas_detalhado(self):
-        """Abre diÃ¡logo para gerar relatÃ³rio detalhado de notas"""
-        dialog = RelatorioNotasDialog(self)
-        dialog.exec_()
-
-    def gerar_relatorio_frequencia_detalhado(self):
-        """Abre diÃ¡logo para gerar relatÃ³rio detalhado de frequÃªncia"""
-        dialog = RelatorioFrequenciaDialog(self)
-        dialog.exec_()
-
-    def gerar_boletim_individual(self):
-        """Abre diÃ¡logo para gerar boletim individual"""
-        dialog = BoletimIndividualDialog(self)
-        dialog.exec_()
-
-    def ver_estatisticas_gerais(self):
-        """Mostra estatÃ­sticas gerais do sistema"""
-        dialog = EstatisticasGeraisDialog(self)
-        dialog.exec_()
-
-    def relatorio_personalizado_detalhado(self):
-        """Abre diÃ¡logo para criar relatÃ³rio personalizado"""
-        dialog = RelatorioPersonalizadoDialog(self)
-        dialog.exec_()
-
-    def exportar_para_excel(self):
-        """Exporta dados para Excel"""
-        dialog = ExportarDadosDialog(self, "excel")
-        dialog.exec_()
-
-    def exportar_para_pdf(self):
-        """Exporta dados para PDF"""
-        dialog = ExportarDadosDialog(self, "pdf")
-        dialog.exec_()
-
-    def exportar_para_csv(self):
-        """Exporta dados para CSV"""
-        dialog = ExportarDadosDialog(self, "csv")
-        dialog.exec_()
-
-
-# ============================================
-# DIÃLOGO DE RELATÃ“RIO DE ALUNOS
-# ============================================
-
-class RelatorioAlunosDialog(QDialog):
-    """DiÃ¡logo para gerar relatÃ³rio de alunos"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.db = DatabaseManager()
-
-        self.setWindowTitle("RelatÃ³rio de Alunos")
-        self.setFixedSize(600, 500)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel("RELATÃ“RIO DE ALUNOS")
-        lbl_titulo.setObjectName("title")
-
-        # Filtros
-        group_filtros = QGroupBox("FILTROS DO RELATÃ“RIO")
-        group_filtros.setStyleSheet("""
-            QGroupBox {
-                font-weight: 600;
-                border: 2px solid #dce1e6;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 15px;
-                padding: 0 10px;
-                background-color: #f5f7fa;
-            }
-        """)
-
-        layout_filtros = QFormLayout(group_filtros)
-        layout_filtros.setSpacing(15)
-
-        # Filtro por status
-        self.combo_status_rel = QComboBox()
-        self.combo_status_rel.addItems(["Todos", "Ativos", "Inativos", "Transferidos", "Evadidos"])
-
-        # Filtro por turma
-        self.combo_turma_rel = QComboBox()
-        self.combo_turma_rel.addItem("Todas as turmas")
-        self.carregar_turmas_relatorio()
-
-        # Filtro por sÃ©rie
-        self.combo_serie_rel = QComboBox()
-        self.combo_serie_rel.addItem("Todas as sÃ©ries")
-        self.carregar_series_relatorio()
-
-        # Filtro por data de matrÃ­cula
-        lbl_periodo = QLabel("PerÃ­odo de matrÃ­cula:")
-
-        periodo_layout = QHBoxLayout()
-        self.date_inicio_rel = QDateEdit()
-        self.date_inicio_rel.setCalendarPopup(True)
-        self.date_inicio_rel.setDate(QDate.currentDate().addYears(-1))
-        self.date_inicio_rel.setDisplayFormat("dd/MM/yyyy")
-
-        self.date_fim_rel = QDateEdit()
-        self.date_fim_rel.setCalendarPopup(True)
-        self.date_fim_rel.setDate(QDate.currentDate())
-        self.date_fim_rel.setDisplayFormat("dd/MM/yyyy")
-
-        periodo_layout.addWidget(self.date_inicio_rel)
-        periodo_layout.addWidget(QLabel("atÃ©"))
-        periodo_layout.addWidget(self.date_fim_rel)
-
-        layout_filtros.addRow("Status:", self.combo_status_rel)
-        layout_filtros.addRow("Turma:", self.combo_turma_rel)
-        layout_filtros.addRow("SÃ©rie:", self.combo_serie_rel)
-        layout_filtros.addRow(lbl_periodo, periodo_layout)
-
-        # OpÃ§Ãµes de exibiÃ§Ã£o
-        group_opcoes = QGroupBox("OPÃ‡Ã•ES DE EXIBIÃ‡ÃƒO")
-        group_opcoes.setStyleSheet(group_filtros.styleSheet())
-
-        layout_opcoes = QVBoxLayout(group_opcoes)
-
-        self.check_endereco = QCheckBox("Incluir endereÃ§o completo")
-        self.check_contato = QCheckBox("Incluir informaÃ§Ãµes de contato")
-        self.check_responsavel = QCheckBox("Incluir dados do responsÃ¡vel")
-        self.check_observacoes = QCheckBox("Incluir observaÃ§Ãµes")
-
-        layout_opcoes.addWidget(self.check_endereco)
-        layout_opcoes.addWidget(self.check_contato)
-        layout_opcoes.addWidget(self.check_responsavel)
-        layout_opcoes.addWidget(self.check_observacoes)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_gerar = AnimacaoBotao("GERAR RELATÃ“RIO", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_gerar.setMinimumHeight(45)
-        btn_gerar.clicked.connect(self.gerar_relatorio)
-
-        btn_visualizar = AnimacaoBotao("VISUALIZAR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_visualizar.setMinimumHeight(45)
-        btn_visualizar.clicked.connect(self.visualizar_relatorio)
-
-        btn_exportar = AnimacaoBotao("EXPORTAR", cor_normal="#f39c12", cor_hover="#d68910", cor_press="#b9770e")
-        btn_exportar.setMinimumHeight(45)
-        btn_exportar.clicked.connect(self.exportar_relatorio)
-
-        btn_fechar = QPushButton("FECHAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.setMinimumHeight(45)
-        btn_fechar.clicked.connect(self.close)
-
-        botoes_layout.addWidget(btn_gerar)
-        botoes_layout.addWidget(btn_visualizar)
-        botoes_layout.addWidget(btn_exportar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(group_filtros)
-        layout.addWidget(group_opcoes)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def carregar_turmas_relatorio(self):
-        """Carrega turmas para o relatÃ³rio"""
         try:
-            turmas = self.db.execute_query('''
-                SELECT DISTINCT turma 
-                FROM alunos 
-                WHERE turma IS NOT NULL AND turma != ''
-                ORDER BY turma
-            ''', fetch=True)
+            # Buscar ID da turma
+            self.cursor.execute("SELECT id FROM turmas WHERE nome = ?", (turma_nome,))
+            turma_id = self.cursor.fetchone()
+            if not turma_id:
+                return
 
-            for turma in turmas:
-                if turma[0]:
-                    self.combo_turma_rel.addItem(turma[0])
+            turma_id = turma_id[0]
 
-        except Exception as e:
-            print(f"Erro ao carregar turmas: {e}")
+            # Buscar disciplinas da turma
+            self.cursor.execute('''
+                SELECT d.nome 
+                FROM disciplinas d 
+                WHERE d.turma_id = ? AND d.status = 'Ativa'
+                ORDER BY d.nome
+            ''', (turma_id,))
 
-    def carregar_series_relatorio(self):
-        """Carrega sÃ©ries para o relatÃ³rio"""
-        try:
-            series = self.db.execute_query('''
-                SELECT DISTINCT serie 
-                FROM alunos 
-                WHERE serie IS NOT NULL AND serie != ''
-                ORDER BY serie
-            ''', fetch=True)
+            disciplinas = [disc[0] for disc in self.cursor.fetchall()]
+            self.entries_diario["Disciplina*"]['values'] = disciplinas
 
-            for serie in series:
-                if serie[0]:
-                    self.combo_serie_rel.addItem(serie[0])
-
-        except Exception as e:
-            print(f"Erro ao carregar sÃ©ries: {e}")
-
-    def gerar_relatorio(self):
-        """Gera o relatÃ³rio com base nos filtros"""
-        # Obter parÃ¢metros dos filtros
-        status_filtro = self.combo_status_rel.currentText()
-        turma_filtro = self.combo_turma_rel.currentText()
-        serie_filtro = self.combo_serie_rel.currentText()
-        data_inicio = self.date_inicio_rel.date().toString("yyyy-MM-dd")
-        data_fim = self.date_fim_rel.date().toString("yyyy-MM-dd")
-
-        # Construir query
-        query = "SELECT COUNT(*) FROM alunos WHERE 1=1"
-        params = []
-
-        if status_filtro != "Todos":
-            query += " AND status = ?"
-            params.append(status_filtro)
-
-        if turma_filtro != "Todas as turmas":
-            query += " AND turma = ?"
-            params.append(turma_filtro)
-
-        if serie_filtro != "Todas as sÃ©ries":
-            query += " AND serie = ?"
-            params.append(serie_filtro)
-
-        query += " AND data_matricula BETWEEN ? AND ?"
-        params.extend([data_inicio, data_fim])
-
-        try:
-            resultado = self.db.execute_query(query, tuple(params), fetch=True)
-
-            if resultado:
-                total_alunos = resultado[0][0]
-
-                # Obter dados detalhados
-                query_detalhes = query.replace("COUNT(*)", "*")
-                alunos = self.db.execute_query(query_detalhes, tuple(params), fetch=True)
-
-                # Criar relatÃ³rio
-                relatorio = f"""
-                RELATÃ“RIO DE ALUNOS
-                ====================
-                Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-                Status: {status_filtro}
-                Turma: {turma_filtro}
-                SÃ©rie: {serie_filtro}
-                PerÃ­odo: {self.date_inicio_rel.date().toString('dd/MM/yyyy')} a {self.date_fim_rel.date().toString('dd/MM/yyyy')}
-                Total de alunos: {total_alunos}
-                ====================
-
-                DETALHES DOS ALUNOS:
-                """
-
-                for aluno in alunos:
-                    relatorio += f"\nâ€¢ {aluno[1]}"
-                    if aluno[17]:  # status
-                        relatorio += f" ({aluno[17]})"
-                    if aluno[13]:  # sÃ©rie
-                        relatorio += f" - {aluno[13]}"
-                    if aluno[14]:  # turma
-                        relatorio += f" - {aluno[14]}"
-
-                QMessageBox.information(self, "RelatÃ³rio Gerado",
-                                        f"RelatÃ³rio gerado com sucesso!\n\n"
-                                        f"Total de alunos encontrados: {total_alunos}\n\n"
-                                        "Para visualizaÃ§Ã£o completa, use a opÃ§Ã£o VISUALIZAR.")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao gerar relatÃ³rio:\n{str(e)}")
-
-    def visualizar_relatorio(self):
-        """Visualiza o relatÃ³rio gerado"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A visualizaÃ§Ã£o completa do relatÃ³rio serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def exportar_relatorio(self):
-        """Exporta o relatÃ³rio gerado"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A exportaÃ§Ã£o do relatÃ³rio serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-
-"""
-PROJETO ESCOLA - SISTEMA DE GESTÃƒO ESCOLAR
-Parte 7/10 - ContinuaÃ§Ã£o: RelatÃ³rios, ConfiguraÃ§Ãµes e Sistema
-"""
-
-
-# ============================================
-# DIÃLOGO DE RELATÃ“RIO DE NOTAS
-# ============================================
-
-class RelatorioNotasDialog(QDialog):
-    """DiÃ¡logo para gerar relatÃ³rio de notas"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.db = DatabaseManager()
-
-        self.setWindowTitle("RelatÃ³rio de Notas")
-        self.setFixedSize(600, 500)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_turmas()
-        self.carregar_disciplinas()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel("RELATÃ“RIO DE NOTAS")
-        lbl_titulo.setObjectName("title")
-
-        # Filtros
-        group_filtros = QGroupBox("FILTROS DO RELATÃ“RIO")
-        group_filtros.setStyleSheet("""
-            QGroupBox {
-                font-weight: 600;
-                border: 2px solid #dce1e6;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 15px;
-                padding: 0 10px;
-                background-color: #f5f7fa;
-            }
-        """)
-
-        layout_filtros = QFormLayout(group_filtros)
-        layout_filtros.setSpacing(15)
-
-        # Filtro por turma
-        self.combo_turma_notas_rel = QComboBox()
-        self.combo_turma_notas_rel.addItem("Todas as turmas")
-
-        # Filtro por disciplina
-        self.combo_disciplina_notas_rel = QComboBox()
-        self.combo_disciplina_notas_rel.addItem("Todas as disciplinas")
-
-        # Filtro por bimestre
-        self.combo_bimestre_notas_rel = QComboBox()
-        self.combo_bimestre_notas_rel.addItems(
-            ["Todos os bimestres", "1Âº Bimestre", "2Âº Bimestre", "3Âº Bimestre", "4Âº Bimestre"])
-
-        # Filtro por situaÃ§Ã£o
-        self.combo_situacao_notas_rel = QComboBox()
-        self.combo_situacao_notas_rel.addItems(["Todas as situaÃ§Ãµes", "Aprovado", "RecuperaÃ§Ã£o", "Reprovado"])
-
-        layout_filtros.addRow("Turma:", self.combo_turma_notas_rel)
-        layout_filtros.addRow("Disciplina:", self.combo_disciplina_notas_rel)
-        layout_filtros.addRow("Bimestre:", self.combo_bimestre_notas_rel)
-        layout_filtros.addRow("SituaÃ§Ã£o:", self.combo_situacao_notas_rel)
-
-        # OpÃ§Ãµes de exibiÃ§Ã£o
-        group_opcoes = QGroupBox("OPÃ‡Ã•ES DE EXIBIÃ‡ÃƒO")
-        group_opcoes.setStyleSheet(group_filtros.styleSheet())
-
-        layout_opcoes = QVBoxLayout(group_opcoes)
-
-        self.check_medias = QCheckBox("Incluir mÃ©dias individuais")
-        self.check_medias.setChecked(True)
-
-        self.check_notas_detalhadas = QCheckBox("Incluir notas por bimestre")
-
-        self.check_estatisticas = QCheckBox("Incluir estatÃ­sticas (mÃ©dia geral, desvio padrÃ£o)")
-        self.check_estatisticas.setChecked(True)
-
-        self.check_ranking = QCheckBox("Incluir ranking por mÃ©dia")
-
-        layout_opcoes.addWidget(self.check_medias)
-        layout_opcoes.addWidget(self.check_notas_detalhadas)
-        layout_opcoes.addWidget(self.check_estatisticas)
-        layout_opcoes.addWidget(self.check_ranking)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_gerar = AnimacaoBotao("GERAR RELATÃ“RIO", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_gerar.setMinimumHeight(45)
-        btn_gerar.clicked.connect(self.gerar_relatorio)
-
-        btn_visualizar = AnimacaoBotao("VISUALIZAR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_visualizar.setMinimumHeight(45)
-        btn_visualizar.clicked.connect(self.visualizar_relatorio)
-
-        btn_fechar = QPushButton("FECHAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.setMinimumHeight(45)
-        btn_fechar.clicked.connect(self.close)
-
-        botoes_layout.addWidget(btn_gerar)
-        botoes_layout.addWidget(btn_visualizar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(group_filtros)
-        layout.addWidget(group_opcoes)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def carregar_turmas(self):
-        """Carrega turmas para o relatÃ³rio"""
-        try:
-            turmas = self.db.execute_query('''
-                SELECT DISTINCT nome, serie 
-                FROM turmas 
-                WHERE ativa = 1
-                ORDER BY serie, nome
-            ''', fetch=True)
-
-            for nome, serie in turmas:
-                texto = f"{nome} - {serie}" if serie else nome
-                self.combo_turma_notas_rel.addItem(texto, nome)
-
-        except Exception as e:
-            print(f"Erro ao carregar turmas: {e}")
-
-    def carregar_disciplinas(self):
-        """Carrega disciplinas para o relatÃ³rio"""
-        try:
-            disciplinas = self.db.execute_query('''
-                SELECT DISTINCT nome, serie 
-                FROM disciplinas 
-                WHERE ativa = 1
-                ORDER BY nome
-            ''', fetch=True)
-
-            for nome, serie in disciplinas:
-                texto = f"{nome} ({serie})" if serie else nome
-                self.combo_disciplina_notas_rel.addItem(texto, nome)
+            if disciplinas:
+                self.entries_diario["Disciplina*"].set(disciplinas[0])
 
         except Exception as e:
             print(f"Erro ao carregar disciplinas: {e}")
 
-    def gerar_relatorio(self):
-        """Gera o relatÃ³rio de notas"""
-        # Obter parÃ¢metros dos filtros
-        turma_filtro = self.combo_turma_notas_rel.currentText()
-        disciplina_filtro = self.combo_disciplina_notas_rel.currentText()
-        bimestre_filtro = self.combo_bimestre_notas_rel.currentText()
-        situacao_filtro = self.combo_situacao_notas_rel.currentText()
+    def limpar_formulario_diario(self):
+        """Limpa todos os campos do formulário do diário"""
+        for entry in self.entries_diario.values():
+            if isinstance(entry, tk.Entry):
+                entry.delete(0, tk.END)
+            elif isinstance(entry, ttk.Combobox):
+                entry.set('')
+            elif isinstance(entry, tk.Text):
+                entry.delete('1.0', tk.END)
 
-        # Construir query bÃ¡sica
-        query = """
-            SELECT a.nome as aluno, a.turma, d.nome as disciplina, 
-                   n.bimestre, n.nota1, n.nota2, n.nota3, n.nota4,
-                   n.media, n.situacao
-            FROM notas n
-            JOIN alunos a ON n.aluno_id = a.id
-            JOIN disciplinas d ON n.disciplina_id = d.id
-            WHERE 1=1
-        """
+        # Preencher data atual
+        if "Data da Aula*" in self.entries_diario:
+            self.entries_diario["Data da Aula*"].insert(0, date.today().strftime('%d/%m/%Y'))
 
-        params = []
-
-        if turma_filtro != "Todas as turmas":
-            query += " AND a.turma = ?"
-            params.append(turma_filtro.split(" - ")[0])  # Extrair apenas o nome da turma
-
-        if disciplina_filtro != "Todas as disciplinas":
-            query += " AND d.nome = ?"
-            params.append(disciplina_filtro.split(" (")[0])  # Extrair apenas o nome da disciplina
-
-        if bimestre_filtro != "Todos os bimestres":
-            bimestre_num = int(bimestre_filtro[0])  # Extrair nÃºmero do bimestre
-            query += " AND n.bimestre = ?"
-            params.append(bimestre_num)
-
-        if situacao_filtro != "Todas as situaÃ§Ãµes":
-            query += " AND n.situacao = ?"
-            params.append(situacao_filtro)
-
-        query += " ORDER BY a.turma, a.nome, d.nome, n.bimestre"
-
+    def registrar_aula_diario(self):
+        """Registra aula no diário de classe"""
         try:
-            notas = self.db.execute_query(query, tuple(params), fetch=True)
-
-            if not notas:
-                QMessageBox.information(self, "Sem dados",
-                                        "Nenhum registro encontrado com os filtros selecionados.")
+            # Validar campos obrigatórios
+            if not self.entries_diario["Turma*"].get().strip():
+                messagebox.showwarning("Aviso", "Selecione a turma!")
+                return
+            if not self.entries_diario["Disciplina*"].get().strip():
+                messagebox.showwarning("Aviso", "Selecione a disciplina!")
+                return
+            if not self.entries_diario["Data da Aula*"].get().strip():
+                messagebox.showwarning("Aviso", "Informe a data da aula!")
+                return
+            if not self.entries_diario["Conteúdo Ministrado*"].get().strip():
+                messagebox.showwarning("Aviso", "Informe o conteúdo ministrado!")
                 return
 
-            # Criar relatÃ³rio
-            relatorio = f"""
-            RELATÃ“RIO DE NOTAS
-            ====================
-            Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-            Turma: {turma_filtro}
-            Disciplina: {disciplina_filtro}
-            Bimestre: {bimestre_filtro}
-            SituaÃ§Ã£o: {situacao_filtro}
-            Total de registros: {len(notas)}
-            ====================
+            # Buscar IDs
+            turma_nome = self.entries_diario["Turma*"].get()
+            disciplina_nome = self.entries_diario["Disciplina*"].get()
 
-            DETALHES DAS NOTAS:
-            """
+            self.cursor.execute("SELECT id FROM turmas WHERE nome = ?", (turma_nome,))
+            turma_id = self.cursor.fetchone()[0]
 
-            turma_atual = None
-            aluno_atual = None
-            disciplina_atual = None
+            self.cursor.execute("SELECT id, professor_id FROM disciplinas WHERE nome = ? AND turma_id = ?",
+                                (disciplina_nome, turma_id))
+            disciplina_info = self.cursor.fetchone()
+            disciplina_id, professor_id = disciplina_info
 
-            for nota in notas:
-                aluno, turma, disciplina, bimestre, n1, n2, n3, n4, media, situacao = nota
-
-                # Agrupar por turma
-                if turma != turma_atual:
-                    turma_atual = turma
-                    relatorio += f"\n\nTURMA: {turma_atual}"
-                    relatorio += "\n" + "-" * 40
-
-                # Agrupar por aluno
-                if aluno != aluno_atual:
-                    aluno_atual = aluno
-                    relatorio += f"\n\nAluno: {aluno_atual}"
-
-                # Adicionar detalhes da disciplina
-                relatorio += f"\n  Disciplina: {disciplina} | Bimestre: {bimestre}"
-
-                if self.check_notas_detalhadas.isChecked():
-                    notas_str = []
-                    if n1 is not None:
-                        notas_str.append(f"N1: {n1:.1f}")
-                    if n2 is not None:
-                        notas_str.append(f"N2: {n2:.1f}")
-                    if n3 is not None:
-                        notas_str.append(f"N3: {n3:.1f}")
-                    if n4 is not None:
-                        notas_str.append(f"N4: {n4:.1f}")
-
-                    if notas_str:
-                        relatorio += f" | Notas: {', '.join(notas_str)}"
-
-                if self.check_medias.isChecked() and media is not None:
-                    relatorio += f" | MÃ©dia: {media:.1f}"
-
-                if situacao:
-                    relatorio += f" | SituaÃ§Ã£o: {situacao}"
-
-            # Adicionar estatÃ­sticas se solicitado
-            if self.check_estatisticas.isChecked() and notas:
-                medias = [n[8] for n in notas if n[8] is not None]
-
-                if medias:
-                    media_geral = sum(medias) / len(medias)
-                    relatorio += f"\n\n{'=' * 40}"
-                    relatorio += f"\nESTATÃSTICAS:"
-                    relatorio += f"\nMÃ©dia geral: {media_geral:.2f}"
-                    relatorio += f"\nMaior mÃ©dia: {max(medias):.2f}"
-                    relatorio += f"\nMenor mÃ©dia: {min(medias):.2f}"
-                    relatorio += f"\nTotal de alunos com mÃ©dia: {len(medias)}"
-
-            # Adicionar ranking se solicitado
-            if self.check_ranking.isChecked() and notas:
-                # Agrupar mÃ©dias por aluno
-                medias_alunos = {}
-                for nota in notas:
-                    aluno, _, _, _, _, _, _, _, media, _ = nota
-                    if media is not None:
-                        if aluno not in medias_alunos:
-                            medias_alunos[aluno] = []
-                        medias_alunos[aluno].append(media)
-
-                # Calcular mÃ©dia por aluno
-                medias_finais = {}
-                for aluno, notas_aluno in medias_alunos.items():
-                    medias_finais[aluno] = sum(notas_aluno) / len(notas_aluno)
-
-                # Ordenar por mÃ©dia
-                ranking = sorted(medias_finais.items(), key=lambda x: x[1], reverse=True)
-
-                relatorio += f"\n\n{'=' * 40}"
-                relatorio += f"\nRANKING POR MÃ‰DIA:"
-
-                for pos, (aluno, media) in enumerate(ranking[:10], 1):  # Top 10
-                    relatorio += f"\n{pos}Âº. {aluno}: {media:.2f}"
-
-            QMessageBox.information(self, "RelatÃ³rio Gerado",
-                                    f"RelatÃ³rio gerado com sucesso!\n\n"
-                                    f"Total de registros: {len(notas)}\n\n"
-                                    "Para visualizaÃ§Ã£o completa, use a opÃ§Ã£o VISUALIZAR.")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao gerar relatÃ³rio:\n{str(e)}")
-
-    def visualizar_relatorio(self):
-        """Visualiza o relatÃ³rio gerado"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A visualizaÃ§Ã£o completa do relatÃ³rio serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-
-# ============================================
-# DIÃLOGO DE RELATÃ“RIO DE FREQUÃŠNCIA
-# ============================================
-
-class RelatorioFrequenciaDialog(QDialog):
-    """DiÃ¡logo para gerar relatÃ³rio de frequÃªncia"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.db = DatabaseManager()
-
-        self.setWindowTitle("RelatÃ³rio de FrequÃªncia")
-        self.setFixedSize(600, 500)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-        self.carregar_turmas_freq()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel("RELATÃ“RIO DE FREQUÃŠNCIA")
-        lbl_titulo.setObjectName("title")
-
-        # Filtros
-        group_filtros = QGroupBox("FILTROS DO RELATÃ“RIO")
-        group_filtros.setStyleSheet("""
-            QGroupBox {
-                font-weight: 600;
-                border: 2px solid #dce1e6;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 15px;
-                padding: 0 10px;
-                background-color: #f5f7fa;
-            }
-        """)
-
-        layout_filtros = QFormLayout(group_filtros)
-        layout_filtros.setSpacing(15)
-
-        # Filtro por turma
-        self.combo_turma_freq_rel = QComboBox()
-        self.combo_turma_freq_rel.addItem("Todas as turmas")
-
-        # Filtro por perÃ­odo
-        lbl_periodo = QLabel("PerÃ­odo:")
-
-        periodo_layout = QHBoxLayout()
-        self.date_inicio_freq = QDateEdit()
-        self.date_inicio_freq.setCalendarPopup(True)
-        self.date_inicio_freq.setDate(QDate.currentDate().addMonths(-1))
-        self.date_inicio_freq.setDisplayFormat("dd/MM/yyyy")
-
-        self.date_fim_freq = QDateEdit()
-        self.date_fim_freq.setCalendarPopup(True)
-        self.date_fim_freq.setDate(QDate.currentDate())
-        self.date_fim_freq.setDisplayFormat("dd/MM/yyyy")
-
-        periodo_layout.addWidget(self.date_inicio_freq)
-        periodo_layout.addWidget(QLabel("atÃ©"))
-        periodo_layout.addWidget(self.date_fim_freq)
-
-        # Filtro por disciplina
-        self.combo_disciplina_freq_rel = QComboBox()
-        self.combo_disciplina_freq_rel.addItem("Todas as disciplinas")
-
-        # Filtro por presenÃ§a
-        self.combo_presenca_freq_rel = QComboBox()
-        self.combo_presenca_freq_rel.addItems(
-            ["Todas", "Apenas presentes", "Apenas faltas", "Apenas faltas justificadas"])
-
-        layout_filtros.addRow("Turma:", self.combo_turma_freq_rel)
-        layout_filtros.addRow(lbl_periodo, periodo_layout)
-        layout_filtros.addRow("Disciplina:", self.combo_disciplina_freq_rel)
-        layout_filtros.addRow("PresenÃ§a:", self.combo_presenca_freq_rel)
-
-        # OpÃ§Ãµes de exibiÃ§Ã£o
-        group_opcoes = QGroupBox("OPÃ‡Ã•ES DE EXIBIÃ‡ÃƒO")
-        group_opcoes.setStyleSheet(group_filtros.styleSheet())
-
-        layout_opcoes = QVBoxLayout(group_opcoes)
-
-        self.check_detalhado = QCheckBox("RelatÃ³rio detalhado (por dia)")
-        self.check_detalhado.setChecked(True)
-
-        self.check_resumido = QCheckBox("RelatÃ³rio resumido (totais)")
-
-        self.check_porcentagens = QCheckBox("Incluir porcentagens")
-        self.check_porcentagens.setChecked(True)
-
-        self.check_justificativas = QCheckBox("Incluir justificativas de faltas")
-
-        layout_opcoes.addWidget(self.check_detalhado)
-        layout_opcoes.addWidget(self.check_resumido)
-        layout_opcoes.addWidget(self.check_porcentagens)
-        layout_opcoes.addWidget(self.check_justificativas)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_gerar = AnimacaoBotao("GERAR RELATÃ“RIO", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_gerar.setMinimumHeight(45)
-        btn_gerar.clicked.connect(self.gerar_relatorio)
-
-        btn_visualizar = AnimacaoBotao("VISUALIZAR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_visualizar.setMinimumHeight(45)
-        btn_visualizar.clicked.connect(self.visualizar_relatorio)
-
-        btn_fechar = QPushButton("FECHAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.setMinimumHeight(45)
-        btn_fechar.clicked.connect(self.close)
-
-        botoes_layout.addWidget(btn_gerar)
-        botoes_layout.addWidget(btn_visualizar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(group_filtros)
-        layout.addWidget(group_opcoes)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def carregar_turmas_freq(self):
-        """Carrega turmas para o relatÃ³rio de frequÃªncia"""
-        try:
-            turmas = self.db.execute_query('''
-                SELECT DISTINCT nome, serie 
-                FROM turmas 
-                WHERE ativa = 1
-                ORDER BY serie, nome
-            ''', fetch=True)
-
-            for nome, serie in turmas:
-                texto = f"{nome} - {serie}" if serie else nome
-                self.combo_turma_freq_rel.addItem(texto, nome)
-
-        except Exception as e:
-            print(f"Erro ao carregar turmas: {e}")
-
-    def gerar_relatorio(self):
-        """Gera o relatÃ³rio de frequÃªncia"""
-        # Obter parÃ¢metros dos filtros
-        turma_filtro = self.combo_turma_freq_rel.currentText()
-        data_inicio = self.date_inicio_freq.date().toString("yyyy-MM-dd")
-        data_fim = self.date_fim_freq.date().toString("yyyy-MM-dd")
-        disciplina_filtro = self.combo_disciplina_freq_rel.currentText()
-        presenca_filtro = self.combo_presenca_freq_rel.currentText()
-
-        # Construir query
-        query = """
-            SELECT a.nome as aluno, a.turma, f.data, 
-                   d.nome as disciplina, f.presente, f.justificativa
-            FROM frequencia f
-            JOIN alunos a ON f.aluno_id = a.id
-            LEFT JOIN disciplinas d ON f.disciplina_id = d.id
-            WHERE f.data BETWEEN ? AND ?
-        """
-
-        params = [data_inicio, data_fim]
-
-        if turma_filtro != "Todas as turmas":
-            query += " AND a.turma = ?"
-            params.append(turma_filtro.split(" - ")[0])
-
-        if disciplina_filtro != "Todas as disciplinas":
-            query += " AND d.nome = ?"
-            params.append(disciplina_filtro.split(" (")[0])
-
-        if presenca_filtro == "Apenas presentes":
-            query += " AND f.presente = 1"
-        elif presenca_filtro == "Apenas faltas":
-            query += " AND f.presente = 0"
-        elif presenca_filtro == "Apenas faltas justificadas":
-            query += " AND f.presente = 0 AND f.justificativa IS NOT NULL"
-
-        query += " ORDER BY a.turma, a.nome, f.data"
-
-        try:
-            frequencias = self.db.execute_query(query, tuple(params), fetch=True)
-
-            if not frequencias:
-                QMessageBox.information(self, "Sem dados",
-                                        "Nenhum registro encontrado com os filtros selecionados.")
+            # Converter data
+            data_aula_str = self.entries_diario["Data da Aula*"].get()
+            try:
+                data_aula = datetime.strptime(data_aula_str, '%d/%m/%Y').strftime('%Y-%m-%d')
+            except ValueError:
+                messagebox.showerror("Erro", "Data inválida! Use o formato DD/MM/AAAA")
                 return
 
-            # Criar relatÃ³rio
-            relatorio = f"""
-            RELATÃ“RIO DE FREQUÃŠNCIA
-            ========================
-            Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-            PerÃ­odo: {self.date_inicio_freq.date().toString('dd/MM/yyyy')} a {self.date_fim_freq.date().toString('dd/MM/yyyy')}
-            Turma: {turma_filtro}
-            Disciplina: {disciplina_filtro}
-            Tipo: {presenca_filtro}
-            Total de registros: {len(frequencias)}
-            ========================
-            """
+            # Coletar dados
+            dados = {
+                'disciplina_id': disciplina_id,
+                'turma_id': turma_id,
+                'professor_id': professor_id,
+                'data_aula': data_aula,
+                'conteudo': self.entries_diario["Conteúdo Ministrado*"].get().strip(),
+                'objetivos': self.entries_diario["Objetivos da Aula"].get("1.0", tk.END).strip(),
+                'metodologia': self.entries_diario["Metodologia Utilizada"].get("1.0", tk.END).strip(),
+                'recursos': self.entries_diario["Recursos Didáticos"].get("1.0", tk.END).strip(),
+                'tarefa_casa': self.entries_diario["Tarefa de Casa"].get("1.0", tk.END).strip(),
+                'observacoes': self.entries_diario["Observações"].get("1.0", tk.END).strip(),
+            }
 
-            # RelatÃ³rio detalhado
-            if self.check_detalhado.isChecked():
-                turma_atual = None
-                aluno_atual = None
+            # Inserir no banco
+            self.cursor.execute('''
+                INSERT INTO diario_aula (
+                    disciplina_id, turma_id, professor_id, data_aula, conteudo,
+                    objetivos, metodologia, recursos, tarefa_casa, observacoes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (dados['disciplina_id'], dados['turma_id'], dados['professor_id'],
+                  dados['data_aula'], dados['conteudo'], dados['objetivos'],
+                  dados['metodologia'], dados['recursos'], dados['tarefa_casa'],
+                  dados['observacoes']))
 
-                for freq in frequencias:
-                    aluno, turma, data, disciplina, presente, justificativa = freq
+            self.conn.commit()
 
-                    # Formatar data
-                    try:
-                        data_obj = datetime.strptime(data, '%Y-%m-%d')
-                        data_formatada = data_obj.strftime('%d/%m/%Y')
-                    except:
-                        data_formatada = data
+            # Registrar log
+            self.registrar_log('REGISTRO', 'Diário de Aula',
+                               f'Registrou aula: {disciplina_nome} - {turma_nome} - {data_aula_str}')
 
-                    # Agrupar por turma
-                    if turma != turma_atual:
-                        turma_atual = turma
-                        relatorio += f"\n\nTURMA: {turma_atual}"
-                        relatorio += "\n" + "-" * 50
-
-                    # Agrupar por aluno
-                    if aluno != aluno_atual:
-                        aluno_atual = aluno
-                        relatorio += f"\n\nAluno: {aluno_atual}"
-
-                    # Adicionar registro
-                    status = "PRESENTE" if presente == 1 else "FALTA"
-                    status_cor = "âœ“" if presente == 1 else "âœ—"
-
-                    linha = f"\n  {data_formatada} | {disciplina or 'Geral'} | {status_cor} {status}"
-
-                    if not presente and justificativa and self.check_justificativas.isChecked():
-                        linha += f" | Justificativa: {justificativa}"
-
-                    relatorio += linha
-
-            # RelatÃ³rio resumido
-            if self.check_resumido.isChecked():
-                # Calcular totais
-                total_registros = len(frequencias)
-                presentes = sum(1 for f in frequencias if f[4] == 1)
-                faltas = total_registros - presentes
-                faltas_justificadas = sum(1 for f in frequencias if f[4] == 0 and f[5])
-
-                relatorio += f"\n\n{'=' * 50}"
-                relatorio += f"\nRESUMO ESTATÃSTICO:"
-                relatorio += f"\nTotal de registros: {total_registros}"
-                relatorio += f"\nPresenÃ§as: {presentes}"
-                relatorio += f"\nFaltas: {faltas}"
-                relatorio += f"\nFaltas justificadas: {faltas_justificadas}"
-
-                if self.check_porcentagens.isChecked() and total_registros > 0:
-                    percent_presentes = (presentes / total_registros) * 100
-                    percent_faltas = (faltas / total_registros) * 100
-
-                    relatorio += f"\n\nPorcentagens:"
-                    relatorio += f"\nPresenÃ§as: {percent_presentes:.1f}%"
-                    relatorio += f"\nFaltas: {percent_faltas:.1f}%"
-
-                    if faltas > 0:
-                        percent_justificadas = (faltas_justificadas / faltas) * 100
-                        relatorio += f"\nFaltas justificadas: {percent_justificadas:.1f}% do total de faltas"
-
-            QMessageBox.information(self, "RelatÃ³rio Gerado",
-                                    f"RelatÃ³rio gerado com sucesso!\n\n"
-                                    f"Total de registros: {len(frequencias)}\n\n"
-                                    "Para visualizaÃ§Ã£o completa, use a opÃ§Ã£o VISUALIZAR.")
+            messagebox.showinfo("Sucesso", "Aula registrada no diário com sucesso!")
+            self.limpar_formulario_diario()
 
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao gerar relatÃ³rio:\n{str(e)}")
+            messagebox.showerror("Erro", f"Erro ao registrar aula: {str(e)}")
 
-    def visualizar_relatorio(self):
-        """Visualiza o relatÃ³rio gerado"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A visualizaÃ§Ã£o completa do relatÃ³rio serÃ¡ implementada na prÃ³xima versÃ£o.")
+    def carregar_aba_consulta_aulas(self, parent):
+        """Carrega aba de consulta de aulas"""
+        # Frame de filtros
+        filtros_frame = tk.Frame(parent, bg='white', relief='flat', bd=1, padx=20, pady=15)
+        filtros_frame.pack(fill=tk.X, pady=(0, 20))
 
+        # Linha 1
+        linha1 = tk.Frame(filtros_frame, bg='white')
+        linha1.pack(fill=tk.X, pady=5)
 
-# ============================================
-# DIÃLOGO DE BOLETIM INDIVIDUAL
-# ============================================
+        tk.Label(linha1, text="Turma:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=5)
 
-class BoletimIndividualDialog(QDialog):
-    """DiÃ¡logo para gerar boletim individual"""
+        self.turma_consulta_diario = ttk.Combobox(linha1, values=self.obter_turmas_combo(),
+                                                  state='readonly', width=25)
+        self.turma_consulta_diario.pack(side=tk.LEFT, padx=5)
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.db = DatabaseManager()
+        tk.Label(linha1, text="Disciplina:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=(20, 5))
 
-        self.setWindowTitle("Boletim Individual")
-        self.setFixedSize(500, 400)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
+        self.disciplina_consulta_diario = ttk.Combobox(linha1, state='readonly', width=25)
+        self.disciplina_consulta_diario.pack(side=tk.LEFT, padx=5)
 
-        self.init_ui()
-        self.carregar_alunos()
+        # Linha 2
+        linha2 = tk.Frame(filtros_frame, bg='white')
+        linha2.pack(fill=tk.X, pady=5)
 
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+        tk.Label(linha2, text="Data Início:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=5)
 
-        # TÃ­tulo
-        lbl_titulo = QLabel("BOLETIM INDIVIDUAL")
-        lbl_titulo.setObjectName("title")
+        self.data_inicio_diario = tk.Entry(linha2, width=12, font=('Arial', 10))
+        self.data_inicio_diario.pack(side=tk.LEFT, padx=5)
+        self.data_inicio_diario.insert(0, date.today().replace(day=1).strftime('%d/%m/%Y'))
 
-        # SeleÃ§Ã£o do aluno
-        group_selecao = QGroupBox("SELECIONE O ALUNO")
-        group_selecao.setStyleSheet("""
-            QGroupBox {
-                font-weight: 600;
-                border: 2px solid #dce1e6;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 15px;
-                padding: 0 10px;
-                background-color: #f5f7fa;
-            }
-        """)
+        tk.Label(linha2, text="Data Fim:", font=('Arial', 10, 'bold'),
+                 bg='white', fg='#0046AD').pack(side=tk.LEFT, padx=(20, 5))
 
-        layout_selecao = QFormLayout(group_selecao)
-        layout_selecao.setSpacing(15)
+        self.data_fim_diario = tk.Entry(linha2, width=12, font=('Arial', 10))
+        self.data_fim_diario.pack(side=tk.LEFT, padx=5)
+        self.data_fim_diario.insert(0, date.today().strftime('%d/%m/%Y'))
 
-        # Combo para selecionar aluno
-        lbl_aluno = QLabel("Aluno:")
-        self.combo_aluno_boletim = QComboBox()
-        self.combo_aluno_boletim.addItem("Selecione um aluno")
+        ModernButton(linha2, text="🔍 Buscar Aulas",
+                     command=self.buscar_aulas_diario,
+                     color='#0046AD').pack(side=tk.LEFT, padx=20)
 
-        # Combo para selecionar ano/semestre
-        lbl_periodo = QLabel("Ano letivo:")
-        self.combo_ano_boletim = QComboBox()
+        ModernButton(linha2, text="📋 Relatório",
+                     command=self.gerar_relatorio_diario,
+                     color='#0046AD').pack(side=tk.LEFT, padx=5)
 
-        # Carregar anos disponÃ­veis
-        anos = list(range(date.today().year - 5, date.today().year + 1))
-        for ano in reversed(anos):
-            self.combo_ano_boletim.addItem(str(ano))
+        # Tabela de aulas
+        colunas = ('ID', 'Data', 'Turma', 'Disciplina', 'Conteúdo', 'Professor', 'Registro')
+        self.tree_diario = self.criar_tabela(parent, colunas)
 
-        self.combo_ano_boletim.setCurrentText(str(date.today().year))
+        # Configurar evento para carregar disciplinas
+        self.turma_consulta_diario.bind('<<ComboboxSelected>>', self.carregar_disciplinas_consulta_diario)
 
-        layout_selecao.addRow(lbl_aluno, self.combo_aluno_boletim)
-        layout_selecao.addRow(lbl_periodo, self.combo_ano_boletim)
-
-        # OpÃ§Ãµes
-        group_opcoes = QGroupBox("OPÃ‡Ã•ES DO BOLETIM")
-        group_opcoes.setStyleSheet(group_selecao.styleSheet())
-
-        layout_opcoes = QVBoxLayout(group_opcoes)
-
-        self.check_todas_disciplinas = QCheckBox("Incluir todas as disciplinas")
-        self.check_todas_disciplinas.setChecked(True)
-
-        self.check_frequencia = QCheckBox("Incluir registro de frequÃªncia")
-        self.check_frequencia.setChecked(True)
-
-        self.check_observacoes = QCheckBox("Incluir observaÃ§Ãµes dos professores")
-
-        self.check_assinatura = QCheckBox("Incluir espaÃ§o para assinatura")
-        self.check_assinatura.setChecked(True)
-
-        layout_opcoes.addWidget(self.check_todas_disciplinas)
-        layout_opcoes.addWidget(self.check_frequencia)
-        layout_opcoes.addWidget(self.check_observacoes)
-        layout_opcoes.addWidget(self.check_assinatura)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_gerar = AnimacaoBotao("GERAR BOLETIM", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_gerar.setMinimumHeight(45)
-        btn_gerar.clicked.connect(self.gerar_boletim)
-
-        btn_preview = AnimacaoBotao("PRÃ‰-VISUALIZAR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_preview.setMinimumHeight(45)
-        btn_preview.clicked.connect(self.previsualizar_boletim)
-
-        btn_fechar = QPushButton("FECHAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.setMinimumHeight(45)
-        btn_fechar.clicked.connect(self.close)
-
-        botoes_layout.addWidget(btn_gerar)
-        botoes_layout.addWidget(btn_preview)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(group_selecao)
-        layout.addWidget(group_opcoes)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def carregar_alunos(self):
-        """Carrega alunos ativos para o boletim"""
-        try:
-            alunos = self.db.execute_query('''
-                SELECT id, nome, turma, serie 
-                FROM alunos 
-                WHERE status = 'Ativo'
-                ORDER BY nome
-            ''', fetch=True)
-
-            for id_aluno, nome, turma, serie in alunos:
-                texto = f"{nome}"
-                if turma:
-                    texto += f" - {turma}"
-                if serie:
-                    texto += f" ({serie})"
-
-                self.combo_aluno_boletim.addItem(texto, id_aluno)
-
-        except Exception as e:
-            print(f"Erro ao carregar alunos: {e}")
-
-    def gerar_boletim(self):
-        """Gera o boletim individual"""
-        if self.combo_aluno_boletim.currentIndex() == 0:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione um aluno.")
+    def carregar_disciplinas_consulta_diario(self, event=None):
+        """Carrega disciplinas para consulta no diário"""
+        turma_nome = self.turma_consulta_diario.get()
+        if not turma_nome:
             return
 
-        aluno_id = self.combo_aluno_boletim.currentData()
-        ano_letivo = self.combo_ano_boletim.currentText()
-
         try:
-            # Obter dados do aluno
-            aluno = self.db.execute_query('''
-                SELECT nome, turma, serie, data_nascimento
-                FROM alunos 
-                WHERE id = ?
-            ''', (aluno_id,), fetch=True)
-
-            if not aluno:
-                QMessageBox.warning(self, "Aluno nÃ£o encontrado",
-                                    "NÃ£o foi possÃ­vel encontrar os dados do aluno.")
+            # Buscar ID da turma
+            self.cursor.execute("SELECT id FROM turmas WHERE nome = ?", (turma_nome,))
+            turma_id = self.cursor.fetchone()
+            if not turma_id:
                 return
 
-            nome_aluno, turma, serie, data_nasc = aluno[0]
+            turma_id = turma_id[0]
 
-            # Obter notas do aluno
-            notas = self.db.execute_query('''
-                SELECT d.nome as disciplina, n.bimestre, 
-                       n.nota1, n.nota2, n.nota3, n.nota4,
-                       n.media, n.situacao, n.observacoes
-                FROM notas n
-                JOIN disciplinas d ON n.disciplina_id = d.id
-                WHERE n.aluno_id = ? 
-                ORDER BY d.nome, n.bimestre
-            ''', (aluno_id,), fetch=True)
+            # Buscar disciplinas da turma
+            self.cursor.execute('''
+                SELECT d.nome 
+                FROM disciplinas d 
+                WHERE d.turma_id = ? AND d.status = 'Ativa'
+                ORDER BY d.nome
+            ''', (turma_id,))
 
-            # Obter frequÃªncia do aluno
-            frequencia = self.db.execute_query('''
-                SELECT COUNT(*) as total_aulas,
-                       SUM(CASE WHEN presente = 1 THEN 1 ELSE 0 END) as presencas,
-                       SUM(CASE WHEN presente = 0 AND justificativa IS NOT NULL THEN 1 ELSE 0 END) as faltas_justificadas,
-                       SUM(CASE WHEN presente = 0 AND justificativa IS NULL THEN 1 ELSE 0 END) as faltas_nao_justificadas
-                FROM frequencia
-                WHERE aluno_id = ? AND strftime('%Y', data) = ?
-            ''', (aluno_id, ano_letivo), fetch=True)
-
-            # Criar boletim
-            boletim = f"""
-            {'=' * 60}
-            BOLETIM ESCOLAR - {ano_letivo}
-            {'=' * 60}
-
-            DADOS DO ALUNO:
-            Nome: {nome_aluno}
-            Turma: {turma if turma else 'NÃ£o informada'}
-            SÃ©rie: {serie if serie else 'NÃ£o informada'}
-
-            {'=' * 60}
-            DESEMPENHO ACADÃŠMICO:
-            {'=' * 60}
-            """
-
-            if not notas:
-                boletim += "\nNenhuma nota registrada para este aluno.\n"
-            else:
-                # Agrupar por disciplina
-                disciplinas = {}
-                for nota in notas:
-                    disciplina, bimestre, n1, n2, n3, n4, media, situacao, obs = nota
-
-                    if disciplina not in disciplinas:
-                        disciplinas[disciplina] = []
-
-                    disciplinas[disciplina].append({
-                        'bimestre': bimestre,
-                        'notas': [n1, n2, n3, n4],
-                        'media': media,
-                        'situacao': situacao,
-                        'observacoes': obs
-                    })
-
-                # Adicionar notas por disciplina
-                for disciplina, dados in disciplinas.items():
-                    boletim += f"\nDisciplina: {disciplina}"
-                    boletim += "\n" + "-" * 40
-
-                    for dado in dados:
-                        boletim += f"\nBimestre {dado['bimestre']}: "
-
-                        # Adicionar notas
-                        notas_str = []
-                        for i, nota in enumerate(dado['notas'], 1):
-                            if nota is not None:
-                                notas_str.append(f"N{i}: {nota:.1f}")
-
-                        if notas_str:
-                            boletim += f"{', '.join(notas_str)}"
-
-                        # Adicionar mÃ©dia
-                        if dado['media'] is not None:
-                            boletim += f" | MÃ©dia: {dado['media']:.1f}"
-
-                        # Adicionar situaÃ§Ã£o
-                        if dado['situacao']:
-                            boletim += f" | SituaÃ§Ã£o: {dado['situacao']}"
-
-                    boletim += "\n"
-
-            # Adicionar frequÃªncia
-            if self.check_frequencia.isChecked() and frequencia:
-                total, presencas, faltas_just, faltas_nao_just = frequencia[0]
-
-                boletim += f"\n{'=' * 60}"
-                boletim += f"\nFREQUÃŠNCIA - {ano_letivo}:"
-                boletim += f"\n{'=' * 60}"
-
-                if total and total > 0:
-                    percent_presenca = (presencas / total) * 100
-
-                    boletim += f"\nTotal de aulas: {total or 0}"
-                    boletim += f"\nPresenÃ§as: {presencas or 0}"
-                    boletim += f"\nFaltas justificadas: {faltas_just or 0}"
-                    boletim += f"\nFaltas nÃ£o justificadas: {faltas_nao_just or 0}"
-                    boletim += f"\nPercentual de presenÃ§a: {percent_presenca:.1f}%"
-                else:
-                    boletim += "\nNenhum registro de frequÃªncia encontrado."
-
-            # Adicionar espaÃ§o para assinatura
-            if self.check_assinatura.isChecked():
-                boletim += f"\n\n{'=' * 60}"
-                boletim += f"\n\nASSINATURAS:"
-                boletim += f"\n\nResponsÃ¡vel pelo aluno: ___________________________"
-                boletim += f"\n\nCoordenador(a): ___________________________"
-                boletim += f"\n\nData: ___/___/_______"
-
-            QMessageBox.information(self, "Boletim Gerado",
-                                    f"Boletim gerado com sucesso para {nome_aluno}!\n\n"
-                                    f"Ano letivo: {ano_letivo}\n\n"
-                                    "Para visualizaÃ§Ã£o completa, use a opÃ§Ã£o PRÃ‰-VISUALIZAR.")
+            disciplinas = [disc[0] for disc in self.cursor.fetchall()]
+            self.disciplina_consulta_diario['values'] = disciplinas
 
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao gerar boletim:\n{str(e)}")
+            print(f"Erro ao carregar disciplinas: {e}")
 
-    def previsualizar_boletim(self):
-        """PrÃ©-visualiza o boletim gerado"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A prÃ©-visualizaÃ§Ã£o do boletim serÃ¡ implementada na prÃ³xima versÃ£o.")
+    def buscar_aulas_diario(self):
+        """Busca aulas no diário conforme filtros"""
+        # Limpar tabela
+        for item in self.tree_diario.get_children():
+            self.tree_diario.delete(item)
 
+        turma_nome = self.turma_consulta_diario.get()
+        disciplina_nome = self.disciplina_consulta_diario.get()
+        data_inicio = self.data_inicio_diario.get()
+        data_fim = self.data_fim_diario.get()
 
-# ============================================
-# DIÃLOGO DE ESTATÃSTICAS GERAIS
-# ============================================
+        try:
+            sql = '''
+                SELECT da.id, da.data_aula, t.nome, d.nome, da.conteudo, p.nome, da.data_registro
+                FROM diario_aula da
+                JOIN turmas t ON da.turma_id = t.id
+                JOIN disciplinas d ON da.disciplina_id = d.id
+                JOIN professores p ON da.professor_id = p.id
+                WHERE 1=1
+            '''
+            params = []
 
-class EstatisticasGeraisDialog(QDialog):
-    """DiÃ¡logo para exibir estatÃ­sticas gerais do sistema"""
+            if turma_nome:
+                sql += ' AND t.nome = ?'
+                params.append(turma_nome)
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.db = DatabaseManager()
+            if disciplina_nome:
+                sql += ' AND d.nome = ?'
+                params.append(disciplina_nome)
 
-        self.setWindowTitle("EstatÃ­sticas Gerais")
-        self.setFixedSize(800, 600)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
+            if data_inicio:
+                try:
+                    data_ini = datetime.strptime(data_inicio, '%d/%m/%Y').strftime('%Y-%m-%d')
+                    sql += ' AND da.data_aula >= ?'
+                    params.append(data_ini)
+                except ValueError:
+                    pass
 
-        self.init_ui()
-        self.carregar_estatisticas()
+            if data_fim:
+                try:
+                    data_f = datetime.strptime(data_fim, '%d/%m/%Y').strftime('%Y-%m-%d')
+                    sql += ' AND da.data_aula <= ?'
+                    params.append(data_f)
+                except ValueError:
+                    pass
 
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+            sql += ' ORDER BY da.data_aula DESC, t.nome'
 
-        # TÃ­tulo
-        lbl_titulo = QLabel("ESTATÃSTICAS GERAIS DO SISTEMA")
-        lbl_titulo.setObjectName("title")
+            self.cursor.execute(sql, params)
+            aulas = self.cursor.fetchall()
+
+            for aula in aulas:
+                # Formatar data
+                data_formatada = datetime.strptime(aula[1], '%Y-%m-%d').strftime('%d/%m/%Y')
+                registro_formatado = datetime.strptime(aula[6], '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y %H:%M')
+
+                valores = (aula[0], data_formatada, aula[2], aula[3],
+                           aula[4][:50] + "..." if len(aula[4]) > 50 else aula[4],
+                           aula[5], registro_formatado)
+                self.tree_diario.insert('', tk.END, values=valores)
+
+        except Exception as e:
+            print(f"Erro ao buscar aulas: {e}")
+
+    def gerar_relatorio_diario(self):
+        """Gera relatório do diário de classe"""
+        turma_nome = self.turma_consulta_diario.get()
+        disciplina_nome = self.disciplina_consulta_diario.get()
+        data_inicio = self.data_inicio_diario.get()
+        data_fim = self.data_fim_diario.get()
+
+        try:
+            # Buscar aulas
+            sql = '''
+                SELECT da.data_aula, t.nome, d.nome, da.conteudo, p.nome, 
+                       da.objetivos, da.metodologia, da.recursos, da.tarefa_casa, da.observacoes
+                FROM diario_aula da
+                JOIN turmas t ON da.turma_id = t.id
+                JOIN disciplinas d ON da.disciplina_id = d.id
+                JOIN professores p ON da.professor_id = p.id
+                WHERE 1=1
+            '''
+            params = []
+
+            if turma_nome:
+                sql += ' AND t.nome = ?'
+                params.append(turma_nome)
+
+            if disciplina_nome:
+                sql += ' AND d.nome = ?'
+                params.append(disciplina_nome)
+
+            if data_inicio:
+                try:
+                    data_ini = datetime.strptime(data_inicio, '%d/%m/%Y').strftime('%Y-%m-%d')
+                    sql += ' AND da.data_aula >= ?'
+                    params.append(data_ini)
+                except ValueError:
+                    pass
+
+            if data_fim:
+                try:
+                    data_f = datetime.strptime(data_fim, '%d/%m/%Y').strftime('%Y-%m-%d')
+                    sql += ' AND da.data_aula <= ?'
+                    params.append(data_f)
+                except ValueError:
+                    pass
+
+            sql += ' ORDER BY da.data_aula, t.nome'
+
+            self.cursor.execute(sql, params)
+            aulas = self.cursor.fetchall()
+
+            relatorio = "RELATÓRIO DO DIÁRIO DE CLASSE\n"
+            relatorio += "=" * 50 + "\n\n"
+
+            if turma_nome:
+                relatorio += f"Turma: {turma_nome}\n"
+            if disciplina_nome:
+                relatorio += f"Disciplina: {disciplina_nome}\n"
+            if data_inicio and data_fim:
+                relatorio += f"Período: {data_inicio} a {data_fim}\n"
+
+            relatorio += f"Data do relatório: {date.today().strftime('%d/%m/%Y')}\n\n"
+
+            relatorio += f"Total de aulas registradas: {len(aulas)}\n\n"
+
+            for aula in aulas:
+                data_formatada = datetime.strptime(aula[0], '%Y-%m-%d').strftime('%d/%m/%Y')
+                relatorio += f"Data: {data_formatada}\n"
+                relatorio += f"Turma: {aula[1]} | Disciplina: {aula[2]} | Professor: {aula[4]}\n"
+                relatorio += f"Conteúdo: {aula[3]}\n"
+
+                if aula[5]:  # Objetivos
+                    relatorio += f"Objetivos: {aula[5]}\n"
+                if aula[6]:  # Metodologia
+                    relatorio += f"Metodologia: {aula[6]}\n"
+                if aula[7]:  # Recursos
+                    relatorio += f"Recursos: {aula[7]}\n"
+                if aula[8]:  # Tarefa de casa
+                    relatorio += f"Tarefa: {aula[8]}\n"
+                if aula[9]:  # Observações
+                    relatorio += f"Observações: {aula[9]}\n"
+
+                relatorio += "-" * 50 + "\n\n"
+
+            self.mostrar_relatorio("Relatório do Diário", relatorio)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar relatório: {str(e)}")
+
+    # ========== MÓDULO GESTÃO DE DISCIPLINAS ==========
+
+    def carregar_gestao_disciplinas(self):
+        """Carrega módulo de gestão de disciplinas"""
+        self.limpar_conteudo()
+        self.ativar_botao("📚 Gestão de Disciplinas")
+        self.registrar_log('ACESSO', 'Gestão de Disciplinas', 'Acessou módulo de gestão de disciplinas')
+
+        # Frame principal com notebook
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        # Título
+        title_frame = tk.Frame(main_frame, bg='#f8f9fa')
+        title_frame.pack(fill='x', pady=(0, 20))
+
+        tk.Label(title_frame, text="Gestão de Disciplinas", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Cadastro e gerenciamento de disciplinas escolares",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook para abas
+        notebook = ttk.Notebook(main_frame, style='Custom.TNotebook')
+        notebook.pack(fill='both', expand=True)
 
         # Abas
-        tab_widget = QTabWidget()
+        self.carregar_aba_lista_disciplinas_modulo(notebook)
+        self.carregar_aba_cadastro_disciplinas_modulo(notebook)
+        self.carregar_aba_relatorios_disciplinas(notebook)
+
+    def carregar_aba_lista_disciplinas_modulo(self, parent):
+        """Aba de listagem de disciplinas"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='📋 Lista de Disciplinas')
+
+        # Barra de ferramentas
+        toolbar = tk.Frame(frame, bg='white', pady=10)
+        toolbar.pack(fill='x', padx=20)
+
+        # Busca
+        search_frame = tk.Frame(toolbar, bg='white')
+        search_frame.pack(side='left', fill='x', expand=True)
+
+        tk.Label(search_frame, text="🔍 Buscar:", font=('Arial', 10, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left', padx=5)
+
+        self.busca_disciplina_var = tk.StringVar()
+        busca_entry = tk.Entry(search_frame, textvariable=self.busca_disciplina_var,
+                              font=('Arial', 10), width=40, relief='solid', bd=1)
+        busca_entry.pack(side='left', padx=5)
+        busca_entry.bind('<KeyRelease>', self.buscar_disciplinas_modulo)
 
-        # Aba: VisÃ£o Geral
-        aba_geral = QWidget()
-        self.layout_geral = QFormLayout(aba_geral)
-        self.layout_geral.setContentsMargins(20, 20, 20, 20)
-        self.layout_geral.setSpacing(10)
-
-        # Aba: Alunos
-        aba_alunos = QWidget()
-        self.layout_alunos = QFormLayout(aba_alunos)
-        self.layout_alunos.setContentsMargins(20, 20, 20, 20)
-        self.layout_alunos.setSpacing(10)
-
-        # Aba: Desempenho
-        aba_desempenho = QWidget()
-        self.layout_desempenho = QFormLayout(aba_desempenho)
-        self.layout_desempenho.setContentsMargins(20, 20, 20, 20)
-        self.layout_desempenho.setSpacing(10)
-
-        # Aba: FrequÃªncia
-        aba_frequencia = QWidget()
-        self.layout_frequencia = QFormLayout(aba_frequencia)
-        self.layout_frequencia.setContentsMargins(20, 20, 20, 20)
-        self.layout_frequencia.setSpacing(10)
-
-        # Adicionar abas
-        tab_widget.addTab(aba_geral, "VisÃ£o Geral")
-        tab_widget.addTab(aba_alunos, "Alunos")
-        tab_widget.addTab(aba_desempenho, "Desempenho")
-        tab_widget.addTab(aba_frequencia, "FrequÃªncia")
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_atualizar = AnimacaoBotao("ATUALIZAR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_atualizar.setMinimumHeight(45)
-        btn_atualizar.clicked.connect(self.carregar_estatisticas)
-
-        btn_exportar = AnimacaoBotao("EXPORTAR", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_exportar.setMinimumHeight(45)
-        btn_exportar.clicked.connect(self.exportar_estatisticas)
-
-        btn_fechar = QPushButton("FECHAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.setMinimumHeight(45)
-        btn_fechar.clicked.connect(self.close)
-
-        botoes_layout.addWidget(btn_atualizar)
-        botoes_layout.addWidget(btn_exportar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(tab_widget)
-        layout.addLayout(botoes_layout)
-
-    def carregar_estatisticas(self):
-        """Carrega as estatÃ­sticas do sistema"""
-        try:
-            # Limpar layouts
-            self.limpar_layout(self.layout_geral)
-            self.limpar_layout(self.layout_alunos)
-            self.limpar_layout(self.layout_desempenho)
-            self.limpar_layout(self.layout_frequencia)
-
-            # VisÃ£o Geral
-            self.adicionar_estatistica(self.layout_geral, "Data da consulta:",
-                                       datetime.now().strftime('%d/%m/%Y %H:%M'))
-
-            # Total de registros
-            total_alunos = self.db.execute_query("SELECT COUNT(*) FROM alunos", fetch=True)[0][0]
-            total_professores = \
-            self.db.execute_query("SELECT COUNT(*) FROM professores WHERE ativo = 1", fetch=True)[0][0]
-            total_disciplinas = \
-            self.db.execute_query("SELECT COUNT(*) FROM disciplinas WHERE ativa = 1", fetch=True)[0][0]
-            total_turmas = self.db.execute_query("SELECT COUNT(*) FROM turmas WHERE ativa = 1", fetch=True)[0][0]
-
-            self.adicionar_estatistica(self.layout_geral, "Total de alunos:", str(total_alunos))
-            self.adicionar_estatistica(self.layout_geral, "Total de professores:", str(total_professores))
-            self.adicionar_estatistica(self.layout_geral, "Total de disciplinas:", str(total_disciplinas))
-            self.adicionar_estatistica(self.layout_geral, "Total de turmas:", str(total_turmas))
-
-            # EstatÃ­sticas de Alunos
-            alunos_ativos = self.db.execute_query(
-                "SELECT COUNT(*) FROM alunos WHERE status = 'Ativo'",
-                fetch=True
-            )[0][0]
-
-            alunos_inativos = self.db.execute_query(
-                "SELECT COUNT(*) FROM alunos WHERE status != 'Ativo'",
-                fetch=True
-            )[0][0]
-
-            alunos_por_serie = self.db.execute_query('''
-                SELECT serie, COUNT(*) 
-                FROM alunos 
-                WHERE status = 'Ativo' AND serie IS NOT NULL
-                GROUP BY serie 
-                ORDER BY serie
-            ''', fetch=True)
-
-            self.adicionar_estatistica(self.layout_alunos, "Alunos ativos:", str(alunos_ativos))
-            self.adicionar_estatistica(self.layout_alunos, "Alunos inativos:", str(alunos_inativos))
-
-            percent_ativo = (alunos_ativos / total_alunos * 100) if total_alunos > 0 else 0
-            self.adicionar_estatistica_colorida(
-                self.layout_alunos, "Percentual ativo:",
-                f"{percent_ativo:.1f}%",
-                "#27ae60" if percent_ativo > 90 else "#f39c12" if percent_ativo > 70 else "#e74c3c"
-            )
-
-            for serie, quantidade in alunos_por_serie:
-                self.adicionar_estatistica(self.layout_alunos, f"SÃ©rie {serie}:", str(quantidade))
-
-            # EstatÃ­sticas de Desempenho
-            media_geral = self.db.execute_query(
-                "SELECT AVG(media) FROM notas WHERE media IS NOT NULL",
-                fetch=True
-            )[0][0]
-
-            total_notas = self.db.execute_query("SELECT COUNT(*) FROM notas", fetch=True)[0][0]
-            aprovados = self.db.execute_query(
-                "SELECT COUNT(*) FROM notas WHERE situacao = 'Aprovado'",
-                fetch=True
-            )[0][0]
-
-            recuperacao = self.db.execute_query(
-                "SELECT COUNT(*) FROM notas WHERE situacao = 'RecuperaÃ§Ã£o'",
-                fetch=True
-            )[0][0]
-
-            reprovados = self.db.execute_query(
-                "SELECT COUNT(*) FROM notas WHERE situacao = 'Reprovado'",
-                fetch=True
-            )[0][0]
-
-            self.adicionar_estatistica(self.layout_desempenho, "MÃ©dia geral:",
-                                       f"{media_geral:.2f}" if media_geral else "N/A")
-
-            self.adicionar_estatistica(self.layout_desempenho, "Total de notas:", str(total_notas))
-
-            if total_notas > 0:
-                percent_aprovados = (aprovados / total_notas) * 100
-                percent_recuperacao = (recuperacao / total_notas) * 100
-                percent_reprovados = (reprovados / total_notas) * 100
-
-                self.adicionar_estatistica_colorida(
-                    self.layout_desempenho, "Aprovados:",
-                    f"{aprovados} ({percent_aprovados:.1f}%)", "#27ae60"
-                )
-                self.adicionar_estatistica_colorida(
-                    self.layout_desempenho, "RecuperaÃ§Ã£o:",
-                    f"{recuperacao} ({percent_recuperacao:.1f}%)", "#f39c12"
-                )
-                self.adicionar_estatistica_colorida(
-                    self.layout_desempenho, "Reprovados:",
-                    f"{reprovados} ({percent_reprovados:.1f}%)", "#e74c3c"
-                )
-
-            # EstatÃ­sticas de FrequÃªncia
-            total_registros_freq = self.db.execute_query(
-                "SELECT COUNT(*) FROM frequencia",
-                fetch=True
-            )[0][0]
-
-            presencas = self.db.execute_query(
-                "SELECT COUNT(*) FROM frequencia WHERE presente = 1",
-                fetch=True
-            )[0][0]
-
-            faltas = self.db.execute_query(
-                "SELECT COUNT(*) FROM frequencia WHERE presente = 0",
-                fetch=True
-            )[0][0]
-
-            faltas_justificadas = self.db.execute_query(
-                "SELECT COUNT(*) FROM frequencia WHERE presente = 0 AND justificativa IS NOT NULL",
-                fetch=True
-            )[0][0]
-
-            self.adicionar_estatistica(self.layout_frequencia, "Total de registros:", str(total_registros_freq))
-            self.adicionar_estatistica(self.layout_frequencia, "PresenÃ§as:", str(presencas))
-            self.adicionar_estatistica(self.layout_frequencia, "Faltas:", str(faltas))
-            self.adicionar_estatistica(self.layout_frequencia, "Faltas justificadas:", str(faltas_justificadas))
-
-            if total_registros_freq > 0:
-                percent_presenca = (presencas / total_registros_freq) * 100
-                percent_falta = (faltas / total_registros_freq) * 100
-
-                self.adicionar_estatistica_colorida(
-                    self.layout_frequencia, "Taxa de presenÃ§a:",
-                    f"{percent_presenca:.1f}%",
-                    "#27ae60" if percent_presenca > 90 else "#f39c12" if percent_presenca > 80 else "#e74c3c"
-                )
-
-                if faltas > 0:
-                    percent_justificadas = (faltas_justificadas / faltas) * 100
-                    self.adicionar_estatistica(
-                        self.layout_frequencia, "Faltas justificadas:",
-                        f"{percent_justificadas:.1f}% das faltas"
-                    )
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao carregar estatÃ­sticas:\n{str(e)}")
-
-    def limpar_layout(self, layout):
-        """Limpa todos os widgets de um layout"""
-        while layout.rowCount() > 0:
-            layout.removeRow(0)
-
-    def adicionar_estatistica(self, layout, label, valor):
-        """Adiciona uma estatÃ­stica ao layout"""
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet("font-weight: 600; color: #2c3e50; font-size: 13px;")
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet("color: #34495e; font-size: 13px;")
-
-        layout.addRow(lbl_label, lbl_valor)
-
-    def adicionar_estatistica_colorida(self, layout, label, valor, cor):
-        """Adiciona uma estatÃ­stica colorida ao layout"""
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet("font-weight: 600; color: #2c3e50; font-size: 13px;")
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet(f"color: {cor}; font-weight: 600; font-size: 13px;")
-
-        layout.addRow(lbl_label, lbl_valor)
-
-    def exportar_estatisticas(self):
-        """Exporta as estatÃ­sticas para um arquivo"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A exportaÃ§Ã£o de estatÃ­sticas serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-
-"""
-PROJETO ESCOLA - SISTEMA DE GESTÃƒO ESCOLAR
-Parte 8/10 - ContinuaÃ§Ã£o: RelatÃ³rio Personalizado, ExportaÃ§Ã£o e ConfiguraÃ§Ãµes
-"""
-
-
-# ============================================
-# DIÃLOGO DE RELATÃ“RIO PERSONALIZADO
-# ============================================
-
-class RelatorioPersonalizadoDialog(QDialog):
-    """DiÃ¡logo para criar relatÃ³rio personalizado"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.db = DatabaseManager()
-
-        self.setWindowTitle("RelatÃ³rio Personalizado")
-        self.setFixedSize(700, 600)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel("RELATÃ“RIO PERSONALIZADO")
-        lbl_titulo.setObjectName("title")
-
-        # SeÃ§Ã£o: Tipo de RelatÃ³rio
-        group_tipo = QGroupBox("TIPO DE RELATÃ“RIO")
-        group_tipo.setStyleSheet("""
-            QGroupBox {
-                font-weight: 600;
-                border: 2px solid #dce1e6;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 15px;
-                padding: 0 10px;
-                background-color: #f5f7fa;
-            }
-        """)
-
-        layout_tipo = QVBoxLayout(group_tipo)
-
-        self.radio_alunos = QRadioButton("RelatÃ³rio de Alunos")
-        self.radio_alunos.setChecked(True)
-        self.radio_alunos.toggled.connect(self.atualizar_opcoes)
-
-        self.radio_notas = QRadioButton("RelatÃ³rio de Notas")
-        self.radio_notas.toggled.connect(self.atualizar_opcoes)
-
-        self.radio_frequencia = QRadioButton("RelatÃ³rio de FrequÃªncia")
-        self.radio_frequencia.toggled.connect(self.atualizar_opcoes)
-
-        self.radio_financeiro = QRadioButton("RelatÃ³rio Financeiro")
-        self.radio_financeiro.toggled.connect(self.atualizar_opcoes)
-
-        layout_tipo.addWidget(self.radio_alunos)
-        layout_tipo.addWidget(self.radio_notas)
-        layout_tipo.addWidget(self.radio_frequencia)
-        layout_tipo.addWidget(self.radio_financeiro)
-
-        # SeÃ§Ã£o: Filtros (dinÃ¢mica)
-        self.group_filtros = QGroupBox("FILTROS")
-        self.group_filtros.setStyleSheet(group_tipo.styleSheet())
-
-        self.layout_filtros = QVBoxLayout(self.group_filtros)
-
-        # SeÃ§Ã£o: Campos a Incluir
-        group_campos = QGroupBox("CAMPOS A INCLUIR")
-        group_campos.setStyleSheet(group_tipo.styleSheet())
-
-        self.layout_campos = QVBoxLayout(group_campos)
-
-        # Inicializar opÃ§Ãµes
-        self.atualizar_opcoes()
-
-        # SeÃ§Ã£o: Formato de SaÃ­da
-        group_formato = QGroupBox("FORMATO DE SAÃDA")
-        group_formato.setStyleSheet(group_tipo.styleSheet())
-
-        layout_formato = QVBoxLayout(group_formato)
-
-        self.check_pdf = QCheckBox("Gerar em PDF")
-        self.check_pdf.setChecked(True)
-
-        self.check_excel = QCheckBox("Gerar em Excel")
-        self.check_excel.setChecked(True)
-
-        self.check_tela = QCheckBox("Exibir na tela")
-
-        layout_formato.addWidget(self.check_pdf)
-        layout_formato.addWidget(self.check_excel)
-        layout_formato.addWidget(self.check_tela)
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_gerar = AnimacaoBotao("GERAR RELATÃ“RIO", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_gerar.setMinimumHeight(45)
-        btn_gerar.clicked.connect(self.gerar_relatorio)
-
-        btn_salvar_template = AnimacaoBotao("SALVAR TEMPLATE", cor_normal="#3498db", cor_hover="#2980b9",
-                                            cor_press="#1c6ea4")
-        btn_salvar_template.setMinimumHeight(45)
-        btn_salvar_template.clicked.connect(self.salvar_template)
-
-        btn_fechar = QPushButton("FECHAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.setMinimumHeight(45)
-        btn_fechar.clicked.connect(self.close)
-
-        botoes_layout.addWidget(btn_gerar)
-        botoes_layout.addWidget(btn_salvar_template)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(group_tipo)
-        layout.addWidget(self.group_filtros)
-        layout.addWidget(group_campos)
-        layout.addWidget(group_formato)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def atualizar_opcoes(self):
-        """Atualiza as opÃ§Ãµes de filtros e campos baseado no tipo selecionado"""
-        # Limpar layouts
-        self.limpar_layout(self.layout_filtros)
-        self.limpar_layout(self.layout_campos)
-
-        if self.radio_alunos.isChecked():
-            self.configurar_opcoes_alunos()
-        elif self.radio_notas.isChecked():
-            self.configurar_opcoes_notas()
-        elif self.radio_frequencia.isChecked():
-            self.configurar_opcoes_frequencia()
-        elif self.radio_financeiro.isChecked():
-            self.configurar_opcoes_financeiro()
-
-    def limpar_layout(self, layout):
-        """Limpa todos os widgets de um layout"""
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-    def configurar_opcoes_alunos(self):
-        """Configura opÃ§Ãµes para relatÃ³rio de alunos"""
         # Filtros
-        lbl_status = QLabel("Status:")
-        self.combo_status_personalizado = QComboBox()
-        self.combo_status_personalizado.addItems(["Todos", "Ativos", "Inativos", "Transferidos", "Evadidos"])
-
-        lbl_turma = QLabel("Turma:")
-        self.combo_turma_personalizado = QComboBox()
-        self.combo_turma_personalizado.addItem("Todas as turmas")
-        self.carregar_turmas_combo(self.combo_turma_personalizado)
-
-        lbl_serie = QLabel("SÃ©rie:")
-        self.combo_serie_personalizado = QComboBox()
-        self.combo_serie_personalizado.addItem("Todas as sÃ©ries")
-        self.carregar_series_combo(self.combo_serie_personalizado)
-
-        # Layout de filtros
-        form_filtros = QFormLayout()
-        form_filtros.addRow(lbl_status, self.combo_status_personalizado)
-        form_filtros.addRow(lbl_turma, self.combo_turma_personalizado)
-        form_filtros.addRow(lbl_serie, self.combo_serie_personalizado)
-
-        self.layout_filtros.addLayout(form_filtros)
-
-        # Campos a incluir
-        self.check_nome = QCheckBox("Nome")
-        self.check_nome.setChecked(True)
-
-        self.check_cpf = QCheckBox("CPF")
-
-        self.check_data_nasc = QCheckBox("Data de Nascimento")
-
-        self.check_turma = QCheckBox("Turma")
-        self.check_turma.setChecked(True)
-
-        self.check_serie = QCheckBox("SÃ©rie")
-        self.check_serie.setChecked(True)
-
-        self.check_responsavel = QCheckBox("ResponsÃ¡vel")
-
-        self.check_telefone = QCheckBox("Telefone")
-
-        self.check_endereco = QCheckBox("EndereÃ§o")
-
-        self.check_status = QCheckBox("Status")
-        self.check_status.setChecked(True)
-
-        # Layout de campos
-        grid_campos = QGridLayout()
-        grid_campos.addWidget(self.check_nome, 0, 0)
-        grid_campos.addWidget(self.check_cpf, 0, 1)
-        grid_campos.addWidget(self.check_data_nasc, 0, 2)
-        grid_campos.addWidget(self.check_turma, 1, 0)
-        grid_campos.addWidget(self.check_serie, 1, 1)
-        grid_campos.addWidget(self.check_responsavel, 1, 2)
-        grid_campos.addWidget(self.check_telefone, 2, 0)
-        grid_campos.addWidget(self.check_endereco, 2, 1)
-        grid_campos.addWidget(self.check_status, 2, 2)
-
-        self.layout_campos.addLayout(grid_campos)
-
-    def configurar_opcoes_notas(self):
-        """Configura opÃ§Ãµes para relatÃ³rio de notas"""
-        # Filtros
-        lbl_turma = QLabel("Turma:")
-        self.combo_turma_notas_personalizado = QComboBox()
-        self.combo_turma_notas_personalizado.addItem("Todas as turmas")
-        self.carregar_turmas_combo(self.combo_turma_notas_personalizado)
-
-        lbl_disciplina = QLabel("Disciplina:")
-        self.combo_disciplina_personalizado = QComboBox()
-        self.combo_disciplina_personalizado.addItem("Todas as disciplinas")
-        self.carregar_disciplinas_combo(self.combo_disciplina_personalizado)
-
-        lbl_bimestre = QLabel("Bimestre:")
-        self.combo_bimestre_personalizado = QComboBox()
-        self.combo_bimestre_personalizado.addItems(
-            ["Todos", "1Âº Bimestre", "2Âº Bimestre", "3Âº Bimestre", "4Âº Bimestre"])
-
-        # Layout de filtros
-        form_filtros = QFormLayout()
-        form_filtros.addRow(lbl_turma, self.combo_turma_notas_personalizado)
-        form_filtros.addRow(lbl_disciplina, self.combo_disciplina_personalizado)
-        form_filtros.addRow(lbl_bimestre, self.combo_bimestre_personalizado)
-
-        self.layout_filtros.addLayout(form_filtros)
-
-        # Campos a incluir
-        self.check_aluno = QCheckBox("Nome do Aluno")
-        self.check_aluno.setChecked(True)
-
-        self.check_turma_nota = QCheckBox("Turma")
-        self.check_turma_nota.setChecked(True)
-
-        self.check_disciplina = QCheckBox("Disciplina")
-        self.check_disciplina.setChecked(True)
-
-        self.check_bimestre = QCheckBox("Bimestre")
-        self.check_bimestre.setChecked(True)
-
-        self.check_nota1 = QCheckBox("Nota 1")
-
-        self.check_nota2 = QCheckBox("Nota 2")
-
-        self.check_nota3 = QCheckBox("Nota 3")
-
-        self.check_nota4 = QCheckBox("Nota 4")
-
-        self.check_media = QCheckBox("MÃ©dia")
-        self.check_media.setChecked(True)
-
-        self.check_situacao = QCheckBox("SituaÃ§Ã£o")
-        self.check_situacao.setChecked(True)
-
-        # Layout de campos
-        grid_campos = QGridLayout()
-        grid_campos.addWidget(self.check_aluno, 0, 0)
-        grid_campos.addWidget(self.check_turma_nota, 0, 1)
-        grid_campos.addWidget(self.check_disciplina, 0, 2)
-        grid_campos.addWidget(self.check_bimestre, 1, 0)
-        grid_campos.addWidget(self.check_nota1, 1, 1)
-        grid_campos.addWidget(self.check_nota2, 1, 2)
-        grid_campos.addWidget(self.check_nota3, 2, 0)
-        grid_campos.addWidget(self.check_nota4, 2, 1)
-        grid_campos.addWidget(self.check_media, 2, 2)
-        grid_campos.addWidget(self.check_situacao, 3, 0)
-
-        self.layout_campos.addLayout(grid_campos)
-
-    def configurar_opcoes_frequencia(self):
-        """Configura opÃ§Ãµes para relatÃ³rio de frequÃªncia"""
-        # Filtros
-        lbl_turma = QLabel("Turma:")
-        self.combo_turma_freq_personalizado = QComboBox()
-        self.combo_turma_freq_personalizado.addItem("Todas as turmas")
-        self.carregar_turmas_combo(self.combo_turma_freq_personalizado)
-
-        lbl_periodo = QLabel("PerÃ­odo:")
-
-        periodo_layout = QHBoxLayout()
-        self.date_inicio_personalizado = QDateEdit()
-        self.date_inicio_personalizado.setCalendarPopup(True)
-        self.date_inicio_personalizado.setDate(QDate.currentDate().addMonths(-1))
-        self.date_inicio_personalizado.setDisplayFormat("dd/MM/yyyy")
-
-        self.date_fim_personalizado = QDateEdit()
-        self.date_fim_personalizado.setCalendarPopup(True)
-        self.date_fim_personalizado.setDate(QDate.currentDate())
-        self.date_fim_personalizado.setDisplayFormat("dd/MM/yyyy")
-
-        periodo_layout.addWidget(self.date_inicio_personalizado)
-        periodo_layout.addWidget(QLabel("atÃ©"))
-        periodo_layout.addWidget(self.date_fim_personalizado)
-
-        # Layout de filtros
-        form_filtros = QFormLayout()
-        form_filtros.addRow(lbl_turma, self.combo_turma_freq_personalizado)
-        form_filtros.addRow(lbl_periodo, periodo_layout)
-
-        self.layout_filtros.addLayout(form_filtros)
-
-        # Campos a incluir
-        self.check_aluno_freq = QCheckBox("Nome do Aluno")
-        self.check_aluno_freq.setChecked(True)
-
-        self.check_turma_freq = QCheckBox("Turma")
-        self.check_turma_freq.setChecked(True)
-
-        self.check_data = QCheckBox("Data")
-        self.check_data.setChecked(True)
-
-        self.check_disciplina_freq = QCheckBox("Disciplina")
-
-        self.check_presente = QCheckBox("Presente")
-        self.check_presente.setChecked(True)
-
-        self.check_justificativa = QCheckBox("Justificativa")
-
-        self.check_observacoes_freq = QCheckBox("ObservaÃ§Ãµes")
-
-        # Layout de campos
-        grid_campos = QGridLayout()
-        grid_campos.addWidget(self.check_aluno_freq, 0, 0)
-        grid_campos.addWidget(self.check_turma_freq, 0, 1)
-        grid_campos.addWidget(self.check_data, 0, 2)
-        grid_campos.addWidget(self.check_disciplina_freq, 1, 0)
-        grid_campos.addWidget(self.check_presente, 1, 1)
-        grid_campos.addWidget(self.check_justificativa, 1, 2)
-        grid_campos.addWidget(self.check_observacoes_freq, 2, 0)
-
-        self.layout_campos.addLayout(grid_campos)
-
-    def configurar_opcoes_financeiro(self):
-        """Configura opÃ§Ãµes para relatÃ³rio financeiro (simplificado)"""
-        lbl_info = QLabel("MÃ³dulo financeiro nÃ£o implementado nesta versÃ£o.")
-        lbl_info.setStyleSheet("color: #f39c12; font-weight: 600; padding: 10px;")
-
-        self.layout_filtros.addWidget(lbl_info)
-
-        lbl_campos = QLabel("Nenhum campo disponÃ­vel para este mÃ³dulo.")
-        lbl_campos.setStyleSheet("color: #95a5a6; padding: 10px;")
-
-        self.layout_campos.addWidget(lbl_campos)
-
-    def carregar_turmas_combo(self, combo):
-        """Carrega turmas em um combobox"""
-        try:
-            turmas = self.db.execute_query('''
-                SELECT DISTINCT nome 
-                FROM turmas 
-                WHERE ativa = 1
-                ORDER BY nome
-            ''', fetch=True)
-
-            for turma in turmas:
-                if turma[0]:
-                    combo.addItem(turma[0])
-
-        except Exception as e:
-            print(f"Erro ao carregar turmas: {e}")
-
-    def carregar_series_combo(self, combo):
-        """Carrega sÃ©ries em um combobox"""
-        try:
-            series = self.db.execute_query('''
-                SELECT DISTINCT serie 
-                FROM alunos 
-                WHERE serie IS NOT NULL AND serie != ''
-                ORDER BY serie
-            ''', fetch=True)
-
-            for serie in series:
-                if serie[0]:
-                    combo.addItem(serie[0])
-
-        except Exception as e:
-            print(f"Erro ao carregar sÃ©ries: {e}")
-
-    def carregar_disciplinas_combo(self, combo):
-        """Carrega disciplinas em um combobox"""
-        try:
-            disciplinas = self.db.execute_query('''
-                SELECT DISTINCT nome 
-                FROM disciplinas 
-                WHERE ativa = 1
-                ORDER BY nome
-            ''', fetch=True)
-
-            for disciplina in disciplinas:
-                if disciplina[0]:
-                    combo.addItem(disciplina[0])
-
-        except Exception as e:
-            print(f"Erro ao carregar disciplinas: {e}")
-
-    def gerar_relatorio(self):
-        """Gera o relatÃ³rio personalizado"""
-        if self.radio_financeiro.isChecked():
-            QMessageBox.information(self, "MÃ³dulo nÃ£o implementado",
-                                    "O mÃ³dulo financeiro nÃ£o estÃ¡ implementado nesta versÃ£o.")
-            return
-
-        # Coletar parÃ¢metros
-        tipo_relatorio = ""
-        if self.radio_alunos.isChecked():
-            tipo_relatorio = "alunos"
-        elif self.radio_notas.isChecked():
-            tipo_relatorio = "notas"
-        elif self.radio_frequencia.isChecked():
-            tipo_relatorio = "frequencia"
-
-        # Coletar filtros
-        filtros = {}
-        if tipo_relatorio == "alunos":
-            filtros['status'] = self.combo_status_personalizado.currentText()
-            filtros['turma'] = self.combo_turma_personalizado.currentText()
-            filtros['serie'] = self.combo_serie_personalizado.currentText()
-
-        elif tipo_relatorio == "notas":
-            filtros['turma'] = self.combo_turma_notas_personalizado.currentText()
-            filtros['disciplina'] = self.combo_disciplina_personalizado.currentText()
-            filtros['bimestre'] = self.combo_bimestre_personalizado.currentText()
-
-        elif tipo_relatorio == "frequencia":
-            filtros['turma'] = self.combo_turma_freq_personalizado.currentText()
-            filtros['data_inicio'] = self.date_inicio_personalizado.date().toString("yyyy-MM-dd")
-            filtros['data_fim'] = self.date_fim_personalizado.date().toString("yyyy-MM-dd")
-
-        # Coletar campos selecionados
-        campos = []
-        if tipo_relatorio == "alunos":
-            if self.check_nome.isChecked(): campos.append("nome")
-            if self.check_cpf.isChecked(): campos.append("cpf")
-            if self.check_data_nasc.isChecked(): campos.append("data_nascimento")
-            if self.check_turma.isChecked(): campos.append("turma")
-            if self.check_serie.isChecked(): campos.append("serie")
-            if self.check_responsavel.isChecked(): campos.append("responsavel")
-            if self.check_telefone.isChecked(): campos.append("telefone")
-            if self.check_endereco.isChecked(): campos.append("endereco")
-            if self.check_status.isChecked(): campos.append("status")
-
-        elif tipo_relatorio == "notas":
-            if self.check_aluno.isChecked(): campos.append("aluno")
-            if self.check_turma_nota.isChecked(): campos.append("turma")
-            if self.check_disciplina.isChecked(): campos.append("disciplina")
-            if self.check_bimestre.isChecked(): campos.append("bimestre")
-            if self.check_nota1.isChecked(): campos.append("nota1")
-            if self.check_nota2.isChecked(): campos.append("nota2")
-            if self.check_nota3.isChecked(): campos.append("nota3")
-            if self.check_nota4.isChecked(): campos.append("nota4")
-            if self.check_media.isChecked(): campos.append("media")
-            if self.check_situacao.isChecked(): campos.append("situacao")
-
-        elif tipo_relatorio == "frequencia":
-            if self.check_aluno_freq.isChecked(): campos.append("aluno")
-            if self.check_turma_freq.isChecked(): campos.append("turma")
-            if self.check_data.isChecked(): campos.append("data")
-            if self.check_disciplina_freq.isChecked(): campos.append("disciplina")
-            if self.check_presente.isChecked(): campos.append("presente")
-            if self.check_justificativa.isChecked(): campos.append("justificativa")
-            if self.check_observacoes_freq.isChecked(): campos.append("observacoes")
-
-        if not campos:
-            QMessageBox.warning(self, "Campos necessÃ¡rios",
-                                "Selecione pelo menos um campo para incluir no relatÃ³rio.")
-            return
-
-        # Gerar relatÃ³rio
-        try:
-            # Construir query baseada no tipo e filtros
-            query = self.construir_query(tipo_relatorio, filtros, campos)
-
-            if not query:
-                QMessageBox.warning(self, "Erro na query",
-                                    "NÃ£o foi possÃ­vel construir a query para o relatÃ³rio.")
-                return
-
-            # Executar query
-            dados = self.db.execute_query(query, fetch=True)
-
-            if not dados:
-                QMessageBox.information(self, "Sem dados",
-                                        "Nenhum registro encontrado com os filtros selecionados.")
-                return
-
-            # Preparar formato de saÃ­da
-            formatos = []
-            if self.check_pdf.isChecked():
-                formatos.append("PDF")
-            if self.check_excel.isChecked():
-                formatos.append("Excel")
-            if self.check_tela.isChecked():
-                formatos.append("Tela")
-
-            if not formatos:
-                QMessageBox.warning(self, "Formato necessÃ¡rio",
-                                    "Selecione pelo menos um formato de saÃ­da.")
-                return
-
-            # Gerar relatÃ³rio nos formatos selecionados
-            for formato in formatos:
-                if formato == "Tela":
-                    self.exibir_relatorio_tela(tipo_relatorio, dados, campos)
-                elif formato == "Excel":
-                    self.exportar_relatorio_excel(tipo_relatorio, dados, campos, filtros)
-                elif formato == "PDF":
-                    self.exportar_relatorio_pdf(tipo_relatorio, dados, campos, filtros)
-
-            QMessageBox.information(self, "RelatÃ³rio Gerado",
-                                    f"RelatÃ³rio gerado com sucesso!\n\n"
-                                    f"Tipo: {tipo_relatorio.capitalize()}\n"
-                                    f"Registros: {len(dados)}\n"
-                                    f"Formatos: {', '.join(formatos)}")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao gerar relatÃ³rio:\n{str(e)}")
-
-    def construir_query(self, tipo, filtros, campos):
-        """Constroi a query SQL baseada no tipo e filtros"""
-        if tipo == "alunos":
-            query = "SELECT "
-
-            # Mapear campos para colunas do banco
-            campos_map = {
-                'nome': 'nome',
-                'cpf': 'cpf',
-                'data_nascimento': 'data_nascimento',
-                'turma': 'turma',
-                'serie': 'serie',
-                'responsavel': 'nome_mae',
-                'telefone': 'telefone_responsavel',
-                'endereco': 'endereco',
-                'status': 'status'
-            }
-
-            campos_sql = []
-            for campo in campos:
-                if campo in campos_map:
-                    campos_sql.append(campos_map[campo])
-
-            if not campos_sql:
-                return None
-
-            query += ', '.join(campos_sql) + " FROM alunos WHERE 1=1"
-
-            # Aplicar filtros
-            if filtros['status'] != "Todos":
-                query += f" AND status = '{filtros['status']}'"
-
-            if filtros['turma'] != "Todas as turmas":
-                query += f" AND turma = '{filtros['turma']}'"
-
-            if filtros['serie'] != "Todas as sÃ©ries":
-                query += f" AND serie = '{filtros['serie']}'"
-
-            query += " ORDER BY nome"
-
-            return query
-
-        elif tipo == "notas":
-            query = """
-                SELECT a.nome as aluno, a.turma, d.nome as disciplina, 
-                       n.bimestre, n.nota1, n.nota2, n.nota3, n.nota4,
-                       n.media, n.situacao
-                FROM notas n
-                JOIN alunos a ON n.aluno_id = a.id
-                JOIN disciplinas d ON n.disciplina_id = d.id
-                WHERE 1=1
-            """
-
-            # Aplicar filtros
-            if filtros['turma'] != "Todas as turmas":
-                query += f" AND a.turma = '{filtros['turma']}'"
-
-            if filtros['disciplina'] != "Todas as disciplinas":
-                query += f" AND d.nome = '{filtros['disciplina']}'"
-
-            if filtros['bimestre'] != "Todos":
-                bimestre_num = int(filtros['bimestre'][0])
-                query += f" AND n.bimestre = {bimestre_num}"
-
-            query += " ORDER BY a.turma, a.nome, d.nome, n.bimestre"
-
-            return query
-
-        elif tipo == "frequencia":
-            query = """
-                SELECT a.nome as aluno, a.turma, f.data, 
-                       d.nome as disciplina, f.presente, f.justificativa, f.observacoes
-                FROM frequencia f
-                JOIN alunos a ON f.aluno_id = a.id
-                LEFT JOIN disciplinas d ON f.disciplina_id = d.id
-                WHERE f.data BETWEEN ? AND ?
-            """
-
-            # Aplicar filtro de turma
-            if filtros['turma'] != "Todas as turmas":
-                query += f" AND a.turma = '{filtros['turma']}'"
-
-            query += " ORDER BY a.turma, a.nome, f.data"
-
-            return query
-
-        return None
-
-    def exibir_relatorio_tela(self, tipo, dados, campos):
-        """Exibe o relatÃ³rio em uma nova janela"""
-        dialog = VisualizadorRelatorioDialog(self, tipo, dados, campos)
-        dialog.exec_()
-
-    def exportar_relatorio_excel(self, tipo, dados, campos, filtros):
-        """Exporta o relatÃ³rio para Excel"""
-        try:
-            exportador = ExportadorDados(self.db)
-
-            # Converter dados para DataFrame
-            df = pd.DataFrame(dados, columns=campos[:len(dados[0])] if dados else [])
-
-            # Criar nome do arquivo
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nome_arquivo = f"relatorio_{tipo}_{timestamp}"
-
-            # Exportar
-            sucesso, caminho = exportador.exportar_para_excel(
-                "",  # Query vazia pois jÃ¡ temos os dados
-                nome_arquivo,
-                cabecalhos=campos[:len(dados[0])] if dados else []
-            )
-
-            if sucesso:
-                QMessageBox.information(self, "Exportado com sucesso",
-                                        f"RelatÃ³rio exportado para Excel:\n{caminho}")
-            else:
-                QMessageBox.warning(self, "Erro na exportaÃ§Ã£o", caminho)
-
-        except Exception as e:
-            QMessageBox.warning(self, "Erro na exportaÃ§Ã£o", f"Erro ao exportar para Excel:\n{str(e)}")
-
-    def exportar_relatorio_pdf(self, tipo, dados, campos, filtros):
-        """Exporta o relatÃ³rio para PDF"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A exportaÃ§Ã£o para PDF serÃ¡ implementada na prÃ³xima versÃ£o.")
-
-    def salvar_template(self):
-        """Salva o template do relatÃ³rio personalizado"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "O salvamento de templates serÃ¡ implementado na prÃ³xima versÃ£o.")
-
-
-# ============================================
-# DIÃLOGO DE VISUALIZADOR DE RELATÃ“RIO
-# ============================================
-
-class VisualizadorRelatorioDialog(QDialog):
-    """DiÃ¡logo para visualizar relatÃ³rios na tela"""
-
-    def __init__(self, parent=None, tipo="", dados=None, campos=None):
-        super().__init__(parent)
-        self.tipo = tipo
-        self.dados = dados or []
-        self.campos = campos or []
-
-        self.setWindowTitle(f"RelatÃ³rio - {tipo.capitalize()}")
-        self.setFixedSize(1000, 700)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
-
-        self.init_ui()
-
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-
-        # TÃ­tulo
-        lbl_titulo = QLabel(f"RELATÃ“RIO - {self.tipo.upper()}")
-        lbl_titulo.setObjectName("title")
-
-        # InformaÃ§Ãµes
-        lbl_info = QLabel(f"Total de registros: {len(self.dados)} | Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-        lbl_info.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #7f8c8d;
-                font-weight: 600;
-                padding: 10px;
-                background-color: #f8f9fa;
-                border-radius: 6px;
-                border: 1px solid #dce1e6;
-            }
-        """)
-
-        # Tabela de dados
-        self.tabela_relatorio = QTableWidget()
-
-        # Configurar tabela
-        self.tabela_relatorio.setAlternatingRowColors(True)
-        self.tabela_relatorio.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Popular tabela
-        self.popular_tabela()
-
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
-
-        btn_exportar = AnimacaoBotao("EXPORTAR", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_exportar.setMinimumHeight(45)
-        btn_exportar.clicked.connect(self.exportar_dados)
-
-        btn_imprimir = AnimacaoBotao("IMPRIMIR", cor_normal="#3498db", cor_hover="#2980b9", cor_press="#1c6ea4")
-        btn_imprimir.setMinimumHeight(45)
-        btn_imprimir.clicked.connect(self.imprimir_relatorio)
-
-        btn_fechar = QPushButton("FECHAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.setMinimumHeight(45)
-        btn_fechar.clicked.connect(self.close)
-
-        botoes_layout.addWidget(btn_exportar)
-        botoes_layout.addWidget(btn_imprimir)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
-
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(lbl_info)
-        layout.addWidget(self.tabela_relatorio)
-        layout.addLayout(botoes_layout)
-
-    def popular_tabela(self):
-        """Popula a tabela com os dados do relatÃ³rio"""
-        if not self.dados:
-            self.tabela_relatorio.setRowCount(0)
-            self.tabela_relatorio.setColumnCount(1)
-            self.tabela_relatorio.setHorizontalHeaderLabels(["Mensagem"])
-
-            item = QTableWidgetItem("Nenhum dado disponÃ­vel para exibiÃ§Ã£o.")
-            item.setTextAlignment(Qt.AlignCenter)
-            self.tabela_relatorio.setItem(0, 0, item)
-            return
+        tk.Label(search_frame, text="Status:", font=('Arial', 10),
+                bg='white', fg='#666666').pack(side='left', padx=(20, 5))
+
+        self.filtro_status_disciplina = ttk.Combobox(search_frame, values=['Todas', 'Ativa', 'Inativa'],
+                                                     state='readonly', width=12, font=('Arial', 10))
+        self.filtro_status_disciplina.set('Ativa')
+        self.filtro_status_disciplina.pack(side='left', padx=5)
+        self.filtro_status_disciplina.bind('<<ComboboxSelected>>', lambda e: self.aplicar_filtros_disciplinas_modulo())
+
+        # Botões de ação
+        btn_frame = tk.Frame(toolbar, bg='white')
+        btn_frame.pack(side='right')
+
+        ModernButton(btn_frame, text="➕ Nova", command=lambda: parent.select(1),
+                    color='#0046AD').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="✏️ Editar", command=self.editar_disciplina_modulo,
+                    color='#FFCC00').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="🗑️ Excluir", command=self.excluir_disciplina_modulo,
+                    color='#dc3545').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="📊 Exportar", command=self.exportar_disciplinas_modulo,
+                    color='#28a745').pack(side='left', padx=5)
+
+        # Tabela de disciplinas
+        table_frame = tk.Frame(frame, bg='white')
+        table_frame.pack(fill='both', expand=True, padx=20, pady=10)
+
+        # Scrollbars
+        scroll_y = ttk.Scrollbar(table_frame)
+        scroll_y.pack(side='right', fill='y')
+
+        scroll_x = ttk.Scrollbar(table_frame, orient='horizontal')
+        scroll_x.pack(side='bottom', fill='x')
+
+        # Treeview
+        colunas = ('ID', 'Nome', 'Carga Horária', 'Professor', 'Turma', 'Status')
+        self.tree_disciplinas_modulo = ttk.Treeview(table_frame, columns=colunas, show='headings',
+                                            yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set,
+                                            style='Custom.Treeview', height=20)
 
         # Configurar colunas
-        num_colunas = len(self.dados[0]) if self.dados else 0
-        num_colunas = min(num_colunas, len(self.campos))
+        self.tree_disciplinas_modulo.heading('ID', text='ID')
+        self.tree_disciplinas_modulo.heading('Nome', text='Nome da Disciplina')
+        self.tree_disciplinas_modulo.heading('Carga Horária', text='Carga Horária (h)')
+        self.tree_disciplinas_modulo.heading('Professor', text='Professor')
+        self.tree_disciplinas_modulo.heading('Turma', text='Turma')
+        self.tree_disciplinas_modulo.heading('Status', text='Status')
 
-        self.tabela_relatorio.setColumnCount(num_colunas)
-        self.tabela_relatorio.setHorizontalHeaderLabels(self.campos[:num_colunas])
+        self.tree_disciplinas_modulo.column('ID', width=50, anchor='center')
+        self.tree_disciplinas_modulo.column('Nome', width=250, anchor='w')
+        self.tree_disciplinas_modulo.column('Carga Horária', width=120, anchor='center')
+        self.tree_disciplinas_modulo.column('Professor', width=200, anchor='w')
+        self.tree_disciplinas_modulo.column('Turma', width=150, anchor='w')
+        self.tree_disciplinas_modulo.column('Status', width=100, anchor='center')
 
-        # Configurar linhas
-        self.tabela_relatorio.setRowCount(len(self.dados))
+        scroll_y.config(command=self.tree_disciplinas_modulo.yview)
+        scroll_x.config(command=self.tree_disciplinas_modulo.xview)
 
-        # Popular dados
-        for row, linha_dados in enumerate(self.dados):
-            for col in range(num_colunas):
-                valor = linha_dados[col] if col < len(linha_dados) else ""
+        self.tree_disciplinas_modulo.pack(fill='both', expand=True)
 
-                # Formatar valores especÃ­ficos
-                if isinstance(valor, float):
-                    valor_texto = f"{valor:.2f}"
-                elif isinstance(valor, datetime):
-                    valor_texto = valor.strftime('%d/%m/%Y %H:%M')
-                elif valor is None:
-                    valor_texto = ""
+        # Carregar dados
+        self.carregar_dados_disciplinas_modulo()
+
+        # Bind duplo clique para editar
+        self.tree_disciplinas_modulo.bind('<Double-1>', lambda e: self.editar_disciplina_modulo())
+
+    def carregar_dados_disciplinas_modulo(self, query=None, filtro_status='Ativa'):
+        """Carrega dados das disciplinas na tabela"""
+        for item in self.tree_disciplinas_modulo.get_children():
+            self.tree_disciplinas_modulo.delete(item)
+
+        try:
+            if query:
+                sql = '''
+                    SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                    FROM disciplinas d
+                    LEFT JOIN professores p ON d.professor_id = p.id
+                    LEFT JOIN turmas t ON d.turma_id = t.id
+                    WHERE (d.nome LIKE ? OR p.nome LIKE ? OR t.nome LIKE ?)
+                '''
+                params = [f'%{query}%', f'%{query}%', f'%{query}%']
+
+                if filtro_status != 'Todas':
+                    sql += ' AND d.status = ?'
+                    params.append(filtro_status)
+
+                sql += ' ORDER BY d.nome'
+                self.cursor.execute(sql, params)
+            else:
+                if filtro_status == 'Todas':
+                    self.cursor.execute('''
+                        SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                        FROM disciplinas d
+                        LEFT JOIN professores p ON d.professor_id = p.id
+                        LEFT JOIN turmas t ON d.turma_id = t.id
+                        ORDER BY d.nome
+                    ''')
                 else:
-                    valor_texto = str(valor)
+                    self.cursor.execute('''
+                        SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                        FROM disciplinas d
+                        LEFT JOIN professores p ON d.professor_id = p.id
+                        LEFT JOIN turmas t ON d.turma_id = t.id
+                        WHERE d.status = ?
+                        ORDER BY d.nome
+                    ''', (filtro_status,))
 
-                item = QTableWidgetItem(valor_texto)
+            disciplinas = self.cursor.fetchall()
 
-                # Colorir valores especÃ­ficos baseado no tipo de relatÃ³rio
-                if self.tipo == "notas" and col == num_colunas - 2:  # Coluna de mÃ©dia
-                    try:
-                        media = float(valor) if valor else 0
-                        if media < 5.0:
-                            item.setForeground(QColor('#e74c3c'))
-                            item.setFont(QFont('', weight=QFont.Bold))
-                        elif media < 7.0:
-                            item.setForeground(QColor('#f39c12'))
-                        else:
-                            item.setForeground(QColor('#27ae60'))
-                    except:
-                        pass
+            for disc in disciplinas:
+                disc_id, nome, carga, professor, turma, status = disc
+                professor = professor if professor else 'Não atribuído'
+                turma = turma if turma else 'Não atribuída'
+                carga = f'{carga}h' if carga else '0h'
 
-                elif self.tipo == "notas" and col == num_colunas - 1:  # Coluna de situaÃ§Ã£o
-                    if valor == "Aprovado":
-                        item.setForeground(QColor('#27ae60'))
-                        item.setFont(QFont('', weight=QFont.Bold))
-                    elif valor == "Reprovado":
-                        item.setForeground(QColor('#e74c3c'))
-                    elif valor == "RecuperaÃ§Ã£o":
-                        item.setForeground(QColor('#f39c12'))
+                # Cor de status
+                tags = ('ativa',) if status == 'Ativa' else ('inativa',)
+                self.tree_disciplinas_modulo.insert('', 'end', values=(disc_id, nome, carga, professor, turma, status), tags=tags)
 
-                elif self.tipo == "frequencia" and "presente" in self.campos[col].lower():
-                    if valor == 1 or str(valor).lower() == "true":
-                        item.setText("Presente")
-                        item.setForeground(QColor('#27ae60'))
-                        item.setFont(QFont('', weight=QFont.Bold))
-                    else:
-                        item.setText("Falta")
-                        item.setForeground(QColor('#e74c3c'))
+            # Configurar cores
+            self.tree_disciplinas_modulo.tag_configure('ativa', foreground='#28a745')
+            self.tree_disciplinas_modulo.tag_configure('inativa', foreground='#dc3545')
 
-                self.tabela_relatorio.setItem(row, col, item)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar disciplinas: {str(e)}")
 
-        # Ajustar largura das colunas
-        self.tabela_relatorio.resizeColumnsToContents()
+    def buscar_disciplinas_modulo(self, event=None):
+        """Busca disciplinas"""
+        query = self.busca_disciplina_var.get()
+        filtro_status = self.filtro_status_disciplina.get()
+        self.carregar_dados_disciplinas_modulo(query, filtro_status)
 
-        # Adicionar numeraÃ§Ã£o das linhas
-        self.tabela_relatorio.setRowCount(len(self.dados))
-        for row in range(len(self.dados)):
-            self.tabela_relatorio.setVerticalHeaderItem(row, QTableWidgetItem(str(row + 1)))
+    def aplicar_filtros_disciplinas_modulo(self):
+        """Aplica filtros na lista de disciplinas"""
+        query = self.busca_disciplina_var.get()
+        filtro_status = self.filtro_status_disciplina.get()
+        self.carregar_dados_disciplinas_modulo(query, filtro_status)
 
-    def exportar_dados(self):
-        """Exporta os dados exibidos"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A exportaÃ§Ã£o direta serÃ¡ implementada na prÃ³xima versÃ£o.")
+    def carregar_aba_cadastro_disciplinas_modulo(self, parent):
+        """Aba de cadastro de disciplinas"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='➕ Cadastrar Disciplina')
 
-    def imprimir_relatorio(self):
-        """Imprime o relatÃ³rio"""
-        QMessageBox.information(self, "Funcionalidade em desenvolvimento",
-                                "A impressÃ£o serÃ¡ implementada na prÃ³xima versÃ£o.")
+        # Container com scroll
+        canvas = tk.Canvas(frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg='white')
 
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
 
-# ============================================
-# DIÃLOGO DE EXPORTAÃ‡ÃƒO DE DADOS
-# ============================================
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-class ExportarDadosDialog(QDialog):
-    """DiÃ¡logo para exportaÃ§Ã£o de dados em diferentes formatos"""
+        # Título
+        title_frame = tk.Frame(scrollable_frame, bg='white')
+        title_frame.pack(fill='x', pady=(20, 20), padx=20)
 
-    def __init__(self, parent=None, formato="excel"):
-        super().__init__(parent)
-        self.formato = formato
-        self.db = DatabaseManager()
-        self.exportador = ExportadorDados(self.db)
+        tk.Label(title_frame, text="📚 Cadastro de Disciplina", font=('Arial', 18, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left')
 
-        self.setWindowTitle(f"Exportar Dados - {formato.upper()}")
-        self.setFixedSize(600, 500)
-        self.setStyleSheet(GLOBAL_STYLESHEET)
+        # Frame do formulário
+        form_frame = tk.Frame(scrollable_frame, bg='white')
+        form_frame.pack(fill='both', expand=True, padx=40)
 
-        self.init_ui()
+        self.entries_disciplina_modulo = {}
 
-    def init_ui(self):
-        """Inicializa a interface do diÃ¡logo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+        # Campos do formulário
+        campos = [
+            ('nome', 'Nome da Disciplina *', 'entry'),
+            ('carga_horaria', 'Carga Horária (horas) *', 'entry'),
+            ('professor_id', 'Professor', 'combo_professor'),
+            ('turma_id', 'Turma', 'combo_turma'),
+            ('descricao', 'Descrição', 'text'),
+            ('status', 'Status', 'combo_status')
+        ]
 
-        # TÃ­tulo
-        lbl_titulo = QLabel(f"EXPORTAR DADOS - {self.formato.upper()}")
-        lbl_titulo.setObjectName("title")
+        row = 0
+        for field, label, tipo in campos:
+            # Label
+            tk.Label(form_frame, text=label, font=('Arial', 11, 'bold'),
+                    bg='white', fg='#0046AD').grid(row=row, column=0, sticky='w', pady=10, padx=10)
 
-        # SeleÃ§Ã£o de dados
-        group_selecao = QGroupBox("SELECIONAR DADOS PARA EXPORTAR")
-        group_selecao.setStyleSheet("""
-            QGroupBox {
-                font-weight: 600;
-                border: 2px solid #dce1e6;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 15px;
-                padding: 0 10px;
-                background-color: #f5f7fa;
-            }
-        """)
+            # Campo
+            if tipo == 'entry':
+                entry = tk.Entry(form_frame, font=('Arial', 11), width=50, relief='solid', bd=1)
+                entry.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = entry
 
-        layout_selecao = QVBoxLayout(group_selecao)
+            elif tipo == 'text':
+                text_widget = tk.Text(form_frame, font=('Arial', 10), width=50, height=4,
+                                     relief='solid', bd=1, wrap='word')
+                text_widget.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = text_widget
 
-        self.radio_alunos_exp = QRadioButton("Dados de Alunos")
-        self.radio_alunos_exp.setChecked(True)
+            elif tipo == 'combo_professor':
+                # Buscar professores
+                self.cursor.execute("SELECT id, nome FROM professores WHERE status = 'Ativo' ORDER BY nome")
+                professores = self.cursor.fetchall()
+                prof_values = ['Selecione...'] + [f"{p[0]} - {p[1]}" for p in professores]
 
-        self.radio_professores = QRadioButton("Dados de Professores")
+                combo = ttk.Combobox(form_frame, values=prof_values, state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Selecione...')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = combo
 
-        self.radio_notas_exp = QRadioButton("Dados de Notas")
+            elif tipo == 'combo_turma':
+                # Buscar turmas
+                self.cursor.execute("SELECT id, nome FROM turmas WHERE status = 'Ativa' ORDER BY nome")
+                turmas = self.cursor.fetchall()
+                turma_values = ['Selecione...'] + [f"{t[0]} - {t[1]}" for t in turmas]
 
-        self.radio_frequencia_exp = QRadioButton("Dados de FrequÃªncia")
+                combo = ttk.Combobox(form_frame, values=turma_values, state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Selecione...')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = combo
 
-        self.radio_turmas = QRadioButton("Dados de Turmas")
+            elif tipo == 'combo_status':
+                combo = ttk.Combobox(form_frame, values=['Ativa', 'Inativa'], state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Ativa')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_disciplina_modulo[field] = combo
 
-        self.radio_disciplinas = QRadioButton("Dados de Disciplinas")
+            row += 1
 
-        self.radio_tudo = QRadioButton("Todos os dados (Backup completo)")
+        form_frame.columnconfigure(1, weight=1)
 
-        layout_selecao.addWidget(self.radio_alunos_exp)
-        layout_selecao.addWidget(self.radio_professores)
-        layout_selecao.addWidget(self.radio_notas_exp)
-        layout_selecao.addWidget(self.radio_frequencia_exp)
-        layout_selecao.addWidget(self.radio_turmas)
-        layout_selecao.addWidget(self.radio_disciplinas)
-        layout_selecao.addWidget(self.radio_tudo)
+        # Botões
+        btn_frame = tk.Frame(scrollable_frame, bg='white')
+        btn_frame.pack(fill='x', pady=20, padx=40)
 
-        # OpÃ§Ãµes de exportaÃ§Ã£o
-        group_opcoes = QGroupBox("OPÃ‡Ã•ES DE EXPORTAÃ‡ÃƒO")
-        group_opcoes.setStyleSheet(group_selecao.styleSheet())
+        ModernButton(btn_frame, text="💾 Salvar Disciplina", command=self.salvar_disciplina_modulo,
+                    color='#0046AD').pack(side='left', padx=10)
 
-        layout_opcoes = QVBoxLayout(group_opcoes)
+        ModernButton(btn_frame, text="🔄 Limpar", command=self.limpar_formulario_disciplina_modulo,
+                    color='#666666').pack(side='left', padx=10)
 
-        if self.formato == "excel":
-            self.check_formatar = QCheckBox("Aplicar formataÃ§Ã£o Ã s cÃ©lulas")
-            self.check_formatar.setChecked(True)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
-            self.check_filtros = QCheckBox("Incluir filtros nas colunas")
-            self.check_filtros.setChecked(True)
+    def limpar_formulario_disciplina_modulo(self):
+        """Limpa o formulário de disciplina"""
+        for field, widget in self.entries_disciplina_modulo.items():
+            if isinstance(widget, tk.Entry):
+                widget.delete(0, tk.END)
+            elif isinstance(widget, tk.Text):
+                widget.delete('1.0', tk.END)
+            elif isinstance(widget, ttk.Combobox):
+                if field == 'status':
+                    widget.set('Ativa')
+                else:
+                    widget.set('Selecione...')
 
-            self.check_auto_ajuste = QCheckBox("Ajustar automaticamente largura das colunas")
-            self.check_auto_ajuste.setChecked(True)
+    def salvar_disciplina_modulo(self):
+        """Salva uma nova disciplina"""
+        try:
+            # Validar campos obrigatórios
+            nome = self.entries_disciplina_modulo['nome'].get().strip()
+            carga_horaria = self.entries_disciplina_modulo['carga_horaria'].get().strip()
 
-            layout_opcoes.addWidget(self.check_formatar)
-            layout_opcoes.addWidget(self.check_filtros)
-            layout_opcoes.addWidget(self.check_auto_ajuste)
+            if not nome:
+                messagebox.showwarning("Aviso", "O nome da disciplina é obrigatório!")
+                return
 
-        elif self.formato == "csv":
-            lbl_delimitador = QLabel("Delimitador:")
-            self.combo_delimitador = QComboBox()
-            self.combo_delimitador.addItems(["; (ponto e vÃ­rgula)", ", (vÃ­rgula)", "| (pipe)", "\\t (tab)"])
+            if not carga_horaria:
+                messagebox.showwarning("Aviso", "A carga horária é obrigatória!")
+                return
 
-            self.check_cabecalho = QCheckBox("Incluir linha de cabeÃ§alho")
-            self.check_cabecalho.setChecked(True)
+            try:
+                carga_horaria = int(carga_horaria)
+            except:
+                messagebox.showwarning("Aviso", "A carga horária deve ser um número inteiro!")
+                return
 
-            self.check_utf8 = QCheckBox("Usar codificaÃ§Ã£o UTF-8")
-            self.check_utf8.setChecked(True)
+            # Obter professor e turma
+            professor_combo = self.entries_disciplina_modulo['professor_id'].get()
+            turma_combo = self.entries_disciplina_modulo['turma_id'].get()
 
-            layout_opcoes.addWidget(lbl_delimitador)
-            layout_opcoes.addWidget(self.combo_delimitador)
-            layout_opcoes.addWidget(self.check_cabecalho)
-            layout_opcoes.addWidget(self.check_utf8)
+            professor_id = None
+            if professor_combo != 'Selecione...':
+                professor_id = int(professor_combo.split(' - ')[0])
 
-        elif self.formato == "pdf":
-            self.check_cabecalho_pdf = QCheckBox("Incluir cabeÃ§alho com data e hora")
-            self.check_cabecalho_pdf.setChecked(True)
+            turma_id = None
+            if turma_combo != 'Selecione...':
+                turma_id = int(turma_combo.split(' - ')[0])
 
-            self.check_rodape = QCheckBox("Incluir rodapÃ© com nÃºmero de pÃ¡ginas")
-            self.check_rodape.setChecked(True)
+            # Obter outros campos
+            descricao = self.entries_disciplina_modulo['descricao'].get('1.0', tk.END).strip()
+            status = self.entries_disciplina_modulo['status'].get()
 
-            self.check_colorir = QCheckBox("Manter cores da tabela")
-            self.check_colorir.setChecked(True)
+            # Inserir no banco
+            self.cursor.execute('''
+                INSERT INTO disciplinas (nome, carga_horaria, professor_id, turma_id, descricao, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (nome, carga_horaria, professor_id, turma_id, descricao, status))
 
-            layout_opcoes.addWidget(self.check_cabecalho_pdf)
-            layout_opcoes.addWidget(self.check_rodape)
-            layout_opcoes.addWidget(self.check_colorir)
+            self.conn.commit()
 
-        # BotÃµes
-        botoes_layout = QHBoxLayout()
+            messagebox.showinfo("Sucesso", f"Disciplina '{nome}' cadastrada com sucesso!")
+            self.registrar_log('CADASTRO', 'Disciplinas', f'Cadastrou disciplina: {nome}')
 
-        btn_exportar = AnimacaoBotao("EXPORTAR", cor_normal="#27ae60", cor_hover="#219653", cor_press="#1e874b")
-        btn_exportar.setMinimumHeight(45)
-        btn_exportar.clicked.connect(self.executar_exportacao)
+            # Limpar formulário
+            self.limpar_formulario_disciplina_modulo()
 
-        btn_fechar = QPushButton("CANCELAR")
-        btn_fechar.setObjectName("danger")
-        btn_fechar.setMinimumHeight(45)
-        btn_fechar.clicked.connect(self.close)
+            # Atualizar lista
+            self.carregar_dados_disciplinas_modulo()
 
-        botoes_layout.addWidget(btn_exportar)
-        botoes_layout.addStretch()
-        botoes_layout.addWidget(btn_fechar)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar disciplina: {str(e)}")
 
-        # Adicionar tudo ao layout
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(group_selecao)
-        layout.addWidget(group_opcoes)
-        layout.addStretch()
-        layout.addLayout(botoes_layout)
-
-    def executar_exportacao(self):
-        """Executa a exportaÃ§Ã£o dos dados"""
-        # Determinar qual conjunto de dados exportar
-        dataset = ""
-        query = ""
-        nome_arquivo = ""
-
-        if self.radio_alunos_exp.isChecked():
-            dataset = "alunos"
-            query = "SELECT * FROM alunos ORDER BY nome"
-            nome_arquivo = "alunos"
-
-        elif self.radio_professores.isChecked():
-            dataset = "professores"
-            query = "SELECT * FROM professores ORDER BY nome"
-            nome_arquivo = "professores"
-
-        elif self.radio_notas_exp.isChecked():
-            dataset = "notas"
-            query = """
-                SELECT a.nome as aluno, d.nome as disciplina, n.bimestre,
-                       n.nota1, n.nota2, n.nota3, n.nota4, n.media, n.situacao,
-                       n.faltas, n.observacoes, n.data_lancamento
-                FROM notas n
-                JOIN alunos a ON n.aluno_id = a.id
-                JOIN disciplinas d ON n.disciplina_id = d.id
-                ORDER BY a.nome, d.nome, n.bimestre
-            """
-            nome_arquivo = "notas"
-
-        elif self.radio_frequencia_exp.isChecked():
-            dataset = "frequencia"
-            query = """
-                SELECT a.nome as aluno, f.data, d.nome as disciplina,
-                       f.presente, f.justificativa, f.observacoes
-                FROM frequencia f
-                JOIN alunos a ON f.aluno_id = a.id
-                LEFT JOIN disciplinas d ON f.disciplina_id = d.id
-                ORDER BY f.data, a.nome
-            """
-            nome_arquivo = "frequencia"
-
-        elif self.radio_turmas.isChecked():
-            dataset = "turmas"
-            query = "SELECT * FROM turmas ORDER BY serie, nome"
-            nome_arquivo = "turmas"
-
-        elif self.radio_disciplinas.isChecked():
-            dataset = "disciplinas"
-            query = "SELECT * FROM disciplinas ORDER BY nome"
-            nome_arquivo = "disciplinas"
-
-        elif self.radio_tudo.isChecked():
-            dataset = "completo"
-            nome_arquivo = "backup_completo"
-
-        if not dataset:
-            QMessageBox.warning(self, "SeleÃ§Ã£o necessÃ¡ria",
-                                "Por favor, selecione um conjunto de dados para exportar.")
+    def editar_disciplina_modulo(self):
+        """Edita uma disciplina selecionada"""
+        selected = self.tree_disciplinas_modulo.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma disciplina para editar!")
             return
 
+        disc_id = self.tree_disciplinas_modulo.item(selected[0])['values'][0]
+        messagebox.showinfo("Info", f"Funcionalidade de edição da disciplina ID {disc_id} será implementada.")
+
+    def excluir_disciplina_modulo(self):
+        """Exclui uma disciplina selecionada"""
+        selected = self.tree_disciplinas_modulo.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma disciplina para excluir!")
+            return
+
+        disc_id = self.tree_disciplinas_modulo.item(selected[0])['values'][0]
+        disc_nome = self.tree_disciplinas_modulo.item(selected[0])['values'][1]
+
+        resposta = messagebox.askyesno("Confirmar Exclusão",
+                                       f"Deseja realmente excluir a disciplina '{disc_nome}'?")
+
+        if resposta:
+            try:
+                self.cursor.execute("DELETE FROM disciplinas WHERE id = ?", (disc_id,))
+                self.conn.commit()
+
+                messagebox.showinfo("Sucesso", f"Disciplina '{disc_nome}' excluída com sucesso!")
+                self.registrar_log('EXCLUSÃO', 'Disciplinas', f'Excluiu disciplina: {disc_nome}')
+
+                self.carregar_dados_disciplinas_modulo()
+
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao excluir disciplina: {str(e)}")
+
+    def exportar_disciplinas_modulo(self):
+        """Exporta lista de disciplinas para Excel"""
         try:
-            if dataset == "completo":
-                # Exportar todos os dados
-                self.exportar_todos_dados()
+            filtro_status = self.filtro_status_disciplina.get()
+
+            if filtro_status == 'Todas':
+                self.cursor.execute('''
+                    SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                    FROM disciplinas d
+                    LEFT JOIN professores p ON d.professor_id = p.id
+                    LEFT JOIN turmas t ON d.turma_id = t.id
+                    ORDER BY d.nome
+                ''')
             else:
-                # Exportar dataset especÃ­fico
-                if self.formato == "excel":
-                    sucesso, caminho = self.exportador.exportar_para_excel(query, nome_arquivo)
-                elif self.formato == "csv":
-                    delimitador = self.obter_delimitador()
-                    sucesso, caminho = self.exportador.exportar_para_csv(query, nome_arquivo, delimitador)
-                elif self.formato == "pdf":
-                    # Obter dados primeiro
-                    dados = self.db.execute_query(query, fetch=True)
-                    cabecalhos = self.obter_cabecalhos(query)
-                    sucesso, caminho = self.exportador.exportar_para_pdf(
-                        f"RelatÃ³rio de {dataset}",
-                        dados,
-                        cabecalhos,
-                        nome_arquivo
-                    )
+                self.cursor.execute('''
+                    SELECT d.id, d.nome, d.carga_horaria, p.nome, t.nome, d.status
+                    FROM disciplinas d
+                    LEFT JOIN professores p ON d.professor_id = p.id
+                    LEFT JOIN turmas t ON d.turma_id = t.id
+                    WHERE d.status = ?
+                    ORDER BY d.nome
+                ''', (filtro_status,))
+
+            disciplinas = self.cursor.fetchall()
+
+            if not disciplinas:
+                messagebox.showwarning("Aviso", "Não há disciplinas para exportar!")
+                return
+
+            # Criar DataFrame
+            df = pd.DataFrame(disciplinas, columns=['ID', 'Nome', 'Carga Horária', 'Professor',
+                                                   'Turma', 'Status'])
+
+            # Salvar arquivo
+            filename = filedialog.asksaveasfilename(
+                defaultextension='.xlsx',
+                filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")],
+                initialfile=f'disciplinas_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            )
+
+            if filename:
+                df.to_excel(filename, index=False, engine='openpyxl')
+                messagebox.showinfo("Sucesso", f"Disciplinas exportadas com sucesso!\n\nArquivo: {filename}")
+                self.registrar_log('EXPORTAÇÃO', 'Disciplinas', f'Exportou lista de disciplinas')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar disciplinas: {str(e)}")
+
+    def carregar_aba_relatorios_disciplinas(self, parent):
+        """Aba de relatórios de disciplinas"""
+        frame = tk.Frame(parent, bg='#f8f9fa')
+        parent.add(frame, text='📊 Relatórios')
+
+        tk.Label(frame, text="Relatórios de Disciplinas", font=('Arial', 16, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(pady=20)
+
+        tk.Label(frame, text="Funcionalidade de relatórios em desenvolvimento", font=('Arial', 12),
+                 bg='#f8f9fa', fg='#666666').pack(pady=10)
+
+    # ========== MÓDULO CONTROLE DE MATRÍCULAS ==========
+
+    def carregar_controle_matriculas(self):
+        """Carrega módulo de controle de matrículas"""
+        self.limpar_conteudo()
+        self.ativar_botao("📋 Controle de Matrículas")
+        self.registrar_log('ACESSO', 'Controle de Matrículas', 'Acessou módulo de controle de matrículas')
+
+        # Frame principal
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        # Título
+        title_frame = tk.Frame(main_frame, bg='#f8f9fa')
+        title_frame.pack(fill='x', pady=(0, 20))
+
+        tk.Label(title_frame, text="Controle de Matrículas", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Gerenciamento completo de matrículas de alunos",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook
+        notebook = ttk.Notebook(main_frame, style='Custom.TNotebook')
+        notebook.pack(fill='both', expand=True)
+
+        # Abas
+        self.carregar_aba_lista_matriculas(notebook)
+        self.carregar_aba_nova_matricula(notebook)
+        self.carregar_aba_relatorios_matriculas(notebook)
+
+    def carregar_aba_lista_matriculas(self, parent):
+        """Aba de listagem de matrículas"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='📋 Lista de Matrículas')
+
+        # Barra de ferramentas
+        toolbar = tk.Frame(frame, bg='white', pady=10)
+        toolbar.pack(fill='x', padx=20)
+
+        # Busca
+        search_frame = tk.Frame(toolbar, bg='white')
+        search_frame.pack(side='left', fill='x', expand=True)
+
+        tk.Label(search_frame, text="🔍 Buscar:", font=('Arial', 10, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left', padx=5)
+
+        self.busca_matricula_var = tk.StringVar()
+        busca_entry = tk.Entry(search_frame, textvariable=self.busca_matricula_var,
+                              font=('Arial', 10), width=40, relief='solid', bd=1)
+        busca_entry.pack(side='left', padx=5)
+        busca_entry.bind('<KeyRelease>', self.buscar_matriculas)
+
+        # Filtros
+        tk.Label(search_frame, text="Status:", font=('Arial', 10),
+                bg='white', fg='#666666').pack(side='left', padx=(20, 5))
+
+        self.filtro_status_matricula = ttk.Combobox(search_frame, values=['Todas', 'Ativa', 'Inativa', 'Transferida'],
+                                                     state='readonly', width=12, font=('Arial', 10))
+        self.filtro_status_matricula.set('Ativa')
+        self.filtro_status_matricula.pack(side='left', padx=5)
+        self.filtro_status_matricula.bind('<<ComboboxSelected>>', lambda e: self.aplicar_filtros_matriculas())
+
+        # Botões de ação
+        btn_frame = tk.Frame(toolbar, bg='white')
+        btn_frame.pack(side='right')
+
+        ModernButton(btn_frame, text="➕ Nova Matrícula", command=lambda: parent.select(1),
+                    color='#0046AD').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="✏️ Editar", command=self.editar_matricula,
+                    color='#FFCC00').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="🔄 Transferir", command=self.transferir_matricula,
+                    color='#17a2b8').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="❌ Cancelar", command=self.cancelar_matricula,
+                    color='#dc3545').pack(side='left', padx=5)
+
+        ModernButton(btn_frame, text="📊 Exportar", command=self.exportar_matriculas,
+                    color='#28a745').pack(side='left', padx=5)
+
+        # Tabela de matrículas
+        table_frame = tk.Frame(frame, bg='white')
+        table_frame.pack(fill='both', expand=True, padx=20, pady=10)
+
+        # Scrollbars
+        scroll_y = ttk.Scrollbar(table_frame)
+        scroll_y.pack(side='right', fill='y')
+
+        scroll_x = ttk.Scrollbar(table_frame, orient='horizontal')
+        scroll_x.pack(side='bottom', fill='x')
+
+        # Treeview
+        colunas = ('ID', 'Nº Matrícula', 'Aluno', 'Turma', 'Data Matrícula', 'Status')
+        self.tree_matriculas = ttk.Treeview(table_frame, columns=colunas, show='headings',
+                                           yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set,
+                                           style='Custom.Treeview', height=20)
+
+        # Configurar colunas
+        self.tree_matriculas.heading('ID', text='ID')
+        self.tree_matriculas.heading('Nº Matrícula', text='Nº Matrícula')
+        self.tree_matriculas.heading('Aluno', text='Nome do Aluno')
+        self.tree_matriculas.heading('Turma', text='Turma')
+        self.tree_matriculas.heading('Data Matrícula', text='Data Matrícula')
+        self.tree_matriculas.heading('Status', text='Status')
+
+        self.tree_matriculas.column('ID', width=50, anchor='center')
+        self.tree_matriculas.column('Nº Matrícula', width=120, anchor='center')
+        self.tree_matriculas.column('Aluno', width=250, anchor='w')
+        self.tree_matriculas.column('Turma', width=150, anchor='w')
+        self.tree_matriculas.column('Data Matrícula', width=120, anchor='center')
+        self.tree_matriculas.column('Status', width=100, anchor='center')
+
+        scroll_y.config(command=self.tree_matriculas.yview)
+        scroll_x.config(command=self.tree_matriculas.xview)
+
+        self.tree_matriculas.pack(fill='both', expand=True)
+
+        # Carregar dados
+        self.carregar_dados_matriculas()
+
+        # Bind duplo clique para editar
+        self.tree_matriculas.bind('<Double-1>', lambda e: self.editar_matricula())
+
+    def carregar_dados_matriculas(self, query=None, filtro_status='Ativa'):
+        """Carrega dados das matrículas na tabela"""
+        for item in self.tree_matriculas.get_children():
+            self.tree_matriculas.delete(item)
+
+        try:
+            if query:
+                sql = '''
+                    SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                    FROM matriculas m
+                    INNER JOIN alunos a ON m.aluno_id = a.id
+                    LEFT JOIN turmas t ON m.turma_id = t.id
+                    WHERE (a.nome LIKE ? OR m.numero_matricula LIKE ? OR t.nome LIKE ?)
+                '''
+                params = [f'%{query}%', f'%{query}%', f'%{query}%']
+
+                if filtro_status != 'Todas':
+                    sql += ' AND m.status = ?'
+                    params.append(filtro_status)
+
+                sql += ' ORDER BY m.data_matricula DESC'
+                self.cursor.execute(sql, params)
+            else:
+                if filtro_status == 'Todas':
+                    self.cursor.execute('''
+                        SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                        FROM matriculas m
+                        INNER JOIN alunos a ON m.aluno_id = a.id
+                        LEFT JOIN turmas t ON m.turma_id = t.id
+                        ORDER BY m.data_matricula DESC
+                    ''')
                 else:
-                    QMessageBox.warning(self, "Formato nÃ£o suportado",
-                                        f"Formato {self.formato} nÃ£o Ã© suportado.")
+                    self.cursor.execute('''
+                        SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                        FROM matriculas m
+                        INNER JOIN alunos a ON m.aluno_id = a.id
+                        LEFT JOIN turmas t ON m.turma_id = t.id
+                        WHERE m.status = ?
+                        ORDER BY m.data_matricula DESC
+                    ''', (filtro_status,))
+
+            matriculas = self.cursor.fetchall()
+
+            for mat in matriculas:
+                mat_id, numero, aluno, turma, data, status = mat
+                turma = turma if turma else 'Não atribuída'
+
+                # Cor de status
+                if status == 'Ativa':
+                    tags = ('ativa',)
+                elif status == 'Inativa':
+                    tags = ('inativa',)
+                else:
+                    tags = ('transferida',)
+
+                self.tree_matriculas.insert('', 'end', values=(mat_id, numero, aluno, turma, data, status), tags=tags)
+
+            # Configurar cores
+            self.tree_matriculas.tag_configure('ativa', foreground='#28a745')
+            self.tree_matriculas.tag_configure('inativa', foreground='#dc3545')
+            self.tree_matriculas.tag_configure('transferida', foreground='#ffc107')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar matrículas: {str(e)}")
+
+    def buscar_matriculas(self, event=None):
+        """Busca matrículas"""
+        query = self.busca_matricula_var.get()
+        filtro_status = self.filtro_status_matricula.get()
+        self.carregar_dados_matriculas(query, filtro_status)
+
+    def aplicar_filtros_matriculas(self):
+        """Aplica filtros na lista de matrículas"""
+        query = self.busca_matricula_var.get()
+        filtro_status = self.filtro_status_matricula.get()
+        self.carregar_dados_matriculas(query, filtro_status)
+
+    def carregar_aba_nova_matricula(self, parent):
+        """Aba de nova matrícula"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='➕ Nova Matrícula')
+
+        # Container com scroll
+        canvas = tk.Canvas(frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg='white')
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Título
+        title_frame = tk.Frame(scrollable_frame, bg='white')
+        title_frame.pack(fill='x', pady=(20, 20), padx=20)
+
+        tk.Label(title_frame, text="📋 Nova Matrícula", font=('Arial', 18, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left')
+
+        # Frame do formulário
+        form_frame = tk.Frame(scrollable_frame, bg='white')
+        form_frame.pack(fill='both', expand=True, padx=40)
+
+        self.entries_matricula = {}
+
+        # Campos do formulário
+        campos = [
+            ('aluno_id', 'Aluno *', 'combo_aluno'),
+            ('turma_id', 'Turma *', 'combo_turma'),
+            ('data_matricula', 'Data da Matrícula *', 'entry'),
+            ('numero_matricula', 'Número da Matrícula (automático)', 'entry_readonly'),
+            ('observacoes', 'Observações', 'text')
+        ]
+
+        row = 0
+        for field, label, tipo in campos:
+            # Label
+            tk.Label(form_frame, text=label, font=('Arial', 11, 'bold'),
+                    bg='white', fg='#0046AD').grid(row=row, column=0, sticky='w', pady=10, padx=10)
+
+            # Campo
+            if tipo == 'entry':
+                entry = tk.Entry(form_frame, font=('Arial', 11), width=50, relief='solid', bd=1)
+                if field == 'data_matricula':
+                    entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
+                entry.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = entry
+
+            elif tipo == 'entry_readonly':
+                entry = tk.Entry(form_frame, font=('Arial', 11), width=50, relief='solid', bd=1, state='readonly')
+                # Gerar número automático
+                self.cursor.execute("SELECT COUNT(*) FROM matriculas")
+                count = self.cursor.fetchone()[0]
+                numero_auto = f"MAT{datetime.now().year}{str(count + 1).zfill(5)}"
+                entry.configure(state='normal')
+                entry.insert(0, numero_auto)
+                entry.configure(state='readonly')
+                entry.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = entry
+
+            elif tipo == 'text':
+                text_widget = tk.Text(form_frame, font=('Arial', 10), width=50, height=4,
+                                     relief='solid', bd=1, wrap='word')
+                text_widget.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = text_widget
+
+            elif tipo == 'combo_aluno':
+                # Buscar alunos ativos
+                self.cursor.execute("SELECT id, nome FROM alunos WHERE status = 'Ativo' ORDER BY nome")
+                alunos = self.cursor.fetchall()
+                aluno_values = ['Selecione...'] + [f"{a[0]} - {a[1]}" for a in alunos]
+
+                combo = ttk.Combobox(form_frame, values=aluno_values, state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Selecione...')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = combo
+
+            elif tipo == 'combo_turma':
+                # Buscar turmas ativas
+                self.cursor.execute("SELECT id, nome, serie FROM turmas WHERE status = 'Ativa' ORDER BY nome")
+                turmas = self.cursor.fetchall()
+                turma_values = ['Selecione...'] + [f"{t[0]} - {t[1]} ({t[2]})" for t in turmas]
+
+                combo = ttk.Combobox(form_frame, values=turma_values, state='readonly',
+                                    font=('Arial', 11), width=48)
+                combo.set('Selecione...')
+                combo.grid(row=row, column=1, sticky='ew', pady=10, padx=10)
+                self.entries_matricula[field] = combo
+
+            row += 1
+
+        form_frame.columnconfigure(1, weight=1)
+
+        # Botões
+        btn_frame = tk.Frame(scrollable_frame, bg='white')
+        btn_frame.pack(fill='x', pady=20, padx=40)
+
+        ModernButton(btn_frame, text="💾 Salvar Matrícula", command=self.salvar_matricula,
+                    color='#0046AD').pack(side='left', padx=10)
+
+        ModernButton(btn_frame, text="🔄 Limpar", command=self.limpar_formulario_matricula,
+                    color='#666666').pack(side='left', padx=10)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def limpar_formulario_matricula(self):
+        """Limpa o formulário de matrícula"""
+        for field, widget in self.entries_matricula.items():
+            if isinstance(widget, tk.Entry):
+                if field == 'data_matricula':
+                    widget.delete(0, tk.END)
+                    widget.insert(0, datetime.now().strftime('%Y-%m-%d'))
+                elif field != 'numero_matricula':  # Não limpar número automático
+                    widget.delete(0, tk.END)
+            elif isinstance(widget, tk.Text):
+                widget.delete('1.0', tk.END)
+            elif isinstance(widget, ttk.Combobox):
+                widget.set('Selecione...')
+
+        # Atualizar número automático
+        self.cursor.execute("SELECT COUNT(*) FROM matriculas")
+        count = self.cursor.fetchone()[0]
+        numero_auto = f"MAT{datetime.now().year}{str(count + 1).zfill(5)}"
+        self.entries_matricula['numero_matricula'].configure(state='normal')
+        self.entries_matricula['numero_matricula'].delete(0, tk.END)
+        self.entries_matricula['numero_matricula'].insert(0, numero_auto)
+        self.entries_matricula['numero_matricula'].configure(state='readonly')
+
+    def salvar_matricula(self):
+        """Salva uma nova matrícula"""
+        try:
+            # Validar campos obrigatórios
+            aluno_combo = self.entries_matricula['aluno_id'].get()
+            turma_combo = self.entries_matricula['turma_id'].get()
+            data_matricula = self.entries_matricula['data_matricula'].get().strip()
+
+            if aluno_combo == 'Selecione...':
+                messagebox.showwarning("Aviso", "Selecione um aluno!")
+                return
+
+            if turma_combo == 'Selecione...':
+                messagebox.showwarning("Aviso", "Selecione uma turma!")
+                return
+
+            if not data_matricula:
+                messagebox.showwarning("Aviso", "A data da matrícula é obrigatória!")
+                return
+
+            aluno_id = int(aluno_combo.split(' - ')[0])
+            turma_id = int(turma_combo.split(' - ')[0])
+
+            numero_matricula = self.entries_matricula['numero_matricula'].get()
+            observacoes = self.entries_matricula['observacoes'].get('1.0', tk.END).strip()
+
+            # Verificar se aluno já tem matrícula ativa
+            self.cursor.execute('''
+                SELECT COUNT(*) FROM matriculas 
+                WHERE aluno_id = ? AND status = 'Ativa'
+            ''', (aluno_id,))
+
+            if self.cursor.fetchone()[0] > 0:
+                messagebox.showwarning("Aviso", "Este aluno já possui uma matrícula ativa!")
+                return
+
+            # Inserir no banco
+            self.cursor.execute('''
+                INSERT INTO matriculas (aluno_id, turma_id, data_matricula, numero_matricula, 
+                                       observacoes, status)
+                VALUES (?, ?, ?, ?, ?, 'Ativa')
+            ''', (aluno_id, turma_id, data_matricula, numero_matricula, observacoes))
+
+            self.conn.commit()
+
+            messagebox.showinfo("Sucesso", f"Matrícula '{numero_matricula}' realizada com sucesso!")
+            self.registrar_log('CADASTRO', 'Matrículas', f'Nova matrícula: {numero_matricula}')
+
+            # Limpar formulário
+            self.limpar_formulario_matricula()
+
+            # Atualizar lista
+            self.carregar_dados_matriculas()
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar matrícula: {str(e)}")
+
+    def editar_matricula(self):
+        """Edita uma matrícula selecionada"""
+        selected = self.tree_matriculas.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma matrícula para editar!")
+            return
+
+        mat_id = self.tree_matriculas.item(selected[0])['values'][0]
+        messagebox.showinfo("Info", f"Funcionalidade de edição da matrícula ID {mat_id} será implementada.")
+
+    def transferir_matricula(self):
+        """Transfere um aluno para outra turma"""
+        selected = self.tree_matriculas.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma matrícula para transferir!")
+            return
+
+        mat_id = self.tree_matriculas.item(selected[0])['values'][0]
+        messagebox.showinfo("Info", f"Funcionalidade de transferência da matrícula ID {mat_id} será implementada.")
+
+    def cancelar_matricula(self):
+        """Cancela uma matrícula"""
+        selected = self.tree_matriculas.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione uma matrícula para cancelar!")
+            return
+
+        mat_id = self.tree_matriculas.item(selected[0])['values'][0]
+        mat_numero = self.tree_matriculas.item(selected[0])['values'][1]
+
+        resposta = messagebox.askyesno("Confirmar Cancelamento",
+                                       f"Deseja realmente cancelar a matrícula '{mat_numero}'?")
+
+        if resposta:
+            try:
+                self.cursor.execute("UPDATE matriculas SET status = 'Inativa' WHERE id = ?", (mat_id,))
+                self.conn.commit()
+
+                messagebox.showinfo("Sucesso", f"Matrícula '{mat_numero}' cancelada com sucesso!")
+                self.registrar_log('CANCELAMENTO', 'Matrículas', f'Cancelou matrícula: {mat_numero}')
+
+                self.carregar_dados_matriculas()
+
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao cancelar matrícula: {str(e)}")
+
+    def exportar_matriculas(self):
+        """Exporta lista de matrículas para Excel"""
+        try:
+            filtro_status = self.filtro_status_matricula.get()
+
+            if filtro_status == 'Todas':
+                self.cursor.execute('''
+                    SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                    FROM matriculas m
+                    INNER JOIN alunos a ON m.aluno_id = a.id
+                    LEFT JOIN turmas t ON m.turma_id = t.id
+                    ORDER BY m.data_matricula DESC
+                ''')
+            else:
+                self.cursor.execute('''
+                    SELECT m.id, m.numero_matricula, a.nome, t.nome, m.data_matricula, m.status
+                    FROM matriculas m
+                    INNER JOIN alunos a ON m.aluno_id = a.id
+                    LEFT JOIN turmas t ON m.turma_id = t.id
+                    WHERE m.status = ?
+                    ORDER BY m.data_matricula DESC
+                ''', (filtro_status,))
+
+            matriculas = self.cursor.fetchall()
+
+            if not matriculas:
+                messagebox.showwarning("Aviso", "Não há matrículas para exportar!")
+                return
+
+            # Criar DataFrame
+            df = pd.DataFrame(matriculas, columns=['ID', 'Nº Matrícula', 'Aluno', 'Turma',
+                                                   'Data Matrícula', 'Status'])
+
+            # Salvar arquivo
+            filename = filedialog.asksaveasfilename(
+                defaultextension='.xlsx',
+                filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")],
+                initialfile=f'matriculas_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            )
+
+            if filename:
+                df.to_excel(filename, index=False, engine='openpyxl')
+                messagebox.showinfo("Sucesso", f"Matrículas exportadas com sucesso!\n\nArquivo: {filename}")
+                self.registrar_log('EXPORTAÇÃO', 'Matrículas', f'Exportou lista de matrículas')
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar matrículas: {str(e)}")
+
+    def carregar_aba_relatorios_matriculas(self, parent):
+        """Aba de relatórios de matrículas"""
+        frame = tk.Frame(parent, bg='#f8f9fa')
+        parent.add(frame, text='📊 Relatórios')
+
+        tk.Label(frame, text="Relatórios de Matrículas", font=('Arial', 16, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(pady=20)
+
+        tk.Label(frame, text="Funcionalidade de relatórios em desenvolvimento", font=('Arial', 12),
+                 bg='#f8f9fa', fg='#666666').pack(pady=10)
+
+    # ========== MÓDULO CONTROLE DE FREQUÊNCIA ==========
+
+    def carregar_controle_frequencia(self):
+        """Carrega módulo de controle de frequência"""
+        self.limpar_conteudo()
+        self.ativar_botao("✅ Controle de Frequência")
+        self.registrar_log('ACESSO', 'Controle de Frequência', 'Acessou módulo de controle de frequência')
+
+        # Frame principal
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        # Título
+        title_frame = tk.Frame(main_frame, bg='#f8f9fa')
+        title_frame.pack(fill='x', pady=(0, 20))
+
+        tk.Label(title_frame, text="Controle de Frequência", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w')
+
+        tk.Label(title_frame, text="Registro e acompanhamento de presença dos alunos",
+                 font=('Arial', 12), bg='#f8f9fa', fg='#666666').pack(anchor='w')
+
+        # Notebook
+        notebook = ttk.Notebook(main_frame, style='Custom.TNotebook')
+        notebook.pack(fill='both', expand=True)
+
+        # Abas
+        self.carregar_aba_registro_frequencia(notebook)
+        self.carregar_aba_consulta_frequencia(notebook)
+        self.carregar_aba_relatorio_frequencia(notebook)
+
+    def carregar_aba_registro_frequencia(self, parent):
+        """Aba de registro de frequência"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='✅ Registrar Frequência')
+
+        # Container com scroll
+        canvas = tk.Canvas(frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg='white')
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Título
+        title_frame = tk.Frame(scrollable_frame, bg='white')
+        title_frame.pack(fill='x', pady=(20, 20), padx=20)
+
+        tk.Label(title_frame, text="✅ Registro de Frequência", font=('Arial', 18, 'bold'),
+                bg='white', fg='#0046AD').pack(side='left')
+
+        # Seleção de turma e disciplina
+        select_frame = tk.Frame(scrollable_frame, bg='white')
+        select_frame.pack(fill='x', padx=40, pady=10)
+
+        # Turma
+        tk.Label(select_frame, text="Turma:", font=('Arial', 11, 'bold'),
+                bg='white', fg='#0046AD').grid(row=0, column=0, sticky='w', pady=10, padx=10)
+
+        self.cursor.execute("SELECT id, nome, serie FROM turmas WHERE status = 'Ativa' ORDER BY nome")
+        turmas = self.cursor.fetchall()
+        turma_values = ['Selecione...'] + [f"{t[0]} - {t[1]} ({t[2]})" for t in turmas]
+
+        self.combo_turma_freq = ttk.Combobox(select_frame, values=turma_values, state='readonly',
+                                            font=('Arial', 11), width=40)
+        self.combo_turma_freq.set('Selecione...')
+        self.combo_turma_freq.grid(row=0, column=1, sticky='ew', pady=10, padx=10)
+        self.combo_turma_freq.bind('<<ComboboxSelected>>', self.carregar_alunos_frequencia)
+
+        # Disciplina
+        tk.Label(select_frame, text="Disciplina:", font=('Arial', 11, 'bold'),
+                bg='white', fg='#0046AD').grid(row=1, column=0, sticky='w', pady=10, padx=10)
+
+        self.combo_disciplina_freq = ttk.Combobox(select_frame, values=['Selecione uma turma primeiro'],
+                                                 state='readonly', font=('Arial', 11), width=40)
+        self.combo_disciplina_freq.set('Selecione uma turma primeiro')
+        self.combo_disciplina_freq.grid(row=1, column=1, sticky='ew', pady=10, padx=10)
+
+        # Data
+        tk.Label(select_frame, text="Data:", font=('Arial', 11, 'bold'),
+                bg='white', fg='#0046AD').grid(row=2, column=0, sticky='w', pady=10, padx=10)
+
+        self.entry_data_freq = tk.Entry(select_frame, font=('Arial', 11), width=42, relief='solid', bd=1)
+        self.entry_data_freq.insert(0, datetime.now().strftime('%Y-%m-%d'))
+        self.entry_data_freq.grid(row=2, column=1, sticky='ew', pady=10, padx=10)
+
+        select_frame.columnconfigure(1, weight=1)
+
+        # Botão carregar alunos
+        btn_carregar = tk.Frame(scrollable_frame, bg='white')
+        btn_carregar.pack(pady=10)
+
+        ModernButton(btn_carregar, text="📋 Carregar Alunos", command=self.carregar_alunos_frequencia,
+                    color='#0046AD').pack()
+
+        # Frame para lista de alunos
+        self.frame_lista_freq = tk.Frame(scrollable_frame, bg='white')
+        self.frame_lista_freq.pack(fill='both', expand=True, padx=40, pady=20)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def carregar_alunos_frequencia(self, event=None):
+        """Carrega lista de alunos para registro de frequência"""
+        # Limpar frame anterior
+        for widget in self.frame_lista_freq.winfo_children():
+            widget.destroy()
+
+        turma_combo = self.combo_turma_freq.get()
+        if turma_combo == 'Selecione...':
+            messagebox.showwarning("Aviso", "Selecione uma turma!")
+            return
+
+        turma_id = int(turma_combo.split(' - ')[0])
+
+        # Carregar disciplinas da turma
+        self.cursor.execute('''
+            SELECT id, nome FROM disciplinas 
+            WHERE turma_id = ? AND status = 'Ativa'
+            ORDER BY nome
+        ''', (turma_id,))
+        disciplinas = self.cursor.fetchall()
+
+        if disciplinas:
+            disc_values = ['Selecione...'] + [f"{d[0]} - {d[1]}" for d in disciplinas]
+            self.combo_disciplina_freq.configure(values=disc_values)
+            self.combo_disciplina_freq.set('Selecione...')
+        else:
+            self.combo_disciplina_freq.configure(values=['Nenhuma disciplina encontrada'])
+            self.combo_disciplina_freq.set('Nenhuma disciplina encontrada')
+
+        # Carregar alunos da turma
+        self.cursor.execute('''
+            SELECT a.id, a.nome
+            FROM alunos a
+            INNER JOIN matriculas m ON a.id = m.aluno_id
+            WHERE m.turma_id = ? AND m.status = 'Ativa' AND a.status = 'Ativo'
+            ORDER BY a.nome
+        ''', (turma_id,))
+
+        alunos = self.cursor.fetchall()
+
+        if not alunos:
+            tk.Label(self.frame_lista_freq, text="Nenhum aluno encontrado nesta turma.",
+                    font=('Arial', 12), bg='white', fg='#666666').pack(pady=20)
+            return
+
+        # Título da lista
+        tk.Label(self.frame_lista_freq, text="Lista de Alunos - Marque os PRESENTES:",
+                font=('Arial', 12, 'bold'), bg='white', fg='#0046AD').pack(anchor='w', pady=10)
+
+        # Frame para checkboxes
+        check_frame = tk.Frame(self.frame_lista_freq, bg='white')
+        check_frame.pack(fill='both', expand=True)
+
+        self.freq_vars = {}
+
+        for i, (aluno_id, aluno_nome) in enumerate(alunos):
+            var = tk.IntVar(value=1)  # Presente por padrão
+            self.freq_vars[aluno_id] = var
+
+            row_frame = tk.Frame(check_frame, bg='white')
+            row_frame.pack(fill='x', pady=2)
+
+            tk.Checkbutton(row_frame, text=f"{aluno_nome}", variable=var,
+                          font=('Arial', 11), bg='white', fg='#333333',
+                          selectcolor='#FFCC00', activebackground='white').pack(side='left', padx=10)
+
+        # Botões de ação
+        btn_frame = tk.Frame(self.frame_lista_freq, bg='white')
+        btn_frame.pack(pady=20)
+
+        ModernButton(btn_frame, text="✅ Marcar Todos Presentes",
+                    command=lambda: self.marcar_todos_freq(1),
+                    color='#28a745').pack(side='left', padx=10)
+
+        ModernButton(btn_frame, text="❌ Marcar Todos Ausentes",
+                    command=lambda: self.marcar_todos_freq(0),
+                    color='#dc3545').pack(side='left', padx=10)
+
+        ModernButton(btn_frame, text="💾 Salvar Frequência",
+                    command=self.salvar_frequencia,
+                    color='#0046AD').pack(side='left', padx=10)
+
+    def marcar_todos_freq(self, valor):
+        """Marca todos os alunos como presentes ou ausentes"""
+        for var in self.freq_vars.values():
+            var.set(valor)
+
+    def salvar_frequencia(self):
+        """Salva o registro de frequência"""
+        try:
+            turma_combo = self.combo_turma_freq.get()
+            disciplina_combo = self.combo_disciplina_freq.get()
+            data_aula = self.entry_data_freq.get().strip()
+
+            if turma_combo == 'Selecione...':
+                messagebox.showwarning("Aviso", "Selecione uma turma!")
+                return
+
+            if disciplina_combo == 'Selecione...' or disciplina_combo == 'Nenhuma disciplina encontrada':
+                messagebox.showwarning("Aviso", "Selecione uma disciplina!")
+                return
+
+            if not data_aula:
+                messagebox.showwarning("Aviso", "Informe a data da aula!")
+                return
+
+            turma_id = int(turma_combo.split(' - ')[0])
+            disciplina_id = int(disciplina_combo.split(' - ')[0])
+
+            # Verificar se já existe registro para esta data
+            self.cursor.execute('''
+                SELECT COUNT(*) FROM frequencia 
+                WHERE turma_id = ? AND disciplina_id = ? AND data_aula = ?
+            ''', (turma_id, disciplina_id, data_aula))
+
+            if self.cursor.fetchone()[0] > 0:
+                resposta = messagebox.askyesno("Aviso",
+                                              "Já existe registro de frequência para esta data.\n"
+                                              "Deseja sobrescrever?")
+                if not resposta:
                     return
 
-                if sucesso:
-                    QMessageBox.information(self, "ExportaÃ§Ã£o concluÃ­da",
-                                            f"Dados exportados com sucesso para:\n{caminho}")
-                    self.accept()
-                else:
-                    QMessageBox.warning(self, "Erro na exportaÃ§Ã£o", caminho)
+                # Deletar registros antigos
+                self.cursor.execute('''
+                    DELETE FROM frequencia 
+                    WHERE turma_id = ? AND disciplina_id = ? AND data_aula = ?
+                ''', (turma_id, disciplina_id, data_aula))
+
+            # Inserir novos registros
+            for aluno_id, var in self.freq_vars.items():
+                presente = var.get()
+                self.cursor.execute('''
+                    INSERT INTO frequencia (aluno_id, disciplina_id, turma_id, data_aula, presente)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (aluno_id, disciplina_id, turma_id, data_aula, presente))
+
+            self.conn.commit()
+
+            messagebox.showinfo("Sucesso", "Frequência registrada com sucesso!")
+            self.registrar_log('REGISTRO', 'Frequência', f'Registrou frequência para {data_aula}')
 
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Falha ao exportar dados:\n{str(e)}")
+            messagebox.showerror("Erro", f"Erro ao salvar frequência: {str(e)}")
 
-    def obter_delimitador(self):
-        """ObtÃ©m o delimitador selecionado para CSV"""
-        texto = self.combo_delimitador.currentText()
+    def carregar_aba_consulta_frequencia(self, parent):
+        """Aba de consulta de frequência"""
+        frame = tk.Frame(parent, bg='white')
+        parent.add(frame, text='🔍 Consultar Frequência')
 
-        if "ponto e vÃ­rgula" in texto:
-            return ";"
-        elif "vÃ­rgula" in texto:
-            return ","
-        elif "pipe" in texto:
-            return "|"
-        elif "tab" in texto:
-            return "\t"
-        else:
-            return ";"
+        tk.Label(frame, text="Consulta de Frequência", font=('Arial', 16, 'bold'),
+                 bg='white', fg='#0046AD').pack(pady=20)
 
-    def obter_cabecalhos(self, query):
-        """ObtÃ©m os cabeÃ§alhos das colunas a partir da query"""
-        try:
-            self.db.connect()
-            self.db.cursor.execute(query)
-            descricao = self.db.cursor.description
+        tk.Label(frame, text="Funcionalidade de consulta em desenvolvimento", font=('Arial', 12),
+                 bg='white', fg='#666666').pack(pady=10)
 
-            if descricao:
-                return [col[0] for col in descricao]
+    def carregar_aba_relatorio_frequencia(self, parent):
+        """Aba de relatórios de frequência"""
+        frame = tk.Frame(parent, bg='#f8f9fa')
+        parent.add(frame, text='📊 Relatórios')
 
-            return []
-        except:
-            return []
-        finally:
-            self.db.disconnect()
+        tk.Label(frame, text="Relatórios de Frequência", font=('Arial', 16, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(pady=20)
 
-    def exportar_todos_dados(self):
-        """Exporta todos os dados do sistema"""
-        try:
-            # Criar diretÃ³rio de exportaÃ§Ã£o
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            export_dir = os.path.join(os.path.expanduser("~"), f"BackupEscola_{timestamp}")
-            os.makedirs(export_dir, exist_ok=True)
+        tk.Label(frame, text="Funcionalidade de relatórios em desenvolvimento", font=('Arial', 12),
+                 bg='#f8f9fa', fg='#666666').pack(pady=10)
 
-            # Lista de tabelas para exportar
-            tabelas = [
-                ("alunos", "SELECT * FROM alunos ORDER BY nome"),
-                ("professores", "SELECT * FROM professores ORDER BY nome"),
-                ("disciplinas", "SELECT * FROM disciplinas ORDER BY nome"),
-                ("turmas", "SELECT * FROM turmas ORDER BY serie, nome"),
-                ("notas", """
-                    SELECT a.nome as aluno, d.nome as disciplina, n.*
-                    FROM notas n
-                    JOIN alunos a ON n.aluno_id = a.id
-                    JOIN disciplinas d ON n.disciplina_id = d.id
-                    ORDER BY a.nome, d.nome, n.bimestre
-                """),
-                ("frequencia", """
-                    SELECT a.nome as aluno, d.nome as disciplina, f.*
-                    FROM frequencia f
-                    JOIN alunos a ON f.aluno_id = a.id
-                    LEFT JOIN disciplinas d ON f.disciplina_id = d.id
-                    ORDER BY f.data, a.nome
-                """),
-                ("horarios", """
-                    SELECT t.nome as turma, d.nome as disciplina, p.nome as professor, h.*
-                    FROM horarios h
-                    JOIN turmas t ON h.turma_id = t.id
-                    JOIN disciplinas d ON h.disciplina_id = d.id
-                    JOIN professores p ON h.professor_id = p.id
-                    ORDER BY h.dia_semana, h.hora_inicio
-                """),
-                ("configuracoes", "SELECT * FROM configuracoes ORDER BY categoria, chave"),
-                ("administradores", "SELECT id, usuario, nome, email, data_cadastro FROM administradores")
-            ]
+    
+    def carregar_calendario_escolar(self):
+        """Carrega módulo de calendário escolar funcional"""
+        self.limpar_conteudo()
+        self.ativar_botao("📅 Calendário Escolar")
+        self.registrar_log('ACESSO', 'Calendário Escolar', 'Acessou módulo de calendário escolar')
 
-            # Exportar cada tabela
-            for nome_tabela, query in tabelas:
-                if self.formato == "excel":
-                    sucesso, caminho = self.exportador.exportar_para_excel(
-                        query,
-                        f"{nome_tabela}_{timestamp}",
-                        cabecalhos=self.obter_cabecalhos(query)
-                    )
-                elif self.formato == "csv":
-                    sucesso, caminho = self.exportador.exportar_para_csv(
-                        query,
-                        f"{nome_tabela}_{timestamp}",
-                        delimitador=";"
-                    )
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
 
-            # Criar arquivo README
-            readme_path = os.path.join(export_dir, "README.txt")
-            with open(readme_path, 'w', encoding='utf-8') as f:
-                f.write(f"BACKUP COMPLETO DO SISTEMA ESCOLAR\n")
-                f.write(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
-                f.write(f"Total de tabelas exportadas: {len(tabelas)}\n")
-                f.write(f"Formato: {self.formato.upper()}\n")
-                f.write("\nTabelas incluÃ­das:\n")
-                for nome_tabela, _ in tabelas:
-                    f.write(f"- {nome_tabela}\n")
+        header = tk.Frame(main_frame, bg='#f8f9fa')
+        header.pack(fill='x', pady=(0, 20))
 
-            QMessageBox.information(self, "Backup completo",
-                                    f"Backup completo realizado com sucesso!\n\n"
-                                    f"DiretÃ³rio: {export_dir}\n"
-                                    f"Total de tabelas: {len(tabelas)}\n\n"
-                                    "Todos os dados foram exportados com sucesso.")
+        tk.Label(header, text="📅 Calendário Escolar", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(side='left')
 
-            self.accept()
+        nav_frame = tk.Frame(header, bg='#f8f9fa')
+        nav_frame.pack(side='right')
 
-        except Exception as e:
-            QMessageBox.critical(self, "Erro no backup", f"Falha ao realizar backup completo:\n{str(e)}")
+        hoje = datetime.now()
+        self.cal_mes = hoje.month
+        self.cal_ano = hoje.year
 
-    def criar_menu_contextual_tabela(self, posicao):
-        """Cria menu contextual para tabelas"""
-        try:
-            # Identificar qual tabela estÃ¡ solicitando o menu
-            tabela = self.sender()
-            if not isinstance(tabela, QTableWidget):
-                return
+        def atualizar_calendario():
+            for widget in cal_grid.winfo_children():
+                widget.destroy()
+            
+            lbl_mes_ano.config(text=f"{calendar.month_name[self.cal_mes].upper()} {self.cal_ano}")
+            
+            dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+            for i, dia in enumerate(dias):
+                lbl = tk.Label(cal_grid, text=dia, font=('Arial', 10, 'bold'), 
+                               bg='#0046AD', fg='white', width=10, pady=5)
+                lbl.grid(row=0, column=i, padx=1, pady=1, sticky='nsew')
 
-            menu = QMenu()
+            cal = calendar.monthcalendar(self.cal_ano, self.cal_mes)
+            for r, semana in enumerate(cal):
+                for c, dia in enumerate(semana):
+                    if dia == 0:
+                        lbl = tk.Label(cal_grid, text="", bg='white', relief='flat')
+                    else:
+                        bg_color = 'white'
+                        if dia == hoje.day and self.cal_mes == hoje.month and self.cal_ano == hoje.year:
+                            bg_color = '#FFCC00'
+                        
+                        lbl = tk.Label(cal_grid, text=str(dia), font=('Arial', 12),
+                                       bg=bg_color, relief='solid', bd=1,
+                                       width=10, height=4, anchor='nw', padx=5, pady=5)
+                        
+                        if dia == 5 and self.cal_mes == 2:
+                            tk.Label(lbl, text="Início Aulas", font=('Arial', 8), bg='#0046AD', fg='white').pack(fill='x', pady=2)
 
-            # AÃ§Ãµes comuns
-            acao_copiar = QAction("ðŸ“‹ Copiar", self)
-            acao_copiar.triggered.connect(lambda: self.copiar_celula_tabela(tabela))
+                    lbl.grid(row=r+1, column=c, padx=1, pady=1, sticky='nsew')
 
-            acao_colar = QAction("ðŸ“ Colar", self)
-            acao_colar.triggered.connect(lambda: self.colar_celula_tabela(tabela))
+        def mes_anterior():
+            self.cal_mes -= 1
+            if self.cal_mes < 1: self.cal_mes = 12; self.cal_ano -= 1
+            atualizar_calendario()
 
-            acao_exportar = QAction("ðŸ“¤ Exportar Linha", self)
-            acao_exportar.triggered.connect(lambda: self.exportar_linha_tabela(tabela))
+        def proximo_mes():
+            self.cal_mes += 1
+            if self.cal_mes > 12: self.cal_mes = 1; self.cal_ano += 1
+            atualizar_calendario()
 
-            acao_deletar = QAction("ðŸ—‘ï¸ Deletar Linha", self)
-            acao_deletar.triggered.connect(lambda: self.deletar_linha_tabela(tabela))
+        tk.Button(nav_frame, text="◀", command=mes_anterior, bg='#0046AD', fg='white', relief='flat', padx=10).pack(side='left', padx=5)
+        lbl_mes_ano = tk.Label(nav_frame, text="", font=('Arial', 14, 'bold'), bg='#f8f9fa', width=20)
+        lbl_mes_ano.pack(side='left')
+        tk.Button(nav_frame, text="▶", command=proximo_mes, bg='#0046AD', fg='white', relief='flat', padx=10).pack(side='left', padx=5)
 
-            acao_formatar = QAction("ðŸŽ¨ Formatar CÃ©lulas", self)
-            acao_formatar.triggered.connect(lambda: self.formatar_celulas_tabela(tabela))
+        cal_grid = tk.Frame(main_frame, bg='#e0e0e0')
+        cal_grid.pack(fill='both', expand=True)
+        for i in range(7): cal_grid.columnconfigure(i, weight=1)
+        atualizar_calendario()
 
-            menu.addAction(acao_copiar)
-            menu.addAction(acao_colar)
-            menu.addSeparator()
-            menu.addAction(acao_exportar)
-            menu.addAction(acao_deletar)
-            menu.addSeparator()
-            menu.addAction(acao_formatar)
 
-            # Mostrar menu na posiÃ§Ã£o do clique
-            menu.exec_(tabela.viewport().mapToGlobal(posicao))
+    # ========== MÓDULO COMUNICADOS E AVISOS ==========
 
-        except Exception as e:
-            print(f"Erro ao criar menu contextual: {e}")
+    
+    def carregar_comunicados_avisos(self):
+        """Carrega módulo de comunicados e avisos funcional"""
+        self.limpar_conteudo()
+        self.ativar_botao("📢 Comunicados e Avisos")
+        self.registrar_log('ACESSO', 'Comunicados', 'Acessou módulo de comunicados')
 
-    def copiar_celula_tabela(self, tabela):
-        """Copia conteÃºdo da cÃ©lula selecionada"""
-        try:
-            itens_selecionados = tabela.selectedItems()
-            if itens_selecionados:
-                texto = itens_selecionados[0].text()
-                clipboard = QApplication.clipboard()
-                clipboard.setText(texto)
-        except Exception as e:
-            print(f"Erro ao copiar cÃ©lula: {e}")
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
 
-    def colar_celula_tabela(self, tabela):
-        """Cola conteÃºdo na cÃ©lula selecionada"""
-        try:
-            itens_selecionados = tabela.selectedItems()
-            if itens_selecionados:
-                clipboard = QApplication.clipboard()
-                texto = clipboard.text()
-                itens_selecionados[0].setText(texto)
-        except Exception as e:
-            print(f"Erro ao colar cÃ©lula: {e}")
+        tk.Label(main_frame, text="📢 Comunicados e Avisos", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w', pady=(0, 20))
 
-    def exportar_linha_tabela(self, tabela):
-        """Exporta linha selecionada para CSV"""
-        try:
-            linhas_selecionadas = set()
-            for item in tabela.selectedItems():
-                linhas_selecionadas.add(item.row())
+        list_frame = tk.Frame(main_frame, bg='white', relief='solid', bd=1)
+        list_frame.pack(fill='both', expand=True)
 
-            if not linhas_selecionadas:
-                QMessageBox.warning(self, "Aviso", "Selecione pelo menos uma linha!")
-                return
+        columns = ('ID', 'Título', 'Data', 'Prioridade')
+        tree = ttk.Treeview(list_frame, columns=columns, show='headings', style='Custom.Treeview')
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=100)
+        tree.pack(side='left', fill='both', expand=True)
 
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Exportar Linhas",
-                f"exportacao_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                "Arquivos CSV (*.csv)"
-            )
+        btn_frame = tk.Frame(main_frame, bg='#f8f9fa')
+        btn_frame.pack(fill='x', pady=20)
+        ModernButton(btn_frame, text="➕ Novo Comunicado", color='#0046AD').pack(side='left', padx=5)
 
-            if file_path:
-                with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
-                    writer = csv.writer(csvfile)
 
-                    # Escrever cabeÃ§alho
-                    headers = []
-                    for col in range(tabela.columnCount()):
-                        headers.append(tabela.horizontalHeaderItem(col).text())
-                    writer.writerow(headers)
+    # ========== MÓDULO OCORRÊNCIAS DISCIPLINARES ==========
 
-                    # Escrever linhas selecionadas
-                    for linha in sorted(linhas_selecionadas):
-                        row_data = []
-                        for col in range(tabela.columnCount()):
-                            item = tabela.item(linha, col)
-                            row_data.append(item.text() if item else "")
-                        writer.writerow(row_data)
+    
+    def carregar_ocorrencias_disciplinares(self):
+        """Carrega módulo de ocorrências disciplinares funcional"""
+        self.limpar_conteudo()
+        self.ativar_botao("🔔 Ocorrências Disciplinares")
+        self.registrar_log('ACESSO', 'Ocorrências', 'Acessou módulo de ocorrências')
 
-                QMessageBox.information(self, "Sucesso", f"Linhas exportadas para:\n{file_path}")
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
 
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao exportar linhas: {str(e)}")
+        tk.Label(main_frame, text="🔔 Ocorrências Disciplinares", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w', pady=(0, 20))
 
-    def deletar_linha_tabela(self, tabela):
-        """Deleta linha selecionada da tabela"""
-        try:
-            linhas_selecionadas = set()
-            for item in tabela.selectedItems():
-                linhas_selecionadas.add(item.row())
+        list_frame = tk.Frame(main_frame, bg='white', relief='solid', bd=1)
+        list_frame.pack(fill='both', expand=True)
 
-            if not linhas_selecionadas:
-                QMessageBox.warning(self, "Aviso", "Selecione pelo menos uma linha!")
-                return
+        columns = ('ID', 'Aluno', 'Tipo', 'Data', 'Status')
+        tree = ttk.Treeview(list_frame, columns=columns, show='headings', style='Custom.Treeview')
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=100)
+        tree.pack(side='left', fill='both', expand=True)
 
-            resposta = QMessageBox.question(
-                self,
-                "Confirmar ExclusÃ£o",
-                f"Deseja excluir {len(linhas_selecionadas)} linha(s) selecionada(s)?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
+        btn_frame = tk.Frame(main_frame, bg='#f8f9fa')
+        btn_frame.pack(fill='x', pady=20)
+        ModernButton(btn_frame, text="➕ Registrar Ocorrência", color='#0046AD').pack(side='left', padx=5)
 
-            if resposta == QMessageBox.Yes:
-                # Deletar em ordem decrescente para manter Ã­ndices corretos
-                for linha in sorted(linhas_selecionadas, reverse=True):
-                    tabela.removeRow(linha)
 
-                QMessageBox.information(self, "Sucesso",
-                                        f"{len(linhas_selecionadas)} linha(s) excluÃ­da(s)!")
+    # ========== MÓDULO RELATÓRIOS GERENCIAIS ==========
 
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao deletar linhas: {str(e)}")
+    
+    def carregar_relatorios_gerenciais(self):
+        """Carrega módulo de relatórios gerenciais funcional"""
+        self.limpar_conteudo()
+        self.ativar_botao("📋 Relatórios Gerenciais")
+        
+        main_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
 
-    def formatar_celulas_tabela(self, tabela):
-        """Abre diÃ¡logo para formataÃ§Ã£o de cÃ©lulas"""
-        try:
-            dialog = QDialog(self)
-            dialog.setWindowTitle("FormataÃ§Ã£o de CÃ©lulas")
-            dialog.setFixedSize(400, 300)
+        tk.Label(main_frame, text="📋 Relatórios Gerenciais", font=('Arial', 24, 'bold'),
+                 bg='#f8f9fa', fg='#0046AD').pack(anchor='w', pady=(0, 20))
 
-            layout = QVBoxLayout()
+        grid_frame = tk.Frame(main_frame, bg='#f8f9fa')
+        grid_frame.pack(fill='both', expand=True)
 
-            # OpÃ§Ãµes de formataÃ§Ã£o
-            grupo_fonte = QGroupBox("ConfiguraÃ§Ãµes de Fonte")
-            fonte_layout = QFormLayout()
+        relatorios = [
+            ("📊 Desempenho por Turma", "Visualizar médias e aprovações"),
+            ("👥 Lista de Alunos Ativos", "Relatório completo de matrículas"),
+            ("💰 Resumo Financeiro", "Balanço de mensalidades"),
+            ("📅 Frequência Mensal", "Relatório de assiduidade")
+        ]
 
-            cb_negrito = QCheckBox("Negrito")
-            cb_italico = QCheckBox("ItÃ¡lico")
-            cb_sublinhado = QCheckBox("Sublinhado")
+        for i, (titulo, desc) in enumerate(relatorios):
+            card = tk.Frame(grid_frame, bg='white', relief='solid', bd=1, padx=15, pady=15)
+            card.grid(row=i//2, column=i%2, padx=10, pady=10, sticky='nsew')
+            tk.Label(card, text=titulo, font=('Arial', 12, 'bold'), bg='white', fg='#0046AD').pack(anchor='w')
+            tk.Label(card, text=desc, font=('Arial', 10), bg='white', fg='#666666').pack(anchor='w', pady=5)
+            ModernButton(card, text="Gerar PDF", color='#666666').pack(anchor='e')
 
-            combo_tamanho = QComboBox()
-            combo_tamanho.addItems(["8", "9", "10", "11", "12", "14", "16", "18", "20"])
-            combo_tamanho.setCurrentText("11")
 
-            combo_cor = QComboBox()
-            combo_cor.addItems(["Preto", "Vermelho", "Verde", "Azul", "Laranja", "Roxo"])
-            combo_cor.setCurrentText("Preto")
+    # ========== MÓDULO HISTÓRICO ESCOLAR ==========
 
-            fonte_layout.addRow("Negrito:", cb_negrito)
-            fonte_layout.addRow("ItÃ¡lico:", cb_italico)
-            fonte_layout.addRow("Sublinhado:", cb_sublinhado)
-            fonte_layout.addRow("Tamanho:", combo_tamanho)
-            fonte_layout.addRow("Cor:", combo_cor)
+    def carregar_historico_escolar(self):
+        """Carrega módulo de histórico escolar"""
+        self.limpar_conteudo()
+        self.ativar_botao("🎓 Histórico Escolar")
+        self.registrar_log('ACESSO', 'Histórico Escolar', 'Acessou módulo de histórico escolar')
 
-            grupo_fonte.setLayout(fonte_layout)
+        tk.Label(self.content_frame, text="Módulo de Histórico Escolar - Registro Acadêmico Completo",
+                 font=('Arial', 16), bg='#f8f9fa').pack(expand=True)
 
-            # OpÃ§Ãµes de alinhamento
-            grupo_alinhamento = QGroupBox("Alinhamento")
-            alinhamento_layout = QHBoxLayout()
+    # ========== MÓDULO PLANEJAMENTO PEDAGÓGICO ==========
 
-            rb_esquerda = QRadioButton("Esquerda")
-            rb_centro = QRadioButton("Centro")
-            rb_direita = QRadioButton("Direita")
-            rb_centro.setChecked(True)
+    def carregar_planejamento_pedagogico(self):
+        """Carrega módulo de planejamento pedagógico"""
+        self.limpar_conteudo()
+        self.ativar_botao("📈 Planejamento Pedagógico")
+        self.registrar_log('ACESSO', 'Planejamento Pedagógico', 'Acessou módulo de planejamento pedagógico')
 
-            alinhamento_layout.addWidget(rb_esquerda)
-            alinhamento_layout.addWidget(rb_centro)
-            alinhamento_layout.addWidget(rb_direita)
-            grupo_alinhamento.setLayout(alinhamento_layout)
+        tk.Label(self.content_frame, text="Módulo de Planejamento Pedagógico - Estrutura Curricular",
+                 font=('Arial', 16), bg='#f8f9fa').pack(expand=True)
 
-            # BotÃµes
-            button_box = QDialogButtonBox(
-                QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-            )
-            button_box.accepted.connect(dialog.accept)
-            button_box.rejected.connect(dialog.reject)
+    # ========== MÓDULO AVALIAÇÕES INSTITUCIONAIS ==========
 
-            layout.addWidget(grupo_fonte)
-            layout.addWidget(grupo_alinhamento)
-            layout.addWidget(button_box)
+    def carregar_avaliacoes_institucionais(self):
+        """Carrega módulo de avaliações institucionais"""
+        self.limpar_conteudo()
+        self.ativar_botao("🏆 Avaliações Institucionais")
+        self.registrar_log('ACESSO', 'Avaliações Institucionais', 'Acessou módulo de avaliações institucionais')
 
-            dialog.setLayout(layout)
+        tk.Label(self.content_frame, text="Módulo de Avaliações Institucionais - Pesquisas e Avaliações",
+                 font=('Arial', 16), bg='#f8f9fa').pack(expand=True)
 
-            if dialog.exec_() == QDialog.Acepted:
-                # Aplicar formataÃ§Ã£o Ã s cÃ©lulas selecionadas
-                for item in tabela.selectedItems():
-                    font = item.font()
-                    font.setBold(cb_negrito.isChecked())
-                    font.setItalic(cb_italico.isChecked())
-                    font.setUnderline(cb_sublinhado.isChecked())
-                    font.setPointSize(int(combo_tamanho.currentText()))
-                    item.setFont(font)
+    # ========== MÓDULO CONFIGURAÇÕES DO SISTEMA ==========
 
-                    # Aplicar cor
-                    cores = {
-                        "Preto": QColor(0, 0, 0),
-                        "Vermelho": QColor(255, 0, 0),
-                        "Verde": QColor(0, 128, 0),
-                        "Azul": QColor(0, 0, 255),
-                        "Laranja": QColor(255, 165, 0),
-                        "Roxo": QColor(128, 0, 128)
-                    }
-                    item.setForeground(cores[combo_cor.currentText()])
+    def carregar_configuracoes_sistema(self):
+        """Carrega módulo de configurações do sistema"""
+        self.limpar_conteudo()
+        self.ativar_botao("⚙️ Configurações do Sistema")
+        self.registrar_log('ACESSO', 'Configurações do Sistema', 'Acessou módulo de configurações do sistema')
 
-                    # Aplicar alinhamento
-                    alinhamentos = {
-                        "Esquerda": Qt.AlignLeft,
-                        "Centro": Qt.AlignCenter,
-                        "Direita": Qt.AlignRight
-                    }
-                    item.setTextAlignment(alinhamentos[
-                                              rb_esquerda.isChecked() and "Esquerda" or
-                                              rb_centro.isChecked() and "Centro" or
-                                              "Direita"
-                                              ])
+        tk.Label(self.content_frame, text="Módulo de Configurações do Sistema - Personalização do Sistema",
+                 font=('Arial', 16), bg='#f8f9fa').pack(expand=True)
 
-                QMessageBox.information(self, "Sucesso", "FormataÃ§Ã£o aplicada Ã s cÃ©lulas selecionadas!")
 
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao formatar cÃ©lulas: {str(e)}")
+# ========== EXECUÇÃO DO SISTEMA ==========
+class SistemaMatriculas:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Sistema de Matrículas Escolares")
+        self.root.geometry("1200x800")
 
-    def configurar_atalhos_teclado(self):
-        """Configura atalhos de teclado globais"""
-        # Atalhos jÃ¡ configurados no __init__
-        # Esta funÃ§Ã£o pode ser expandida para personalizaÃ§Ã£o de atalhos
+        # Criar notebook para abas
+        self.notebook = ttk.Notebook(root)
+        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+
+        # Abas do sistema
+        self.criar_aba_instituicao()
+        self.criar_aba_aluno()
+        self.criar_aba_responsavel_financeiro()
+        self.criar_aba_responsavel_pedagogico()
+        self.criar_aba_consultas()
+
+    def criar_aba_instituicao(self):
+        # Implementação da aba da instituição
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Instituição")
+
+        # Campos da instituição
+        ttk.Label(frame, text="Dados da Instituição", font=('Arial', 14, 'bold')).grid(row=0, column=0, columnspan=2,
+                                                                                       pady=10)
+
+        campos_instituicao = [
+            ("Nome da Instituição:", "nome"),
+            ("Endereço:", "endereco"),
+            ("Mantenedora:", "mantenedora"),
+            ("CNPJ:", "cnpj")
+        ]
+
+        self.entries_instituicao = {}
+        for i, (label, field) in enumerate(campos_instituicao):
+            ttk.Label(frame, text=label).grid(row=i + 1, column=0, sticky='w', padx=5, pady=5)
+            entry = ttk.Entry(frame, width=50)
+            entry.grid(row=i + 1, column=1, padx=5, pady=5)
+            self.entries_instituicao[field] = entry
+
+        ttk.Button(frame, text="Salvar Dados da Instituição",
+                   command=self.salvar_instituicao).grid(row=5, column=0, columnspan=2, pady=10)
+
+    def criar_aba_aluno(self):
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Dados do Aluno")
+
+        # Criar scrollbar
+        canvas = tk.Canvas(frame)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Campos do aluno
+        ttk.Label(scrollable_frame, text="Dados do Beneficiário (ALUNO)",
+                  font=('Arial', 14, 'bold')).grid(row=0, column=0, columnspan=2, pady=10)
+
+        campos_aluno = [
+            # Dados básicos
+            ("Número de Matrícula:", "numero_matricula"),
+            ("Nome Completo:", "nome_completo"),
+            ("Data Nascimento (dd/mm/aaaa):", "data_nascimento"),
+            ("CPF:", "cpf"),
+
+            # Certidão de Nascimento
+            ("Certidão - Número:", "certidao_numero"),
+            ("Certidão - Livro:", "certidao_livro"),
+            ("Certidão - Folha:", "certidao_folha"),
+            ("Certidão - Data Expedição:", "certidao_data_expedicao"),
+            ("Certidão - Cidade:", "certidao_cidade"),
+            ("Certidão - UF:", "certidao_uf"),
+            ("Certidão - Cartório:", "certidao_cartorio"),
+
+            # RG
+            ("RG - UF:", "rg_uf"),
+            ("RG - Data Expedição:", "rg_data_expedicao"),
+
+            # Dados pessoais
+            ("Sexo:", "sexo"),
+            ("Cor/Raça:", "cor_raca"),
+
+            # Endereço
+            ("Bairro:", "endereco_bairro"),
+            ("Cidade:", "endereco_cidade"),
+            ("Estado:", "endereco_estado"),
+            ("CEP:", "endereco_cep"),
+
+            # Dados escolares
+            ("Curso:", "curso"),
+            ("Ano/Série:", "ano_serie"),
+            ("Data Ingresso:", "data_ingresso"),
+
+            # Saúde e informações
+            ("Necessidades Especiais:", "necessidades_especiais"),
+            ("Alergias:", "alergias"),
+            ("Convênio Médico:", "convenio_medico"),
+            ("Colégio Anterior:", "colegio_anterior"),
+
+            # Contato
+            ("Email:", "email"),
+            ("Celular:", "celular"),
+            ("Operadora:", "operadora"),
+            ("Nome Completo da Mãe:", "nome_mae")
+        ]
+
+        self.entries_aluno = {}
+        for i, (label, field) in enumerate(campos_aluno):
+            ttk.Label(scrollable_frame, text=label).grid(row=i + 1, column=0, sticky='w', padx=5, pady=2)
+            if field in ['sexo', 'cor_raca', 'curso', 'ano_serie']:
+                # Combobox para campos com opções fixas
+                if field == 'sexo':
+                    values = ['Masculino', 'Feminino']
+                elif field == 'cor_raca':
+                    values = ['Branca', 'Preta', 'Amarela', 'Parda', 'Indígena']
+                elif field == 'curso':
+                    values = ['Educação Infantil', 'Ensino Fundamental 1', 'Ensino Fundamental 2', 'Ensino Médio']
+                elif field == 'ano_serie':
+                    values = [
+                        'Berçário', 'Maternal', 'Infantil I', 'Infantil II', 'Infantil III', 'Infantil IV',
+                        '1º ano', '2º ano', '3º ano', '4º ano', '5º ano',
+                        '6º ano', '7º ano', '8º ano', '9º ano',
+                        '1ª série', '2ª série', '3ª série'
+                    ]
+
+                combobox = ttk.Combobox(scrollable_frame, values=values, width=47)
+                combobox.grid(row=i + 1, column=1, padx=5, pady=2)
+                self.entries_aluno[field] = combobox
+            else:
+                entry = ttk.Entry(scrollable_frame, width=50)
+                entry.grid(row=i + 1, column=1, padx=5, pady=2)
+                self.entries_aluno[field] = entry
+
+        # Botão para upload de foto
+        ttk.Button(scrollable_frame, text="Upload Foto do Aluno",
+                   command=self.upload_foto).grid(row=len(campos_aluno) + 1, column=0, pady=10)
+
+        self.foto_path_label = ttk.Label(scrollable_frame, text="Nenhuma foto selecionada")
+        self.foto_path_label.grid(row=len(campos_aluno) + 1, column=1, pady=10)
+
+        # Botão salvar
+        ttk.Button(scrollable_frame, text="Salvar Dados do Aluno",
+                   command=self.salvar_aluno).grid(row=len(campos_aluno) + 2, column=0, columnspan=2, pady=10)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def criar_aba_responsavel_financeiro(self):
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Responsável Financeiro")
+        # Implementação similar à aba do aluno...
+
+    def criar_aba_responsavel_pedagogico(self):
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Responsável Pedagógico")
+        # Implementação similar...
+
+    def criar_aba_consultas(self):
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Consultas")
+        # Implementação das consultas...
+
+    def upload_foto(self):
+        filename = filedialog.askopenfilename(
+            title="Selecionar Foto do Aluno",
+            filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")]
+        )
+        if filename:
+            self.foto_path = filename
+            self.foto_path_label.config(text=os.path.basename(filename))
+
+    def salvar_instituicao(self):
+        # Implementação para salvar dados da instituição
         pass
 
-    def mostrar_ajuda_contexto(self):
-        """Mostra ajuda contextual baseada no widget atual"""
+    def salvar_aluno(self):
+        # Implementação para salvar dados do aluno
         try:
-            widget_focado = QApplication.focusWidget()
-
-            if isinstance(widget_focado, QLineEdit):
-                mensagem = "Campo de texto. Digite a informaÃ§Ã£o solicitada."
-            elif isinstance(widget_focado, QComboBox):
-                mensagem = "Menu suspenso. Selecione uma opÃ§Ã£o da lista."
-            elif isinstance(widget_focado, QTableWidget):
-                mensagem = "Tabela de dados. Clique com botÃ£o direito para mais opÃ§Ãµes."
-            elif isinstance(widget_focado, QPushButton):
-                mensagem = "BotÃ£o. Clique para executar a aÃ§Ã£o."
-            elif isinstance(widget_focado, QDateEdit):
-                mensagem = "Seletor de data. Use as setas ou clique para selecionar data."
-            else:
-                mensagem = "Widget ativo. Consulte a documentaÃ§Ã£o para mais informaÃ§Ãµes."
-
-            QMessageBox.information(self, "Ajuda Contexto", mensagem)
-
-        except Exception as e:
-            print(f"Erro ao mostrar ajuda: {e}")
-
-    def alternar_tema_escuro(self):
-        """Alterna entre tema claro e escuro"""
-        try:
-            if not hasattr(self, 'tema_escuro'):
-                self.tema_escuro = False
-
-            self.tema_escuro = not self.tema_escuro
-
-            if self.tema_escuro:
-                # Tema escuro
-                estilo_escuro = """
-                    QMainWindow {
-                        background-color: #2c3e50;
-                    }
-                    QWidget {
-                        background-color: #34495e;
-                        color: #ecf0f1;
-                    }
-                    QPushButton {
-                        background-color: #3498db;
-                        color: white;
-                        border-radius: 6px;
-                        padding: 10px;
-                    }
-                    QPushButton:hover {
-                        background-color: #2980b9;
-                    }
-                    QLineEdit, QTextEdit, QComboBox {
-                        background-color: #4a6572;
-                        color: #ecf0f1;
-                        border: 1px solid #5d6d7e;
-                        border-radius: 4px;
-                        padding: 6px;
-                    }
-                    QTableWidget {
-                        background-color: #4a6572;
-                        color: #ecf0f1;
-                        gridline-color: #5d6d7e;
-                    }
-                    QHeaderView::section {
-                        background-color: #2c3e50;
-                        color: #ecf0f1;
-                        padding: 8px;
-                    }
-                """
-                self.setStyleSheet(estilo_escuro)
-                QMessageBox.information(self, "Tema Alterado", "Tema escuro ativado!")
-            else:
-                # Restaurar tema original
-                self.setStyleSheet(GLOBAL_STYLESHEET)
-                QMessageBox.information(self, "Tema Alterado", "Tema claro ativado!")
-
-        except Exception as e:
-            QMessageBox.warning(self, "Erro", f"Erro ao alternar tema: {str(e)}")
-
-    def verificar_integridade_dados(self):
-        """Verifica integridade dos dados no banco"""
-        try:
-            if not self.db.conn:
-                QMessageBox.warning(self, "Erro", "Banco de dados nÃ£o conectado!")
-                return
-
-            cursor = self.db.conn.cursor()
-            problemas = []
-
-            # Verificar alunos sem turma
-            cursor.execute("""
-                SELECT COUNT(*) 
-                FROM alunos 
-                WHERE turma_id IS NULL OR turma_id = ''
-            """)
-            alunos_sem_turma = cursor.fetchone()[0]
-            if alunos_sem_turma > 0:
-                problemas.append(f"{alunos_sem_turma} aluno(s) sem turma atribuÃ­da")
-
-            # Verificar notas invÃ¡lidas
-            cursor.execute("""
-                SELECT COUNT(*) 
-                FROM notas 
-                WHERE nota < 0 OR nota > 10
-            """)
-            notas_invalidas = cursor.fetchone()[0]
-            if notas_invalidas > 0:
-                problemas.append(f"{notas_invalidas} nota(s) fora do intervalo 0-10")
-
-            # Verificar datas inconsistentes
-            cursor.execute("""
-                SELECT COUNT(*) 
-                FROM alunos 
-                WHERE data_nascimento > date('now') 
-                OR data_matricula > date('now')
-            """)
-            datas_inconsistentes = cursor.fetchone()[0]
-            if datas_inconsistentes > 0:
-                problemas.append(f"{datas_inconsistentes} data(s) no futuro")
-
-            # Verificar turmas sem alunos
-            cursor.execute("""
-                SELECT t.nome_turma 
-                FROM turmas t 
-                LEFT JOIN alunos a ON t.id = a.turma_id 
-                WHERE a.id IS NULL
-            """)
-            turmas_sem_alunos = cursor.fetchall()
-            if turmas_sem_alunos:
-                problemas.append(f"{len(turmas_sem_alunos)} turma(s) sem alunos: " +
-                                 ", ".join([t[0] for t in turmas_sem_alunos]))
-
-            # Mostrar resultados
-            if problemas:
-                mensagem = "âš ï¸ PROBLEMAS ENCONTRADOS:\n\n" + "\nâ€¢ ".join(problemas)
-                QMessageBox.warning(self, "VerificaÃ§Ã£o de Integridade", mensagem)
-            else:
-                QMessageBox.information(self, "VerificaÃ§Ã£o de Integridade",
-                                        "âœ… Todos os dados estÃ£o Ã­ntegros!")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro na verificaÃ§Ã£o: {str(e)}")
-
-    def otimizar_banco_dados(self):
-        """Otimiza o banco de dados SQLite"""
-        try:
-            if not self.db.conn:
-                QMessageBox.warning(self, "Erro", "Banco de dados nÃ£o conectado!")
-                return
-
-            resposta = QMessageBox.question(
-                self,
-                "Otimizar Banco de Dados",
-                "Esta operaÃ§Ã£o otimizarÃ¡ o banco de dados para melhor desempenho.\n"
-                "Pode demorar alguns segundos. Continuar?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-
-            if resposta == QMessageBox.Yes:
-                cursor = self.db.conn.cursor()
-
-                # Executar VACUUM para otimizar espaÃ§o
-                cursor.execute("VACUUM")
-
-                # Executar ANALYZE para otimizar consultas
-                cursor.execute("ANALYZE")
-
-                # Reconstruir Ã­ndices
-                cursor.execute("REINDEX")
-
-                self.db.conn.commit()
-
-                QMessageBox.information(self, "Sucesso",
-                                        "Banco de dados otimizado com sucesso!\n"
-                                        "Desempenho melhorado.")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao otimizar banco: {str(e)}")
-
-    def criar_relatorio_personalizado(self):
-        """Cria relatÃ³rio personalizado com filtros"""
-        try:
-            dialog = QDialog(self)
-            dialog.setWindowTitle("RelatÃ³rio Personalizado")
-            dialog.setMinimumSize(600, 500)
-
-            layout = QVBoxLayout()
-
-            # SeÃ§Ã£o de filtros
-            grupo_filtros = QGroupBox("ðŸ” Filtros do RelatÃ³rio")
-            grupo_filtros.setStyleSheet("""
-                QGroupBox {
-                    font-weight: bold;
-                    font-size: 14px;
-                    padding-top: 10px;
-                }
-                QGroupBox::title {
-                    subcontrol-origin: margin;
-                    left: 10px;
-                    padding: 0 5px 0 5px;
-                }
-            """)
-
-            filtros_layout = QFormLayout()
-
-            # Filtro por data
-            lbl_data_inicio = QLabel("Data InÃ­cio:")
-            date_inicio = QDateEdit()
-            date_inicio.setDate(QDate.currentDate().addMonths(-1))
-            date_inicio.setCalendarPopup(True)
-
-            lbl_data_fim = QLabel("Data Fim:")
-            date_fim = QDateEdit()
-            date_fim.setDate(QDate.currentDate())
-            date_fim.setCalendarPopup(True)
-
-            # Filtro por turma
-            lbl_turma = QLabel("Turma:")
-            combo_turma = QComboBox()
-            combo_turma.addItem("Todas as Turmas")
-            if self.db.conn:
-                cursor = self.db.conn.cursor()
-                cursor.execute("SELECT nome_turma FROM turmas ORDER BY nome_turma")
-                for turma in cursor.fetchall():
-                    combo_turma.addItem(turma[0])
-
-            # Filtro por tipo de relatÃ³rio
-            lbl_tipo = QLabel("Tipo de RelatÃ³rio:")
-            combo_tipo = QComboBox()
-            combo_tipo.addItems([
-                "Notas e Desempenho",
-                "FrequÃªncia e PresenÃ§a",
-                "InformaÃ§Ãµes de Alunos",
-                "InformaÃ§Ãµes de Professores",
-                "Resumo Financeiro"
-            ])
-
-            # Formato de saÃ­da
-            lbl_formato = QLabel("Formato de SaÃ­da:")
-            combo_formato = QComboBox()
-            combo_formato.addItems(["Excel (.xlsx)", "PDF (.pdf)", "CSV (.csv)", "HTML (.html)"])
-
-            filtros_layout.addRow(lbl_data_inicio, date_inicio)
-            filtros_layout.addRow(lbl_data_fim, date_fim)
-            filtros_layout.addRow(lbl_turma, combo_turma)
-            filtros_layout.addRow(lbl_tipo, combo_tipo)
-            filtros_layout.addRow(lbl_formato, combo_formato)
-
-            grupo_filtros.setLayout(filtros_layout)
-
-            # OpÃ§Ãµes avanÃ§adas
-            grupo_opcoes = QGroupBox("âš™ï¸ OpÃ§Ãµes AvanÃ§adas")
-            opcoes_layout = QVBoxLayout()
-
-            cb_incluir_cabecalho = QCheckBox("Incluir cabeÃ§alho")
-            cb_incluir_cabecalho.setChecked(True)
-
-            cb_incluir_graficos = QCheckBox("Incluir grÃ¡ficos (se disponÃ­vel)")
-            cb_incluir_graficos.setChecked(True)
-
-            cb_incluir_sumario = QCheckBox("Incluir sumÃ¡rio executivo")
-            cb_incluir_sumario.setChecked(True)
-
-            opcoes_layout.addWidget(cb_incluir_cabecalho)
-            opcoes_layout.addWidget(cb_incluir_graficos)
-            opcoes_layout.addWidget(cb_incluir_sumario)
-            grupo_opcoes.setLayout(opcoes_layout)
-
-            # BotÃµes
-            button_box = QDialogButtonBox(
-                QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-            )
-            button_box.accepted.connect(dialog.accept)
-            button_box.rejected.connect(dialog.reject)
-
-            layout.addWidget(grupo_filtros)
-            layout.addWidget(grupo_opcoes)
-            layout.addWidget(button_box)
-
-            dialog.setLayout(layout)
-
-            if dialog.exec_() == QDialog.Accepted:
-                # Coletar parÃ¢metros
-                parametros = {
-                    'data_inicio': date_inicio.date().toString("yyyy-MM-dd"),
-                    'data_fim': date_fim.date().toString("yyyy-MM-dd"),
-                    'turma': combo_turma.currentText(),
-                    'tipo': combo_tipo.currentText(),
-                    'formato': combo_formato.currentText(),
-                    'incluir_cabecalho': cb_incluir_cabecalho.isChecked(),
-                    'incluir_graficos': cb_incluir_graficos.isChecked(),
-                    'incluir_sumario': cb_incluir_sumario.isChecked()
-                }
-
-                # Gerar relatÃ³rio
-                self.gerar_relatorio_com_parametros(parametros)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao criar relatÃ³rio: {str(e)}")
-
-    def gerar_relatorio_com_parametros(self, parametros):
-        """Gera relatÃ³rio baseado nos parÃ¢metros fornecidos"""
-        try:
-            QMessageBox.information(
-                self,
-                "RelatÃ³rio em Processamento",
-                f"Gerando relatÃ³rio '{parametros['tipo']}'...\n"
-                f"PerÃ­odo: {parametros['data_inicio']} a {parametros['data_fim']}\n"
-                f"Turma: {parametros['turma']}\n"
-                f"Formato: {parametros['formato']}\n\n"
-                "Esta funcionalidade serÃ¡ completamente implementada na versÃ£o web Django."
-            )
-
-            # Aqui seria a implementaÃ§Ã£o real da geraÃ§Ã£o de relatÃ³rio
-            # Por enquanto, apenas demonstraÃ§Ã£o
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao gerar relatÃ³rio: {str(e)}")
-
-    def configurar_notificacoes(self):
-        """Configura sistema de notificaÃ§Ãµes"""
-        try:
-            dialog = QDialog(self)
-            dialog.setWindowTitle("ðŸ”” ConfiguraÃ§Ãµes de NotificaÃ§Ãµes")
-            dialog.setFixedSize(500, 400)
-
-            layout = QVBoxLayout()
-
-            # TÃ­tulo
-            titulo = QLabel("Configurar NotificaÃ§Ãµes do Sistema")
-            titulo.setStyleSheet("""
-                font-size: 18px;
-                font-weight: bold;
-                color: #2c3e50;
-                padding: 10px;
-                border-bottom: 2px solid #3498db;
-                margin-bottom: 20px;
-            """)
-            titulo.setAlignment(Qt.AlignCenter)
-
-            # Tipos de notificaÃ§Ã£o
-            grupo_notificacoes = QGroupBox("Tipos de NotificaÃ§Ã£o")
-            notif_layout = QVBoxLayout()
-
-            cb_notas_baixas = QCheckBox("Alertas de notas baixas")
-            cb_notas_baixas.setChecked(True)
-
-            cb_aniversarios = QCheckBox("Lembretes de aniversÃ¡rios")
-            cb_aniversarios.setChecked(True)
-
-            cb_pagamentos = QCheckBox("Lembretes de pagamentos")
-            cb_pagamentos.setChecked(True)
-
-            cb_faltas = QCheckBox("Alertas de faltas excessivas")
-            cb_faltas.setChecked(True)
-
-            cb_atualizacoes = QCheckBox("AtualizaÃ§Ãµes do sistema")
-            cb_atualizacoes.setChecked(True)
-
-            notif_layout.addWidget(cb_notas_baixas)
-            notif_layout.addWidget(cb_aniversarios)
-            notif_layout.addWidget(cb_pagamentos)
-            notif_layout.addWidget(cb_faltas)
-            notif_layout.addWidget(cb_atualizacoes)
-            grupo_notificacoes.setLayout(notif_layout)
-
-            # FrequÃªncia
-            grupo_frequencia = QGroupBox("FrequÃªncia das NotificaÃ§Ãµes")
-            freq_layout = QFormLayout()
-
-            combo_frequencia = QComboBox()
-            combo_frequencia.addItems([
-                "Diariamente",
-                "Semanalmente",
-                "Mensalmente",
-                "Apenas quando necessÃ¡rio"
-            ])
-            combo_frequencia.setCurrentText("Diariamente")
-
-            cb_email = QCheckBox("Enviar notificaÃ§Ãµes por e-mail")
-            cb_popup = QCheckBox("Mostrar popup no sistema")
-            cb_popup.setChecked(True)
-
-            freq_layout.addRow("FrequÃªncia:", combo_frequencia)
-            freq_layout.addRow(cb_email)
-            freq_layout.addRow(cb_popup)
-            grupo_frequencia.setLayout(freq_layout)
-
-            # BotÃµes
-            button_box = QDialogButtonBox(
-                QDialogButtonBox.Save | QDialogButtonBox.Cancel
-            )
-            button_box.accepted.connect(dialog.accept)
-            button_box.rejected.connect(dialog.reject)
-
-            layout.addWidget(titulo)
-            layout.addWidget(grupo_notificacoes)
-            layout.addWidget(grupo_frequencia)
-            layout.addWidget(button_box)
-
-            dialog.setLayout(layout)
-
-            if dialog.exec_() == QDialog.Accepted:
-                # Salvar configuraÃ§Ãµes
-                config = {
-                    'notas_baixas': cb_notas_baixas.isChecked(),
-                    'aniversarios': cb_aniversarios.isChecked(),
-                    'pagamentos': cb_pagamentos.isChecked(),
-                    'faltas': cb_faltas.isChecked(),
-                    'atualizacoes': cb_atualizacoes.isChecked(),
-                    'frequencia': combo_frequencia.currentText(),
-                    'enviar_email': cb_email.isChecked(),
-                    'mostrar_popup': cb_popup.isChecked()
-                }
-
-                # Salvar em arquivo de configuraÃ§Ã£o
-                config_file = os.path.join(os.path.expanduser("~"), ".escola_notificacoes.json")
-                with open(config_file, 'w') as f:
-                    json.dump(config, f, indent=4)
-
-                QMessageBox.information(self, "Sucesso", "ConfiguraÃ§Ãµes salvas com sucesso!")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao configurar notificaÃ§Ãµes: {str(e)}")
-
-    def verificar_notificacoes_pendentes(self):
-        """Verifica e mostra notificaÃ§Ãµes pendentes"""
-        try:
-            if not self.db.conn:
-                return
-
-            notificacoes = []
-            cursor = self.db.conn.cursor()
-
-            # Verificar notas baixas
-            cursor.execute("""
-                SELECT a.nome_completo, d.nome_disciplina, n.nota
-                FROM alunos a
-                JOIN notas n ON a.id = n.aluno_id
-                JOIN disciplinas d ON n.disciplina_id = d.id
-                WHERE n.nota < 6
-                AND n.data >= date('now', '-30 days')
-            """)
-            notas_baixas = cursor.fetchall()
-
-            if notas_baixas:
-                notificacoes.append(f"âš ï¸ {len(notas_baixas)} aluno(s) com nota abaixo de 6")
-
-            # Verificar aniversariantes do dia
-            cursor.execute("""
-                SELECT nome_completo
-                FROM alunos
-                WHERE strftime('%m-%d', data_nascimento) = strftime('%m-%d', 'now')
-            """)
-            aniversariantes = cursor.fetchall()
-
-            if aniversariantes:
-                nomes = ", ".join([a[0] for a in aniversariantes[:3]])  # Limitar a 3 nomes
-                if len(aniversariantes) > 3:
-                    nomes += f" e mais {len(aniversariantes) - 3}"
-                notificacoes.append(f"ðŸŽ‚ Aniversariantes hoje: {nomes}")
-
-            # Verificar pagamentos atrasados
-            cursor.execute("""
-                SELECT COUNT(*)
-                FROM financeiro
-                WHERE strftime('%Y-%m-%d', data_vencimento) < date('now')
-                AND status_pagamento = 'Pendente'
-            """)
-            pagamentos_atrasados = cursor.fetchone()[0]
-
-            if pagamentos_atrasados > 0:
-                notificacoes.append(f"ðŸ’° {pagamentos_atrasados} pagamento(s) atrasado(s)")
-
-            # Mostrar notificaÃ§Ãµes se houver
-            if notificacoes:
-                mensagem = "ðŸ“¢ NOTIFICAÃ‡Ã•ES:\n\n" + "\n\n".join(notificacoes)
-
-                msg_box = QMessageBox(self)
-                msg_box.setWindowTitle("NotificaÃ§Ãµes do Sistema")
-                msg_box.setText(mensagem)
-                msg_box.setIcon(QMessageBox.Information)
-                msg_box.addButton("Marcar como Lidas", QMessageBox.AcceptRole)
-                msg_box.addButton("Mais Tarde", QMessageBox.RejectRole)
-
-                # Adicionar Ã­cone personalizado
-                msg_box.setStyleSheet("""
-                    QMessageBox {
-                        background-color: white;
-                        font-size: 13px;
-                    }
-                    QMessageBox QLabel {
-                        color: #2c3e50;
-                        font-weight: normal;
-                    }
-                """)
-
-                resposta = msg_box.exec_()
-
-                if resposta == QMessageBox.AcceptRole:
-                    print("NotificaÃ§Ãµes marcadas como lidas")
-
-        except Exception as e:
-            print(f"Erro ao verificar notificaÃ§Ãµes: {e}")
-
-    def criar_copia_seguranca_automatica(self):
-        """Cria cÃ³pia de seguranÃ§a automÃ¡tica"""
-        try:
-            if not hasattr(self, 'ultimo_backup'):
-                self.ultimo_backup = None
-
-            agora = datetime.now()
-
-            # Verificar se passou 24 horas desde o Ãºltimo backup
-            if self.ultimo_backup and (agora - self.ultimo_backup).days < 1:
-                return
-
-            # Criar diretÃ³rio de backups se nÃ£o existir
-            backup_dir = os.path.join(os.path.expanduser("~"), "BackupsEscola")
-            os.makedirs(backup_dir, exist_ok=True)
-
-            # Nome do arquivo com data/hora
-            nome_arquivo = f"backup_auto_{agora.strftime('%Y%m%d_%H%M%S')}.db"
-            caminho_backup = os.path.join(backup_dir, nome_arquivo)
-
-            # Criar backup
-            if self.db.conn and hasattr(self.db, 'db_path'):
-                import shutil
-                shutil.copy2(self.db.db_path, caminho_backup)
-
-                # Manter apenas os 10 backups mais recentes
-                backups = sorted([f for f in os.listdir(backup_dir) if f.startswith('backup_auto_')])
-                if len(backups) > 10:
-                    for arquivo_antigo in backups[:-10]:
-                        os.remove(os.path.join(backup_dir, arquivo_antigo))
-
-                self.ultimo_backup = agora
-                print(f"Backup automÃ¡tico criado: {caminho_backup}")
-
-        except Exception as e:
-            print(f"Erro ao criar backup automÃ¡tico: {e}")
-
-    def monitorar_recursos_sistema(self):
-        """Monitora uso de recursos do sistema"""
-        try:
-            import psutil
-            import platform
-
-            info = {
-                'sistema': platform.system(),
-                'processador': platform.processor(),
-                'ram_total': psutil.virtual_memory().total / (1024 ** 3),  # GB
-                'ram_usada': psutil.virtual_memory().used / (1024 ** 3),  # GB
-                'ram_percent': psutil.virtual_memory().percent,
-                'cpu_percent': psutil.cpu_percent(interval=1),
-                'disco_total': psutil.disk_usage('/').total / (1024 ** 3),  # GB
-                'disco_usado': psutil.disk_usage('/').used / (1024 ** 3),  # GB
-                'disco_percent': psutil.disk_usage('/').percent
-            }
-
-            # Mostrar informaÃ§Ãµes em uma janela
-            dialog = QDialog(self)
-            dialog.setWindowTitle("ðŸ“Š Monitor de Recursos")
-            dialog.setFixedSize(400, 300)
-
-            layout = QVBoxLayout()
-
-            texto_info = QTextEdit()
-            texto_info.setReadOnly(True)
-            texto_info.setHtml(f"""
-                <div style='font-family: Consolas, monospace; font-size: 12px;'>
-                    <h3 style='color: #2c3e50;'>SISTEMA DE MONITORAMENTO</h3>
-                    <hr>
-                    <p><b>Sistema Operacional:</b> {info['sistema']}</p>
-                    <p><b>Processador:</b> {info['processador']}</p>
-
-                    <h4 style='color: #3498db;'>MEMÃ“RIA RAM</h4>
-                    <p>Total: {info['ram_total']:.2f} GB</p>
-                    <p>Usada: {info['ram_usada']:.2f} GB ({info['ram_percent']:.1f}%)</p>
-
-                    <h4 style='color: #27ae60;'>CPU</h4>
-                    <p>Uso: {info['cpu_percent']:.1f}%</p>
-
-                    <h4 style='color: #e74c3c;'>DISCO</h4>
-                    <p>Total: {info['disco_total']:.2f} GB</p>
-                    <p>Usado: {info['disco_usado']:.2f} GB ({info['disco_percent']:.1f}%)</p>
-
-                    <hr>
-                    <p style='color: #7f8c8d; font-size: 10px;'>
-                        Monitorado em: {datetime.now().strftime('%H:%M:%S')}
-                    </p>
-                </div>
-            """)
-
-            btn_fechar = QPushButton("Fechar")
-            btn_fechar.clicked.connect(dialog.accept)
-            btn_fechar.setStyleSheet("""
-                QPushButton {
-                    background-color: #95a5a6;
-                    color: white;
-                    padding: 8px 20px;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #7f8c8d;
-                }
-            """)
-
-            layout.addWidget(texto_info)
-            layout.addWidget(btn_fechar, alignment=Qt.AlignCenter)
-
-            dialog.setLayout(layout)
-            dialog.exec_()
-
-        except ImportError:
-            QMessageBox.warning(self, "Aviso",
-                                "Biblioteca psutil nÃ£o instalada.\n"
-                                "Instale com: pip install psutil")
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao monitorar recursos: {str(e)}")
-
-    def configurar_logs_sistema(self):
-        """Configura sistema de logs"""
-        try:
-            dialog = QDialog(self)
-            dialog.setWindowTitle("ðŸ“ ConfiguraÃ§Ã£o de Logs")
-            dialog.setFixedSize(500, 400)
-
-            layout = QVBoxLayout()
-
-            # NÃ­veis de log
-            grupo_nivel = QGroupBox("NÃ­vel de Log")
-            nivel_layout = QVBoxLayout()
-
-            rb_debug = QRadioButton("Debug (Todas as informaÃ§Ãµes)")
-            rb_info = QRadioButton("Info (Apenas informaÃ§Ãµes importantes)")
-            rb_warning = QRadioButton("Warning (Apenas avisos e erros)")
-            rb_error = QRadioButton("Error (Apenas erros crÃ­ticos)")
-            rb_info.setChecked(True)
-
-            nivel_layout.addWidget(rb_debug)
-            nivel_layout.addWidget(rb_info)
-            nivel_layout.addWidget(rb_warning)
-            nivel_layout.addWidget(rb_error)
-            grupo_nivel.setLayout(nivel_layout)
-
-            # Destinos de log
-            grupo_destino = QGroupBox("Destino dos Logs")
-            destino_layout = QVBoxLayout()
-
-            cb_arquivo = QCheckBox("Salvar em arquivo")
-            cb_arquivo.setChecked(True)
-
-            cb_console = QCheckBox("Mostrar no console")
-
-            cb_banco = QCheckBox("Salvar no banco de dados")
-
-            destino_layout.addWidget(cb_arquivo)
-            destino_layout.addWidget(cb_console)
-            destino_layout.addWidget(cb_banco)
-            grupo_destino.setLayout(destino_layout)
-
-            # RotaÃ§Ã£o de logs
-            grupo_rotacao = QGroupBox("RotaÃ§Ã£o de Logs")
-            rotacao_layout = QFormLayout()
-
-            spin_tamanho = QSpinBox()
-            spin_tamanho.setRange(1, 100)
-            spin_tamanho.setValue(10)
-            spin_tamanho.setSuffix(" MB")
-
-            spin_backups = QSpinBox()
-            spin_backups.setRange(1, 50)
-            spin_backups.setValue(5)
-
-            rotacao_layout.addRow("Tamanho mÃ¡ximo por arquivo:", spin_tamanho)
-            rotacao_layout.addRow("NÃºmero de backups mantidos:", spin_backups)
-            grupo_rotacao.setLayout(rotacao_layout)
-
-            # BotÃµes
-            button_box = QDialogButtonBox(
-                QDialogButtonBox.Save | QDialogButtonBox.Cancel | QDialogButtonBox.Reset
-            )
-            button_box.accepted.connect(dialog.accept)
-            button_box.rejected.connect(dialog.reject)
-            button_box.button(QDialogButtonBox.Reset).clicked.connect(
-                lambda: self.restaurar_configuracoes_logs_padrao()
-            )
-
-            layout.addWidget(grupo_nivel)
-            layout.addWidget(grupo_destino)
-            layout.addWidget(grupo_rotacao)
-            layout.addWidget(button_box)
-
-            dialog.setLayout(layout)
-
-            if dialog.exec_() == QDialog.Accepted:
-                # Salvar configuraÃ§Ãµes
-                config_logs = {
-                    'nivel': 'DEBUG' if rb_debug.isChecked() else
-                    'INFO' if rb_info.isChecked() else
-                    'WARNING' if rb_warning.isChecked() else 'ERROR',
-                    'salvar_arquivo': cb_arquivo.isChecked(),
-                    'mostrar_console': cb_console.isChecked(),
-                    'salvar_banco': cb_banco.isChecked(),
-                    'tamanho_max_mb': spin_tamanho.value(),
-                    'backups_mantidos': spin_backups.value()
-                }
-
-                # Salvar em arquivo de configuraÃ§Ã£o
-                config_file = os.path.join(os.path.expanduser("~"), ".escola_logs_config.json")
-                with open(config_file, 'w') as f:
-                    json.dump(config_logs, f, indent=4)
-
-                QMessageBox.information(self, "Sucesso", "ConfiguraÃ§Ãµes de logs salvas!")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao configurar logs: {str(e)}")
-
-    def restaurar_configuracoes_logs_padrao(self):
-        """Restaura configuraÃ§Ãµes padrÃ£o de logs"""
-        try:
-            config_file = os.path.join(os.path.expanduser("~"), ".escola_logs_config.json")
-            if os.path.exists(config_file):
-                os.remove(config_file)
-
-            QMessageBox.information(self, "Sucesso",
-                                    "ConfiguraÃ§Ãµes de logs restauradas para os padrÃµes!")
-
-        except Exception as e:
-            QMessageBox.warning(self, "Aviso", f"Erro ao restaurar configuraÃ§Ãµes: {str(e)}")
-
-    def visualizar_logs_sistema(self):
-        """Visualiza logs do sistema"""
-        try:
-            log_file = os.path.join(os.path.expanduser("~"), "escola_system.log")
-
-            if not os.path.exists(log_file):
-                QMessageBox.information(self, "InformaÃ§Ã£o",
-                                        "Nenhum arquivo de log encontrado.")
-                return
-
-            dialog = QDialog(self)
-            dialog.setWindowTitle("ðŸ“‹ Visualizador de Logs")
-            dialog.setMinimumSize(800, 600)
-
-            layout = QVBoxLayout()
-
-            # Controles
-            controls_layout = QHBoxLayout()
-
-            btn_atualizar = QPushButton("ðŸ”„ Atualizar")
-            btn_atualizar.clicked.connect(lambda: self.carregar_logs_na_visualizacao(text_edit, log_file))
-
-            btn_limpar = QPushButton("ðŸ—‘ï¸ Limpar Logs")
-            btn_limpar.clicked.connect(lambda: self.limpar_arquivo_logs(log_file, text_edit))
-
-            btn_exportar = QPushButton("ðŸ“¤ Exportar")
-            btn_exportar.clicked.connect(lambda: self.exportar_logs(log_file))
-
-            controls_layout.addWidget(btn_atualizar)
-            controls_layout.addWidget(btn_limpar)
-            controls_layout.addWidget(btn_exportar)
-            controls_layout.addStretch()
-
-            # Ãrea de texto para logs
-            text_edit = QTextEdit()
-            text_edit.setReadOnly(True)
-            text_edit.setFont(QFont("Courier", 10))
-
-            # Carregar logs inicialmente
-            self.carregar_logs_na_visualizacao(text_edit, log_file)
-
-            # BotÃ£o fechar
-            btn_fechar = QPushButton("Fechar")
-            btn_fechar.clicked.connect(dialog.accept)
-
-            layout.addLayout(controls_layout)
-            layout.addWidget(text_edit)
-            layout.addWidget(btn_fechar, alignment=Qt.AlignCenter)
-
-            dialog.setLayout(layout)
-            dialog.exec_()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao visualizar logs: {str(e)}")
-
-    def carregar_logs_na_visualizacao(self, text_edit, log_file):
-        """Carrega logs na visualizaÃ§Ã£o"""
-        try:
-            if os.path.exists(log_file):
-                with open(log_file, 'r', encoding='utf-8') as f:
-                    logs = f.read()
-
-                text_edit.clear()
-
-                # Adicionar com formataÃ§Ã£o de cores
-                for linha in logs.split('\n'):
-                    if 'ERROR' in linha:
-                        text_edit.setTextColor(QColor(231, 76, 60))  # Vermelho
-                    elif 'WARNING' in linha:
-                        text_edit.setTextColor(QColor(241, 196, 15))  # Amarelo
-                    elif 'INFO' in linha:
-                        text_edit.setTextColor(QColor(52, 152, 219))  # Azul
-                    elif 'DEBUG' in linha:
-                        text_edit.setTextColor(QColor(46, 204, 113))  # Verde
-                    else:
-                        text_edit.setTextColor(QColor(44, 62, 80))  # Preto
-
-                    text_edit.append(linha)
-
-                # Rolar para o final
-                text_edit.moveCursor(QTextCursor.End)
-            else:
-                text_edit.setText("Nenhum log encontrado.")
-
-        except Exception as e:
-            text_edit.setText(f"Erro ao carregar logs: {str(e)}")
-
-    def limpar_arquivo_logs(self, log_file, text_edit):
-        """Limpa o arquivo de logs"""
-        try:
-            resposta = QMessageBox.question(
-                self,
-                "Confirmar Limpeza",
-                "Deseja limpar todos os logs do sistema?\n"
-                "Esta aÃ§Ã£o nÃ£o pode ser desfeita.",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-
-            if resposta == QMessageBox.Yes:
-                open(log_file, 'w').close()
-                text_edit.clear()
-                text_edit.setText("Logs limpos com sucesso.")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao limpar logs: {str(e)}")
-
-    def exportar_logs(self, log_file):
-        """Exporta logs para um arquivo"""
-        try:
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Exportar Logs",
-                f"logs_escola_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                "Arquivos de Texto (*.txt)"
-            )
-
-            if file_path and os.path.exists(log_file):
-                import shutil
-                shutil.copy2(log_file, file_path)
-                QMessageBox.information(self, "Sucesso", f"Logs exportados para:\n{file_path}")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao exportar logs: {str(e)}")
-
-    def encerrar_sistema(self):
-        """Procedimento de encerramento do sistema"""
-        try:
-            resposta = QMessageBox.question(
-                self,
-                "Encerrar Sistema",
-                "Deseja realmente encerrar o sistema de gestÃ£o escolar?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-
-            if resposta == QMessageBox.Yes:
-                # Criar backup automÃ¡tico antes de sair
-                self.criar_copia_seguranca_automatica()
-
-                # Salvar configuraÃ§Ãµes da janela
-                settings = QSettings("EscolaSystem", "GestaoEscolar")
-                settings.setValue("geometry", self.saveGeometry())
-                settings.setValue("windowState", self.saveState())
-
-                # Fechar conexÃ£o com banco de dados
-                if hasattr(self, 'db') and self.db.conn:
-                    self.db.conn.close()
-
-                # Registrar log de encerramento
-                print(f"Sistema encerrado em: {datetime.now()}")
-
-                # Encerrar aplicaÃ§Ã£o
-                QApplication.quit()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro CrÃ­tico",
-                                 f"Erro ao encerrar sistema: {str(e)}\n"
-                                 "O sistema serÃ¡ forÃ§ado a fechar.")
-            sys.exit(1)
-
-    def closeEvent(self, event):
-        """Evento de fechamento da janela principal"""
-        try:
-            # Perguntar se quer salvar antes de sair
-            resposta = QMessageBox.question(
-                self,
-                "Confirmar SaÃ­da",
-                "Deseja realmente sair do sistema?",
-                QMessageBox.Yes | QButton.No,
-                QButton.No
-            )
-
-            if resposta == QMessageBox.Yes:
-                # Executar procedimento de encerramento
-                self.encerrar_sistema()
-                event.accept()
-            else:
-                event.ignore()
-
-        except Exception as e:
-            print(f"Erro no closeEvent: {e}")
-            event.accept()
-
-
-# ============================================
-# CLASSE DATABASE - MELHORADA E PROFISSIONAL
-# ============================================
-class DatabaseManager:
-    """Gerencia todas as operaÃ§Ãµes de banco de dados"""
-
-    def __init__(self, db_path="escola.db"):
-        self.db_path = db_path
-        self.conn = None
-        self.connect()
-        self.criar_tabelas()
-
-    def connect(self):
-        """Estabelece conexÃ£o com o banco de dados"""
-        try:
-            self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            self.conn.row_factory = sqlite3.Row
-            print(f"ConexÃ£o estabelecida com: {self.db_path}")
-            return True
-        except sqlite3.Error as e:
-            print(f"Erro ao conectar ao banco: {e}")
-            return False
-
-    def criar_tabelas(self):
-        """Cria todas as tabelas necessÃ¡rias se nÃ£o existirem"""
-        try:
-            cursor = self.conn.cursor()
-
-            # Tabela de turmas
+            conn = sqlite3.connect('matriculas.db')
+            cursor = conn.cursor()
+
+            # Coletar dados dos campos
+            dados_aluno = {}
+            for field, entry in self.entries_aluno.items():
+                if isinstance(entry, ttk.Combobox):
+                    dados_aluno[field] = entry.get()
+                else:
+                    dados_aluno[field] = entry.get()
+
+            # Inserir no banco de dados
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS turmas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome_turma TEXT NOT NULL UNIQUE,
-                    ano_letivo TEXT NOT NULL,
-                    periodo TEXT NOT NULL,
-                    sala TEXT,
-                    capacidade INTEGER DEFAULT 30,
-                    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    ativa BOOLEAN DEFAULT 1
-                )
-            ''')
+                INSERT INTO alunos (
+                    foto_path, numero_matricula, nome_completo, data_nascimento,
+                    certidao_numero, certidao_livro, certidao_folha, certidao_data_expedicao,
+                    certidao_cidade, certidao_uf, certidao_cartorio, rg_uf, rg_data_expedicao,
+                    cpf, sexo, cor_raca, endereco_bairro, endereco_cidade, endereco_estado,
+                    endereco_cep, curso, ano_serie, data_ingresso, necessidades_especiais,
+                    alergias, convenio_medico, colegio_anterior, email, celular, operadora, nome_mae
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                getattr(self, 'foto_path', ''),
+                dados_aluno['numero_matricula'],
+                dados_aluno['nome_completo'],
+                dados_aluno['data_nascimento'],
+                dados_aluno['certidao_numero'],
+                dados_aluno['certidao_livro'],
+                dados_aluno['certidao_folha'],
+                dados_aluno['certidao_data_expedicao'],
+                dados_aluno['certidao_cidade'],
+                dados_aluno['certidao_uf'],
+                dados_aluno['certidao_cartorio'],
+                dados_aluno['rg_uf'],
+                dados_aluno['rg_data_expedicao'],
+                dados_aluno['cpf'],
+                dados_aluno['sexo'],
+                dados_aluno['cor_raca'],
+                dados_aluno['endereco_bairro'],
+                dados_aluno['endereco_cidade'],
+                dados_aluno['endereco_estado'],
+                dados_aluno['endereco_cep'],
+                dados_aluno['curso'],
+                dados_aluno['ano_serie'],
+                dados_aluno['data_ingresso'],
+                dados_aluno['necessidades_especiais'],
+                dados_aluno['alergias'],
+                dados_aluno['convenio_medico'],
+                dados_aluno['colegio_anterior'],
+                dados_aluno['email'],
+                dados_aluno['celular'],
+                dados_aluno['operadora'],
+                dados_aluno['nome_mae']
+            ))
 
-            # Tabela de alunos
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS alunos (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome_completo TEXT NOT NULL,
-                    data_nascimento DATE NOT NULL,
-                    cpf TEXT UNIQUE,
-                    rg TEXT,
-                    nome_mae TEXT,
-                    nome_pai TEXT,
-                    telefone TEXT,
-                    email TEXT,
-                    endereco TEXT,
-                    cidade TEXT,
-                    estado TEXT,
-                    cep TEXT,
-                    turma_id INTEGER,
-                    data_matricula DATE DEFAULT CURRENT_DATE,
-                    status TEXT DEFAULT 'Ativo',
-                    observacoes TEXT,
-                    foto BLOB,
-                    FOREIGN KEY (turma_id) REFERENCES turmas (id) ON DELETE SET NULL
-                )
-            ''')
+            conn.commit()
+            conn.close()
+            messagebox.showinfo("Sucesso", "Dados do aluno salvos com sucesso!")
 
-            # Tabela de professores
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS professores (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome_completo TEXT NOT NULL,
-                    data_nascimento DATE,
-                    cpf TEXT UNIQUE,
-                    rg TEXT,
-                    telefone TEXT,
-                    email TEXT UNIQUE,
-                    formacao TEXT,
-                    disciplina_principal TEXT,
-                    data_admissao DATE DEFAULT CURRENT_DATE,
-                    salario DECIMAL(10,2),
-                    status TEXT DEFAULT 'Ativo',
-                    observacoes TEXT
-                )
-            ''')
-
-            # Tabela de disciplinas
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS disciplinas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome_disciplina TEXT NOT NULL UNIQUE,
-                    carga_horaria INTEGER,
-                    professor_id INTEGER,
-                    turma_id INTEGER,
-                    dia_semana TEXT,
-                    horario_inicio TIME,
-                    horario_fim TIME,
-                    sala TEXT,
-                    ativa BOOLEAN DEFAULT 1,
-                    FOREIGN KEY (professor_id) REFERENCES professores (id) ON DELETE SET NULL,
-                    FOREIGN KEY (turma_id) REFERENCES turmas (id) ON DELETE CASCADE
-                )
-            ''')
-
-            # Tabela de notas
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS notas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    aluno_id INTEGER NOT NULL,
-                    disciplina_id INTEGER NOT NULL,
-                    nota DECIMAL(4,2) CHECK (nota >= 0 AND nota <= 10),
-                    bimestre INTEGER CHECK (bimestre BETWEEN 1 AND 4),
-                    ano_letivo TEXT,
-                    data_avaliacao DATE DEFAULT CURRENT_DATE,
-                    tipo_avaliacao TEXT,
-                    peso DECIMAL(3,2) DEFAULT 1.0,
-                    observacoes TEXT,
-                    FOREIGN KEY (aluno_id) REFERENCES alunos (id) ON DELETE CASCADE,
-                    FOREIGN KEY (disciplina_id) REFERENCES disciplinas (id) ON DELETE CASCADE,
-                    UNIQUE(aluno_id, disciplina_id, bimestre, ano_letivo)
-                )
-            ''')
-
-            # Tabela de frequÃªncia
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS frequencia (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    aluno_id INTEGER NOT NULL,
-                    disciplina_id INTEGER NOT NULL,
-                    data DATE NOT NULL,
-                    presenca BOOLEAN DEFAULT 1,
-                    justificativa TEXT,
-                    data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (aluno_id) REFERENCES alunos (id) ON DELETE CASCADE,
-                    FOREIGN KEY (disciplina_id) REFERENCES disciplinas (id) ON DELETE CASCADE,
-                    UNIQUE(aluno_id, disciplina_id, data)
-                )
-            ''')
-
-            # Tabela de usuÃ¡rios (para login)
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS usuarios (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    email TEXT UNIQUE,
-                    tipo_usuario TEXT DEFAULT 'professor',
-                    professor_id INTEGER UNIQUE,
-                    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    ultimo_login TIMESTAMP,
-                    ativo BOOLEAN DEFAULT 1,
-                    FOREIGN KEY (professor_id) REFERENCES professores (id) ON DELETE CASCADE
-                )
-            ''')
-
-            # Tabela financeira (se necessÃ¡rio)
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS financeiro (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    aluno_id INTEGER,
-                    descricao TEXT NOT NULL,
-                    valor DECIMAL(10,2) NOT NULL,
-                    data_vencimento DATE,
-                    data_pagamento DATE,
-                    status_pagamento TEXT DEFAULT 'Pendente',
-                    forma_pagamento TEXT,
-                    observacoes TEXT,
-                    FOREIGN KEY (aluno_id) REFERENCES alunos (id) ON DELETE SET NULL
-                )
-            ''')
-
-            # Tabela de eventos
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS eventos (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    titulo TEXT NOT NULL,
-                    descricao TEXT,
-                    data_inicio DATETIME NOT NULL,
-                    data_fim DATETIME,
-                    local TEXT,
-                    tipo_evento TEXT,
-                    participantes TEXT,
-                    cor_evento TEXT DEFAULT '#3498db',
-                    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            # Tabela de logs do sistema
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS logs_sistema (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nivel TEXT NOT NULL,
-                    mensagem TEXT NOT NULL,
-                    modulo TEXT,
-                    usuario TEXT,
-                    data_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    ip_address TEXT
-                )
-            ''')
-
-            self.conn.commit()
-            print("Tabelas criadas/verificadas com sucesso!")
-
-            # Criar usuÃ¡rio admin padrÃ£o se nÃ£o existir
-            self.criar_usuario_admin_padrao()
-
-        except sqlite3.Error as e:
-            print(f"Erro ao criar tabelas: {e}")
-
-    def criar_usuario_admin_padrao(self):
-        """Cria usuÃ¡rio administrador padrÃ£o"""
-        try:
-            cursor = self.conn.cursor()
-
-            # Verificar se jÃ¡ existe admin
-            cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = 'admin'")
-            if cursor.fetchone()[0] == 0:
-                # Hash da senha padrÃ£o
-                senha_hash = hashlib.sha256("admin123".encode()).hexdigest()
-
-                cursor.execute('''
-                    INSERT INTO usuarios (username, password_hash, email, tipo_usuario)
-                    VALUES (?, ?, ?, ?)
-                ''', ('admin', senha_hash, 'admin@escola.com', 'administrador'))
-
-                self.conn.commit()
-                print("UsuÃ¡rio admin padrÃ£o criado (senha: admin123)")
-
-        except sqlite3.Error as e:
-            print(f"Erro ao criar usuÃ¡rio admin: {e}")
-
-    def executar_consulta(self, query, params=()):
-        """Executa uma consulta SQL"""
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(query, params)
-
-            if query.strip().upper().startswith('SELECT'):
-                return cursor.fetchall()
-            else:
-                self.conn.commit()
-                return cursor.rowcount
-
-        except sqlite3.Error as e:
-            print(f"Erro na consulta: {e}")
-            return None
-
-    def buscar_um(self, query, params=()):
-        """Busca um Ãºnico registro"""
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(query, params)
-            return cursor.fetchone()
-        except sqlite3.Error as e:
-            print(f"Erro na busca: {e}")
-            return None
-
-    def inserir_registro(self, tabela, dados):
-        """Insere um registro em uma tabela"""
-        try:
-            cursor = self.conn.cursor()
-
-            colunas = ', '.join(dados.keys())
-            placeholders = ', '.join(['?' for _ in dados])
-
-            query = f"INSERT INTO {tabela} ({colunas}) VALUES ({placeholders})"
-            cursor.execute(query, list(dados.values()))
-
-            self.conn.commit()
-            return cursor.lastrowid
-
-        except sqlite3.Error as e:
-            print(f"Erro ao inserir registro: {e}")
-            return None
-
-    def atualizar_registro(self, tabela, id_registro, dados):
-        """Atualiza um registro existente"""
-        try:
-            cursor = self.conn.cursor()
-
-            sets = ', '.join([f"{k} = ?" for k in dados.keys()])
-            query = f"UPDATE {tabela} SET {sets} WHERE id = ?"
-
-            params = list(dados.values()) + [id_registro]
-            cursor.execute(query, params)
-
-            self.conn.commit()
-            return cursor.rowcount
-
-        except sqlite3.Error as e:
-            print(f"Erro ao atualizar registro: {e}")
-            return None
-
-    def deletar_registro(self, tabela, id_registro):
-        """Deleta um registro"""
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(f"DELETE FROM {tabela} WHERE id = ?", (id_registro,))
-            self.conn.commit()
-            return cursor.rowcount
-        except sqlite3.Error as e:
-            print(f"Erro ao deletar registro: {e}")
-            return None
-
-    def buscar_todos(self, tabela, condicao="", params=()):
-        """Busca todos os registros de uma tabela"""
-        try:
-            cursor = self.conn.cursor()
-
-            query = f"SELECT * FROM {tabela}"
-            if condicao:
-                query += f" WHERE {condicao}"
-
-            cursor.execute(query, params)
-            return cursor.fetchall()
-
-        except sqlite3.Error as e:
-            print(f"Erro ao buscar registros: {e}")
-            return []
-
-    def contar_registros(self, tabela, condicao="", params=()):
-        """Conta registros em uma tabela"""
-        try:
-            cursor = self.conn.cursor()
-
-            query = f"SELECT COUNT(*) FROM {tabela}"
-            if condicao:
-                query += f" WHERE {condicao}"
-
-            cursor.execute(query, params)
-            return cursor.fetchone()[0]
-
-        except sqlite3.Error as e:
-            print(f"Erro ao contar registros: {e}")
-            return 0
-
-    def verificar_login(self, username, password):
-        """Verifica credenciais de login"""
-        try:
-            cursor = self.conn.cursor()
-
-            # Buscar hash da senha
-            cursor.execute(
-                "SELECT password_hash, tipo_usuario, professor_id FROM usuarios WHERE username = ? AND ativo = 1",
-                (username,)
-            )
-
-            resultado = cursor.fetchone()
-            if resultado:
-                senha_hash_armazenada = resultado['password_hash']
-                senha_hash_input = hashlib.sha256(password.encode()).hexdigest()
-
-                if senha_hash_input == senha_hash_armazenada:
-                    # Atualizar Ãºltimo login
-                    cursor.execute(
-                        "UPDATE usuarios SET ultimo_login = CURRENT_TIMESTAMP WHERE username = ?",
-                        (username,)
-                    )
-                    self.conn.commit()
-
-                    return {
-                        'tipo_usuario': resultado['tipo_usuario'],
-                        'professor_id': resultado['professor_id']
-                    }
-
-            return None
-
-        except sqlite3.Error as e:
-            print(f"Erro ao verificar login: {e}")
-            return None
-
-    def registrar_log(self, nivel, mensagem, modulo="", usuario=""):
-        """Registra log no banco de dados"""
-        try:
-            cursor = self.conn.cursor()
-
-            cursor.execute('''
-                INSERT INTO logs_sistema (nivel, mensagem, modulo, usuario)
-                VALUES (?, ?, ?, ?)
-            ''', (nivel, mensagem, modulo, usuario))
-
-            self.conn.commit()
-
-        except sqlite3.Error as e:
-            print(f"Erro ao registrar log: {e}")
-
-    def fazer_backup(self, caminho_backup):
-        """Faz backup do banco de dados"""
-        try:
-            backup_conn = sqlite3.connect(caminho_backup)
-            self.conn.backup(backup_conn)
-            backup_conn.close()
-            return True
         except Exception as e:
-            print(f"Erro ao fazer backup: {e}")
-            return False
+            messagebox.showerror("Erro", f"Erro ao salvar dados: {str(e)}")
 
-    def verificar_integridade(self):
-        """Verifica integridade do banco de dados"""
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute("PRAGMA integrity_check")
-            resultado = cursor.fetchone()
-            return resultado[0] == "ok"
-        except sqlite3.Error as e:
-            print(f"Erro ao verificar integridade: {e}")
-            return False
+            # =============================================================================
+            # FUNÇÃO PARA INICIAR SISTEMA DE MATRÍCULAS
+            # =============================================================================
 
-    def otimizar(self):
-        """Otimiza o banco de dados"""
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute("VACUUM")
-            cursor.execute("ANALYZE")
-            self.conn.commit()
-            return True
-        except sqlite3.Error as e:
-            print(f"Erro ao otimizar: {e}")
-            return False
-
-    def fechar_conexao(self):
-        """Fecha a conexÃ£o com o banco de dados"""
-        try:
-            if self.conn:
-                self.conn.close()
-                print("ConexÃ£o com banco de dados fechada.")
-        except Exception as e:
-            print(f"Erro ao fechar conexÃ£o: {e}")
-
-
-# ============================================
-# FUNÃ‡ÃƒO PRINCIPAL
-# ============================================
-def main():
-    """FunÃ§Ã£o principal que inicia a aplicaÃ§Ã£o"""
-    try:
-        # Configurar aplicaÃ§Ã£o
-        app = QApplication(sys.argv)
-        app.setApplicationName("Sistema de GestÃ£o Escolar")
-        app.setOrganizationName("EscolaSystem")
-
-        # Aplicar estilo global
-        app.setStyleSheet(GLOBAL_STYLESHEET)
-
-        # Criar e mostrar janela principal
-        window = EscolaApp()
-        window.show()
-
-        # Executar aplicaÃ§Ã£o
-        sys.exit(app.exec_())
-
-    except Exception as e:
-        print(f"Erro fatal na aplicaÃ§Ã£o: {e}")
-        QMessageBox.critical(None, "Erro Fatal",
-                             f"Ocorreu um erro fatal na aplicaÃ§Ã£o:\n{str(e)}")
-        sys.exit(1)
-
-
+            def abrir_sistema_matriculas():
+                """Função para abrir o sistema de matrículas em uma nova janela"""
+                root = tk.Toplevel()
+                root.title("Sistema de Matrículas Escolares")
+                root.geometry("1200x800")
+                app = SistemaMatriculas(root)
 if __name__ == "__main__":
-    main()
+    try:
+        root = tk.Tk()
+        app = SistemaGestaoEscolar(root)
+        root.mainloop()
+    except Exception as e:
+        print(f"Erro ao executar o sistema: {e}")
+        messagebox.showerror("Erro", f"Falha ao iniciar o sistema: {str(e)}")
+        if __name__ == "__main__":
+            # Seu código principal existente...
 
+            # Adicione um botão para matrículas (adapte conforme sua interface)
+            botao_matriculas = tk.Button(sua_janela_principal,
+                                         text="📋 Sistema de Matrículas",
+                                         command=abrir_sistema_matriculas,
+                                         font=("Arial", 12),
+                                         bg="blue", fg="white")
+            botao_matriculas.pack(pady=10)
